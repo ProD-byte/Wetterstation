@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Weather Station – Thumbnail</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; background: #000; }
+  #bild { display: block; width: 100vw; height: auto; aspect-ratio: 16 / 9; }
+  #sim { position: absolute; left: -4000px; top: 0; width: 1000px; height: 900px; border: 0; }
+</style></head><body>
+<canvas id="bild" width="1280" height="720"></canvas>
+<iframe id="sim" src="sim.html"></iframe>
+<script>
+// YouTube-Thumbnail (1280 x 720): Board mit echter Simulation + grosse Schrift.
+// ?w=95 waehlt das Wetter (Knopf wetterWahl-<w>), ?ms= den Zeitpunkt der Animation.
+// Speichern: python server.py, dann window.__speichern(n) -> %TEMP%/wetterstation-video/bilder/<n>.jpg
+const V = document.getElementById("bild"), x = V.getContext("2d");
+const BW = 1280, BH = 720, ORANGE = "#f0a04b";
+const QUER = new Image(); QUER.src = "board_quer.webp";
+const q = new URLSearchParams(location.search);
+let S, simCv;
+
+function simBereit() {
+  const fw = document.getElementById("sim").contentWindow;
+  fw.eval(`
+    var __simT = 0; const __t0 = t0; performance.now = () => __t0 + __simT;
+    const __RD = Date, __BASIS = __RD.UTC(2026, 10, 1, 13, 41, 0);
+    window.Date = class extends __RD { constructor(...a) { if (a.length) super(...a); else super(__BASIS + __simT); } static now() { return __BASIS + __simT; } };
+    window.__ctl = {
+      zeit(ms) { __simT = ms; },
+      klick(id) { document.getElementById(id).click(); },
+      seite(n) { wechsel = false; seite = n; seiteSeit = jetzt(); },
+      zeichnen() { letzterTastendruck = jetzt(); frame(); }
+    };
+    __ctl.klick("pixelWahl-glatt");
+    englisch = true;
+  `);
+  S = fw.__ctl;
+  simCv = fw.document.getElementById("lcd");
+}
+
+function hintergrund() {
+  const g = x.createLinearGradient(0, 0, 0, BH);
+  g.addColorStop(0, "#111833"); g.addColorStop(1, "#05070d");
+  x.fillStyle = g; x.fillRect(0, 0, BW, BH);
+  for (const [fx, fy, r, f] of [[0.72, 0.42, 560, "rgba(240,160,75,0.30)"], [0.12, 0.95, 620, "rgba(70,120,255,0.18)"]]) {
+    const rg = x.createRadialGradient(fx * BW, fy * BH, 0, fx * BW, fy * BH, r);
+    rg.addColorStop(0, f); rg.addColorStop(1, "rgba(0,0,0,0)");
+    x.fillStyle = rg; x.fillRect(0, 0, BW, BH);
+  }
+}
+
+function board(cx, cy, bw, winkel) {
+  const bh = bw * 311 / 730;
+  x.save(); x.translate(cx, cy); x.rotate(winkel);
+  x.shadowColor = "rgba(0,0,0,0.7)"; x.shadowBlur = 60; x.shadowOffsetY = 28;
+  x.drawImage(QUER, -bw / 2, -bh / 2, bw, bh);
+  x.shadowColor = "transparent";
+  const sx = -bw / 2 + 0.084 * bw, sy = -bh / 2 + 0.037 * bh, sw = 0.724 * bw, sh = sw * 170 / 320;
+  // Display leuchtet leicht ueber den Rand
+  x.save(); x.shadowColor = "rgba(255,190,110,0.55)"; x.shadowBlur = 50;
+  x.fillStyle = "#050607"; x.fillRect(sx, sy, sw, sh); x.restore();
+  x.imageSmoothingQuality = "high";
+  x.drawImage(simCv, sx, sy, sw, sh);
+  const sp = x.createLinearGradient(sx, sy, sx + sw * 0.6, sy + sh);
+  sp.addColorStop(0, "rgba(255,255,255,0.10)"); sp.addColorStop(0.45, "rgba(255,255,255,0)");
+  x.fillStyle = sp; x.fillRect(sx, sy, sw, sh);
+  x.restore();
+}
+
+function text(s, px, py, groesse, gewicht, farbe, abstand = 0) {
+  x.save();
+  x.font = `${gewicht} ${groesse}px Inter, sans-serif`;
+  x.letterSpacing = abstand + "px";
+  x.shadowColor = "rgba(0,0,0,0.6)"; x.shadowBlur = 18; x.shadowOffsetY = 6;
+  x.fillStyle = farbe; x.fillText(s, px, py);
+  const w = x.measureText(s).width;
+  x.restore();
+  return w;
+}
+
+function pille(s, px, py, groesse, hinter, vorne) {
+  x.save();
+  x.font = `800 ${groesse}px Inter, sans-serif`;
+  const w = x.measureText(s).width, h = groesse * 1.65;
+  x.fillStyle = hinter; x.beginPath(); x.roundRect(px, py, w + groesse * 1.3, h, h / 2); x.fill();
+  x.fillStyle = vorne; x.textBaseline = "middle"; x.fillText(s, px + groesse * 0.65, py + h / 2 + 1);
+  x.restore();
+}
+
+function zeichne() {
+  S.zeit(+(q.get("ms") || 4000));
+  S.zeichnen();
+  hintergrund();
+  board(870, 285, 760, -0.07);
+  // Schrift unten links
+  pille("DIY  ·  ESP32", 56, 396, 30, ORANGE, "#1a1206");
+  text("WEATHER", 50, 560, 132, 900, "#ffffff", -3);
+  text("STATION", 50, 680, 132, 900, ORANGE, -3);
+  text("Flash it in your browser", 770, 640, 34, 700, "#dfe5f2");
+  text("no coding needed", 770, 684, 34, 500, "#9aa6bf");
+}
+
+async function start() {
+  await new Promise(r => document.readyState === "complete" ? r() : addEventListener("load", r, { once: true }));
+  if (!QUER.complete) await new Promise(r => QUER.addEventListener("load", r, { once: true }));
+  await Promise.all([document.fonts.load("900 132px Inter"), document.fonts.load("800 30px Inter"),
+                     document.fonts.load("700 34px Inter"), document.fonts.load("500 34px Inter")]);
+  simBereit();
+  await document.getElementById("sim").contentWindow.document.fonts.ready;
+  S.klick("tagWahl-" + (q.get("tag") || "tag"));
+  S.klick("wetterWahl-" + (q.get("w") || "95"));
+  S.seite(+(q.get("seite") || 0));
+  zeichne();
+  window.__bereit = true;
+}
+window.__speichern = async n => {
+  await fetch(`/bild?n=${n}`, { method: "POST", body: V.toDataURL("image/jpeg", 0.95) });
+  return "ok";
+};
+start();
+</script>
+</body></html>
