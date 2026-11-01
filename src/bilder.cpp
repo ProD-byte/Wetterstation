@@ -255,6 +255,58 @@ void zeichneBild(TFT_eSprite &s, Bild b, bool tag, int cx, int cy, int groesse, 
 }
 
 // ------------------------------------------------------------
+// Mond und Warnung
+// ------------------------------------------------------------
+
+float mondphase(time_t jetzt) {
+  // Bekannter Neumond: 6.1.2000 18:14 UTC, ein Mondmonat dauert 29,53 Tage
+  double tage = (jetzt - 947182440.0) / 86400.0;
+  double p = fmod(tage / 29.530588853, 1.0);
+  return p < 0 ? p + 1 : p;
+}
+
+const char *mondName(float p) {
+  // kurz genug fuer die rechte Haelfte des Displays
+  if (p < 0.03f || p > 0.97f) return "Neumond";
+  if (p < 0.22f) return "Junge Sichel";
+  if (p < 0.28f) return "Erstes Viertel";
+  if (p < 0.47f) return "Zunehmend";
+  if (p < 0.53f) return "Vollmond";
+  if (p < 0.72f) return "Abnehmend";
+  if (p < 0.78f) return "Letztes Viertel";
+  return "Alte Sichel";
+}
+
+void zeichneMondphase(TFT_eSprite &s, int cx, int cy, int r, float phase) {
+  uint16_t hell = farbe(238, 234, 210);
+  uint16_t hg = s.readPixel(cx, cy);
+  s.fillSmoothCircle(cx, cy, r + 4, s.alphaBlend(30, hell, hg));   // Schein
+  s.fillSmoothCircle(cx, cy, r, s.alphaBlend(60, hell, TFT_BLACK)); // dunkle Seite
+  // Beleuchteter Teil zeilenweise: zunehmend rechts hell, abnehmend links (Nordhalbkugel)
+  float k = cosf(phase * 2 * PI);
+  for (int y = -r + 1; y < r; y++) {
+    float w = sqrtf(r * r - y * y);
+    float a = phase < 0.5f ? w * k : -w;
+    float b = phase < 0.5f ? w : -w * k;
+    if (b > a) s.drawFastHLine(cx + lroundf(a), cy + y, lroundf(b - a), hell);
+  }
+  uint16_t krater = farbe(212, 207, 182);
+  for (int i = 0; i < 3; i++) {
+    static const float kx[] = {-0.35f, 0.32f, 0.12f}, ky[] = {-0.2f, 0.3f, -0.48f}, kr[] = {0.22f, 0.16f, 0.1f};
+    int x = cx + kx[i] * r, y = cy + ky[i] * r;
+    if (s.readPixel(x, y) == hell) s.fillCircle(x, y, max(1, (int)(kr[i] * r)), krater);
+  }
+}
+
+void zeichneWarnzeichen(TFT_eSprite &s, int cx, int cy, int g, uint16_t f) {
+  int h = g, b = g * 1.15f;
+  s.fillTriangle(cx, cy - h / 2, cx - b / 2, cy + h / 2, cx + b / 2, cy + h / 2, f);
+  int t = max(1, g / 7);
+  s.fillRect(cx - t / 2, cy - h / 6, max(2, t), h / 3, TFT_BLACK);
+  s.fillRect(cx - t / 2, cy + h / 4, max(2, t), max(2, t), TFT_BLACK);
+}
+
+// ------------------------------------------------------------
 // Text
 // ------------------------------------------------------------
 

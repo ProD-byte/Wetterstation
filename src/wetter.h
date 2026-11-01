@@ -1,5 +1,6 @@
 #pragma once
-// Wetterdaten von open-meteo.com (kostenlos, ohne Anmeldung)
+// Wetterdaten von open-meteo.com (kostenlos, ohne Anmeldung), dazu Luft & Pollen (auch Open-Meteo)
+// und Unwetterwarnungen des Deutschen Wetterdienstes (ueber brightsky.dev).
 // Laeuft als eigene Aufgabe im Hintergrund, damit die Animationen nicht stocken.
 
 #include <Arduino.h>
@@ -12,6 +13,7 @@ struct Wetter {
   float temp = 0, gefuehlt = 0, wind = 0;
   int feuchte = 0, code = 0;
   bool tag = true;
+  char regenHinweis[24] = "";  // "Regen ab 14:15" / "Regen bis 14:30" (naechste 2 Stunden)
 
   // naechste 24 Stunden
   int stunden = 0;
@@ -25,11 +27,28 @@ struct Wetter {
   int tagRegen[4];
   int tagWochentag[4];  // 0 = Sonntag
 
+  // Sonne (heute)
+  char sonneAuf[6] = "--:--", sonneUnter[6] = "--:--";
+  float uv = 0;
+
+  // Luft & Pollen
+  bool luftGueltig = false;
+  int aqi = 0;          // Europaeischer Luftqualitaetsindex (0 = sehr gut ... 100+ = extrem schlecht)
+  float pm25 = 0;
+  float pollen[5] = {};  // Koerner/m3: Erle, Birke, Graeser, Beifuss, Ambrosia
+
+  // DWD-Warnung (die schwerste, nur in Deutschland)
+  char warnung[48] = "";  // leer = keine
+  int warnStufe = 0;      // 1 gering ... 4 extrem
+
   uint32_t abruf = 0;  // millis() beim letzten Abruf
 };
+
+extern const char *POLLEN_NAME[5];
 
 enum WetterStatus { VERBINDE, ORTUNG, LADE, FERTIG, FEHLER };
 
 void wetterStart();
 bool wetterHolen(Wetter &w);  // Kopie der neuesten Daten, false solange noch keine da sind
 WetterStatus wetterStatus();
+void wetterNeuLaden();        // z. B. nach Ortswechsel auf der Einstellungsseite

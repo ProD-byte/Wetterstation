@@ -10,19 +10,28 @@ Geschrieben mit **VS Code + PlatformIO**.
 
 | | |
 |---|---|
-| ☀️ **Jetzt** | animiertes Wetterbild (Sonne, Wolken, Regen, Schnee, Gewitter mit Blitz, Nebel), Temperatur, gefühlte Temperatur, Wind, Luftfeuchte |
+| ☀️ **Jetzt** | animiertes Wetterbild (Sonne, Wolken, Regen, Schnee, Gewitter mit Blitz, Nebel), Temperatur, gefühlte Temperatur, Wind, Luftfeuchte – und „Regen ab 14:15“ / „Regen bis 14:30“, wenn sich in den nächsten 2 Stunden etwas tut |
 | 📈 **24 Stunden** | Temperaturkurve, die sich beim Umblättern aufbaut, Regenwahrscheinlichkeit als Balken |
 | 📅 **Nächste Tage** | heute, morgen, übermorgen mit Höchst- und Tiefstwert und Regenrisiko |
-| 🌙 **Himmel** | Farbverlauf passend zum Wetter, nachts mit funkelnden Sternen |
+| 🌅 **Sonne & Mond** | Sonne auf ihrem Tagesbogen, Auf- und Untergang, Tageslänge, UV-Index, Mondphase |
+| 🌿 **Luft & Pollen** | Europäischer Luftqualitätsindex, Feinstaub, Erle, Birke, Gräser, Beifuß, Ambrosia |
+| ⚠️ **Warnungen** | Unwetterwarnungen des Deutschen Wetterdienstes ([brightsky.dev](https://brightsky.dev/)) blinken oben |
+| 🌙 **Himmel** | Farbverlauf passend zum Wetter, nachts mit funkelnden Sternen; Nachtmodus dimmt das Display |
 | 📶 **WLAN** | Einrichtung per Handy (WLAN „Wetterstation-Setup“), merkt sich bis zu 5 Netze |
-| 🔄 **Updates** | über WLAN (OTA) oder im Browser mit dem Online-Flasher |
+| ⚙️ **Einstellungen** | im Browser unter **http://wetterstation.local**: Ort, Helligkeit, Seiten, Blättern, Nachtmodus, Updates |
+| 🔄 **Updates** | von selbst aus dem Internet (neue Builds von GitHub), über WLAN (OTA) oder mit dem Online-Flasher |
 
-Die Seiten blättern alle 12 s von allein weiter.
+Die Seiten blättern alle 12 s von allein weiter (einstellbar).
 
 | Taste | kurz | lang |
 |---|---|---|
-| **IO0** | nächste Seite | |
-| **IO35** | Helligkeit (4 Stufen) | 3 s halten = WLAN neu einrichten |
+| **IO0** | nächste Seite | 2 s halten = Adresse der Einstellungsseite und Build anzeigen |
+| **IO35** | Helligkeit (4 Stufen), nachts erst mal aufwecken | 3 s halten = WLAN und Ort neu einrichten |
+
+### Update aus dem Internet
+Die Station schaut alle 6 Stunden auf GitHub Pages nach (`version.json`). Gibt es einen neueren Build, installiert
+sie ihn selbst, sobald eine Minute lang keine Taste gedrückt wurde – abschaltbar auf der Einstellungsseite.
+Firmware, die du selbst in VS Code baust (Build 0), sucht nicht nach Updates.
 
 ## 👀 Simulation
 
@@ -69,6 +78,9 @@ Bei jedem Hochladen baut GitHub die Firmware automatisch (`.github/workflows/bui
 | `src/wetter.cpp` | holt das Wetter alle 15 min im Hintergrund |
 | `src/wlan.cpp` | WLAN mit Einrichtung per Handy (inkl. Ortswahl) |
 | `src/ort.cpp` | Standort: speichern, über die Internet-Adresse ermitteln, Orte suchen |
+| `src/web.cpp` | Einstellungsseite `wetterstation.local` |
+| `src/einstellungen.cpp` | gespeicherte Einstellungen |
+| `src/netzupdate.cpp` | Update aus dem Internet (heißt nicht `update.cpp`, sonst verdeckt es unter Windows `Update.h` des ESP32-Kerns) |
 | `simulation/wetterstation.html` | Simulation (zeichnet wie die Firmware) |
 | `docs/` | Online-Flasher (GitHub Pages) |
 | `website/basteln-wetter.js` | baut den Abschnitt in daveslab.de/basteln ein |

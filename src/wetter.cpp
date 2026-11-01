@@ -1,5 +1,6 @@
 #include "wetter.h"
 #include "ort.h"
+#include "netzupdate.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -8,16 +9,22 @@
 // Ort kommt aus ort.cpp (am Handy gewaehlt, sonst ueber die Internet-Adresse, sonst Cottbus)
 static const char *URL_REST =
     "&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m"
+    "&minutely_15=precipitation&forecast_minutely_15=8"
     "&hourly=temperature_2m,precipitation_probability"
-    "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+    "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max"
     "&timezone=auto&forecast_days=4&forecast_hours=24";
+
+const char *POLLEN_NAME[5] = {"Erle", "Birke", "Gräser", "Beifuß", "Ambrosia"};
 
 const uint32_t ABSTAND_OK     = 15 * 60 * 1000;  // alle 15 min neu
 const uint32_t ABSTAND_FEHLER = 60 * 1000;       // nach Fehler in 1 min nochmal
+const uint32_t ABSTAND_LUFT   = 60 * 60 * 1000;  // Luft & Pollen stuendlich
+const uint32_t ABSTAND_UPDATE = 6 * 60 * 60 * 1000;
 
 static Wetter aktuell;
 static SemaphoreHandle_t sperre;
 static volatile WetterStatus status = VERBINDE;
+static volatile bool neuLaden = false;
 
 // Wochentag aus Datum (Sakamoto), 0 = Sonntag
 static int wochentag(int j, int m, int t) {
@@ -26,30 +33,34 @@ static int wochentag(int j, int m, int t) {
   return (j + j / 4 - j / 100 + j / 400 + k[m - 1] + t) % 7;
 }
 
-static bool abrufen(Wetter &w) {
-  Ort ort = ortAktuell();
-  String url = "https://api.open-meteo.com/v1/forecast?latitude=" + String(ort.lat, 4) +
-               "&longitude=" + String(ort.lon, 4) + URL_REST;
-  strlcpy(w.ort, ort.name, sizeof(w.ort));
-
+// HTTPS-Abruf und JSON lesen (Zertifikat wird nicht geprueft - reicht fuer Wetterdaten)
+static bool holen(const String &url, JsonDocument &doc) {
   WiFiClientSecure client;
-  client.setInsecure();  // Zertifikat nicht pruefen - reicht fuer Wetterdaten
+  client.setInsecure();
   HTTPClient http;
   http.setTimeout(10000);
+  http.setUserAgent("Wetterstation");
   if (!http.begin(client, url)) return false;
-
   int code = http.GET();
   if (code != 200) {
-    Serial.printf("Wetter: HTTP %d\n", code);
+    Serial.printf("Abruf %s: HTTP %d\n", url.substring(8, 40).c_str(), code);
     http.end();
     return false;
   }
   String text = http.getString();
   http.end();
-
-  JsonDocument doc;
   if (deserializeJson(doc, text)) {
-    Serial.println("Wetter: Antwort nicht lesbar");
+    Serial.println("Antwort nicht lesbar");
+    return false;
+  }
+  return true;
+}
+
+static bool wetterAbrufen(Wetter &w, const Ort &ort) {
+  JsonDocument doc;
+  if (!holen("https://api.open-meteo.com/v1/forecast?latitude=" + String(ort.lat, 4) + "&longitude=" +
+                 String(ort.lon, 4) + URL_REST,
+             doc)) {
     return false;
   }
 
@@ -60,6 +71,23 @@ static bool abrufen(Wetter &w) {
   w.feuchte  = c["relative_humidity_2m"] | 0;
   w.code     = c["weather_code"] | 0;
   w.tag      = (c["is_day"] | 1) == 1;
+
+  // Regen in den naechsten 2 Stunden (Viertelstunden): Beginn oder Ende ankuendigen
+  JsonArray zeit15 = doc["minutely_15"]["time"];
+  JsonArray regen15 = doc["minutely_15"]["precipitation"];
+  w.regenHinweis[0] = 0;
+  int n15 = min((int)regen15.size(), 8);
+  if (n15 > 1) {
+    bool jetztNass = (regen15[0] | 0.0f) >= 0.1f;
+    for (int i = 1; i < n15; i++) {
+      bool nass = (regen15[i] | 0.0f) >= 0.1f;
+      const char *z = zeit15[i];
+      if (nass != jetztNass && z) {
+        snprintf(w.regenHinweis, sizeof(w.regenHinweis), jetztNass ? "Regen bis %.5s" : "Regen ab %.5s", z + 11);
+        break;
+      }
+    }
+  }
 
   JsonObject h = doc["hourly"];
   JsonArray zeiten = h["time"];
@@ -80,15 +108,64 @@ static bool abrufen(Wetter &w) {
     w.tagMin[i]   = d["temperature_2m_min"][i] | 0.0f;
     w.tagRegen[i] = d["precipitation_probability_max"][i] | 0;
   }
+  const char *auf = d["sunrise"][0], *unter = d["sunset"][0];  // "2026-11-01T06:56"
+  if (auf) strlcpy(w.sonneAuf, auf + 11, sizeof(w.sonneAuf));
+  if (unter) strlcpy(w.sonneUnter, unter + 11, sizeof(w.sonneUnter));
+  w.uv = d["uv_index_max"][0] | 0.0f;
 
   w.gueltig = true;
   w.abruf = millis();
-  Serial.printf("Wetter: %.1f Grad, Code %d, %d Stunden\n", w.temp, w.code, w.stunden);
+  Serial.printf("Wetter %s: %.1f Grad, Code %d %s\n", ort.name, w.temp, w.code, w.regenHinweis);
   return true;
 }
 
+static bool luftAbrufen(Wetter &w, const Ort &ort) {
+  JsonDocument doc;
+  if (!holen("https://air-quality-api.open-meteo.com/v1/air-quality?latitude=" + String(ort.lat, 4) +
+                 "&longitude=" + String(ort.lon, 4) +
+                 "&current=european_aqi,pm2_5,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,ragweed_pollen"
+                 "&timezone=auto",
+             doc)) {
+    return false;
+  }
+  JsonObject c = doc["current"];
+  w.aqi = c["european_aqi"] | 0;
+  w.pm25 = c["pm2_5"] | 0.0f;
+  const char *namen[5] = {"alder_pollen", "birch_pollen", "grass_pollen", "mugwort_pollen", "ragweed_pollen"};
+  for (int i = 0; i < 5; i++) w.pollen[i] = c[namen[i]] | 0.0f;  // ausserhalb Europas: null -> 0
+  w.luftGueltig = !c["european_aqi"].isNull();
+  return true;
+}
+
+// Unwetterwarnungen des DWD (nur Deutschland, sonst einfach keine)
+static void warnungAbrufen(Wetter &w, const Ort &ort) {
+  JsonDocument filter;
+  filter["alerts"][0]["event_de"] = true;
+  filter["alerts"][0]["severity"] = true;
+  JsonDocument doc;
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  http.setTimeout(10000);
+  String url = "https://api.brightsky.dev/alerts?lat=" + String(ort.lat, 4) + "&lon=" + String(ort.lon, 4);
+  if (!http.begin(client, url)) return;
+  if (http.GET() == 200 && !deserializeJson(doc, http.getString(), DeserializationOption::Filter(filter))) {
+    w.warnung[0] = 0;
+    w.warnStufe = 0;
+    for (JsonObject a : doc["alerts"].as<JsonArray>()) {
+      String s = a["severity"] | "";
+      int stufe = s == "extreme" ? 4 : s == "severe" ? 3 : s == "moderate" ? 2 : 1;
+      if (stufe > w.warnStufe) {
+        w.warnStufe = stufe;
+        strlcpy(w.warnung, a["event_de"] | "Warnung", sizeof(w.warnung));
+      }
+    }
+  }
+  http.end();
+}
+
 static void aufgabe(void *) {
-  uint32_t naechster = 0;
+  uint32_t naechster = 0, naechsteLuft = 0, naechstesUpdate = 0;
   bool ortGeprueft = false;
   for (;;) {
     if (WiFi.status() != WL_CONNECTED) {
@@ -105,10 +182,22 @@ static void aufgabe(void *) {
         if (ortPerIp(o)) ortSpeichern(o);
       }
     }
+    if (neuLaden) {
+      neuLaden = false;
+      naechster = naechsteLuft = millis();
+    }
+
     if ((int32_t)(millis() - naechster) >= 0) {
       if (!aktuell.gueltig) status = LADE;
+      Ort ort = ortAktuell();
       Wetter neu;
-      if (abrufen(neu)) {
+      xSemaphoreTake(sperre, portMAX_DELAY);
+      neu = aktuell;  // Luft & Warnung behalten, falls deren Abruf gleich scheitert
+      xSemaphoreGive(sperre);
+      strlcpy(neu.ort, ort.name, sizeof(neu.ort));
+      if (wetterAbrufen(neu, ort)) {
+        warnungAbrufen(neu, ort);
+        if ((int32_t)(millis() - naechsteLuft) >= 0 && luftAbrufen(neu, ort)) naechsteLuft = millis() + ABSTAND_LUFT;
         xSemaphoreTake(sperre, portMAX_DELAY);
         aktuell = neu;
         xSemaphoreGive(sperre);
@@ -118,6 +207,12 @@ static void aufgabe(void *) {
         if (!aktuell.gueltig) status = FEHLER;
         naechster = millis() + ABSTAND_FEHLER;
       }
+    }
+
+    // Neue Firmware auf GitHub? (erst wenn das Wetter laeuft, dann alle 6 Stunden oder auf Wunsch)
+    if (aktuell.gueltig && ((int32_t)(millis() - naechstesUpdate) >= 0 || updateSucheGewuenscht())) {
+      updatePruefen();
+      naechstesUpdate = millis() + ABSTAND_UPDATE;
     }
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
@@ -137,3 +232,5 @@ bool wetterHolen(Wetter &w) {
 }
 
 WetterStatus wetterStatus() { return status; }
+
+void wetterNeuLaden() { neuLaden = true; }

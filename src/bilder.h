@@ -19,6 +19,14 @@ bool blitzAktiv(uint32_t t);
 // Wetterbild um (cx, cy), groesse = ungefaehre Breite in Pixeln, t = millis() fuer die Animation
 void zeichneBild(TFT_eSprite &s, Bild b, bool tag, int cx, int cy, int groesse, uint32_t t);
 
+// Mond mit beleuchtetem Teil: phase 0 = Neumond, 0.25 = erstes Viertel, 0.5 = Vollmond, 0.75 = letztes Viertel
+void zeichneMondphase(TFT_eSprite &s, int cx, int cy, int r, float phase);
+float mondphase(time_t jetzt);  // 0..1 aus dem Datum
+const char *mondName(float phase);
+
+// Warn-Dreieck mit Ausrufezeichen, g = Hoehe
+void zeichneWarnzeichen(TFT_eSprite &s, int cx, int cy, int g, uint16_t f);
+
 // Text mit Schatten, y = Grundlinie. Kann ä ö ü Ä Ö Ü ß (die Schriften selbst nicht).
 // Schrift vorher mit setFreeFont() oder setTextFont() waehlen.
 void schreibe(TFT_eSprite &s, const char *text, int x, int y, uint16_t f, Ausrichtung a);

@@ -97,7 +97,7 @@ header p { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
 .chips button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .note { font-size: 13px; color: var(--muted); margin: 0; }
 
-.explain { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.explain { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 16px; }
 .explain div { min-width: 0; }
 .explain h2 { font-family: var(--display); font-weight: 600; font-size: 22px; margin: 0 0 4px; letter-spacing: .01em; }
 .explain p { margin: 0; color: var(--muted); font-size: 14px; }
@@ -153,9 +153,12 @@ html.einbetten .wrap { padding-block: 4px 8px; gap: 16px; }
     <div><span class="tag">Seite 1</span><h2>Jetzt</h2><p>Animiertes Wetterbild, Temperatur, gefühlte Temperatur, Wind und Luftfeuchte. Der Himmel färbt sich passend zum Wetter, nachts mit funkelnden Sternen.</p></div>
     <div><span class="tag">Seite 2</span><h2>Nächste 24 Stunden</h2><p>Temperaturkurve, die sich beim Umblättern aufbaut. Darunter blaue Balken für die Regenwahrscheinlichkeit.</p></div>
     <div><span class="tag">Seite 3</span><h2>Die nächsten Tage</h2><p>Heute, morgen und übermorgen mit kleinem animiertem Bild, Höchst- und Tiefstwert und Regenrisiko.</p></div>
+    <div><span class="tag">Seite 4</span><h2>Sonne &amp; Mond</h2><p>Die Sonne wandert über ihren Tagesbogen von Aufgang bis Untergang. Dazu Tageslänge, UV-Index und die aktuelle Mondphase.</p></div>
+    <div><span class="tag">Seite 5</span><h2>Luft &amp; Pollen</h2><p>Europäischer Luftqualitätsindex als Ring und fünf Pollenarten in drei Stufen. Wählst du „Sonnig“, siehst du Pollen.</p></div>
+    <div><span class="tag">Immer</span><h2>Warnungen &amp; Regen</h2><p>DWD-Unwetterwarnungen blinken oben im Wechsel mit dem Titel. Beginnt oder endet Regen in den nächsten zwei Stunden, steht die Uhrzeit auf Seite 1. Probier „Gewitter“.</p></div>
   </section>
 
-  <footer>Die Seiten blättern alle 12 s von allein weiter, nach einem Tastendruck erst wieder nach 30 s. Auf dem echten Display sehen Schrift und Kantenglättung etwas anders aus, Aufbau, Farben und Bewegungen sind gleich. Firmware: <code>src/bilder.cpp</code> und <code>src/main.cpp</code>.</footer>
+  <footer>Die Seiten blättern alle 12 s von allein weiter, nach einem Tastendruck erst wieder nach 30 s. Welche Seiten, wie schnell, Nachtmodus und Ort stellst du im Browser unter wetterstation.local ein. Auf dem echten Display sehen Schrift und Kantenglättung etwas anders aus, Aufbau, Farben und Bewegungen sind gleich. Firmware: <code>src/bilder.cpp</code> und <code>src/main.cpp</code>.</footer>
 </div>
 
 <script>
@@ -177,7 +180,11 @@ const ECHT = {
     precipitation_probability: Array(24).fill(0)
   },
   daily: { time: ["2026-11-01","2026-11-02","2026-11-03","2026-11-04"], weather_code: [61,61,61,45],
-    temperature_2m_max: [9.3,8.7,8.4,7.8], temperature_2m_min: [6.0,6.5,4.3,3.7], precipitation_probability_max: [3,3,3,0] }
+    temperature_2m_max: [9.3,8.7,8.4,7.8], temperature_2m_min: [6.0,6.5,4.3,3.7], precipitation_probability_max: [3,3,3,0],
+    sunrise: ["2026-11-01T06:56"], sunset: ["2026-11-01T16:35"], uv_index_max: [2.1] },
+  // Luft & Pollen (air-quality-api.open-meteo.com) und DWD-Warnungen (brightsky.dev), gleicher Zeitpunkt
+  luft: { european_aqi: 23, pm2_5: 6.4, pollen: [0, 0, 0, 0, 0] },
+  warnung: ""
 };
 
 function wetterAus(j) {
@@ -188,7 +195,10 @@ function wetterAus(j) {
     stdStunde: j.hourly.time.map(Number),
     tagCode: j.daily.weather_code.slice(), tagMax: j.daily.temperature_2m_max.slice(),
     tagMin: j.daily.temperature_2m_min.slice(), tagRegen: j.daily.precipitation_probability_max.slice(),
-    tagWochentag: j.daily.time.map(d => new Date(d + "T12:00:00").getDay())
+    tagWochentag: j.daily.time.map(d => new Date(d + "T12:00:00").getDay()),
+    sonneAuf: j.daily.sunrise[0].slice(11), sonneUnter: j.daily.sunset[0].slice(11), uv: j.daily.uv_index_max[0],
+    aqi: j.luft.european_aqi, pm25: j.luft.pm2_5, pollen: j.luft.pollen.slice(),
+    warnung: j.warnung, warnStufe: 0, regenHinweis: ""
   };
 }
 
@@ -219,8 +229,10 @@ function baueWetter() {
       w.temp = minus(w.temp); w.gefuehlt = minus(w.gefuehlt);
       w.stdTemp = w.stdTemp.map(minus); w.tagMax = w.tagMax.map(minus); w.tagMin = w.tagMin.map(minus);
     }
-    if (modus === 0) { w.temp = 11.4; w.gefuehlt = 10.2; w.feuchte = 61; }
-    if (modus === 95) { w.wind = 38; }
+    if (modus === 0) { w.temp = 11.4; w.gefuehlt = 10.2; w.feuchte = 61; w.uv = 4.6; w.aqi = 12; w.pollen = [0, 38, 74, 4, 0]; }
+    if (modus === 2) { w.aqi = 46; w.pm25 = 18; w.pollen = [12, 0, 22, 0, 0]; }
+    if (modus === 53 || modus === 63) w.regenHinweis = modus === 63 ? "Regen bis 14:30" : "Regen ab 14:15";
+    if (modus === 95) { w.wind = 38; w.warnung = "Schwere Sturmböen"; w.warnStufe = 3; w.regenHinweis = "Regen bis 15:45"; }
   }
   if (tagModus !== "echt") w.tag = tagModus === "tag";
 }
@@ -425,8 +437,23 @@ function tropfenSymbol(x, y, f) { dreieck(x - 3, y - 1, x + 3, y - 1, x, y - 7, 
 const WOCHENTAG = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
 const WOCHENTAG_KURZ = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
+// Titel; bei DWD-Warnung abwechselnd mit der Warnung (wie titel() in main.cpp)
+function warnzeichen(cx, cy, g, f, a) {
+  const h = g, b = g * 1.15, tt = Math.max(2, g / 7);
+  c.globalAlpha = a; dreieck(cx, cy - h / 2, cx - b / 2, cy + h / 2, cx + b / 2, cy + h / 2, f); c.globalAlpha = 1;
+  c.fillStyle = "#000"; c.fillRect(cx - tt / 2, cy - h / 6, tt, h / 3); c.fillRect(cx - tt / 2, cy + h / 4, tt, tt);
+}
+function titel(ox, text, t) {
+  schrift("f2");
+  if (w.warnung && Math.floor(t / 2500) % 2) {
+    const f = w.warnStufe >= 3 ? rgb(255, 80, 70) : rgb(255, 160, 40);
+    warnzeichen(ox + 12, 8, 12, f, 0.6 + 0.4 * Math.sin(t * 0.012));
+    schreibe(w.warnung, ox + 22, 13, f, "l");
+  } else schreibe(text, ox + 6, 13, WEISS, "l");
+}
+
 function seiteJetzt(ox, t) {
-  schrift("f2"); schreibe("Cottbus", ox + 6, 13, WEISS, "l");
+  titel(ox, "Cottbus", t);
   zeichneBild(bildFuerCode(w.code), w.tag, ox + 58, 74, 96, t);
   schrift("b24"); schreibeTemp(w.temp, ox + 118, 66, WEISS, "l");
   const text = textFuerCode(w.code, w.tag);
@@ -435,6 +462,11 @@ function seiteJetzt(ox, t) {
   schrift("f2");
   schreibe("Gefühlt", ox + 118, 106, HELL, "l");
   schreibeTemp(w.gefuehlt, ox + 122 + breite("Gefühlt"), 106, HELL, "l");
+  if (w.regenHinweis) {
+    tropfenSymbol(ox + 122, 118, rgb(130, 190, 255));
+    schreibe(w.regenHinweis, ox + 130, 122, rgb(150, 205, 255), "l");
+    return;
+  }
   schreibe(`Wind ${Math.round(w.wind)} km/h`, ox + 118, 122, HELL, "l");
   const z = `${w.feuchte}%`;
   schreibe(z, ox + 236, 122, HELL, "r");
@@ -442,7 +474,7 @@ function seiteJetzt(ox, t) {
 }
 
 function seiteStunden(ox, t) {
-  schrift("f2"); schreibe("Nächste 24 Stunden", ox + 6, 13, WEISS, "l");
+  titel(ox, "Nächste 24 Stunden", t);
   const n = w.stdTemp.length;
   let tmin = Math.min(...w.stdTemp), tmax = Math.max(...w.stdTemp);
   if (tmax - tmin < 4) { const m = (tmax + tmin) / 2; tmin = m - 2; tmax = m + 2; }
@@ -497,7 +529,7 @@ function seiteStunden(ox, t) {
 }
 
 function seiteTage(ox, t) {
-  schrift("f2"); schreibe("Die nächsten Tage", ox + 6, 13, WEISS, "l");
+  titel(ox, "Die nächsten Tage", t);
   for (let i = 0; i < 3; i++) {
     const x = ox + 6 + i * 78, mx = x + 36;
     rundRechteck(x, 20, 72, 106, 8, "#000", (i === 0 ? 95 : 70) / 255);
@@ -513,9 +545,76 @@ function seiteTage(ox, t) {
   }
 }
 
+// Seite 4: Sonne & Mond (wie seiteSonne in main.cpp)
+function mondphase(ms) { const p = ((ms / 1000 - 947182440) / 86400 / 29.530588853) % 1; return p < 0 ? p + 1 : p; }
+function mondName(p) {
+  return p < .03 || p > .97 ? "Neumond" : p < .22 ? "Junge Sichel" : p < .28 ? "Erstes Viertel" : p < .47 ? "Zunehmend"
+    : p < .53 ? "Vollmond" : p < .72 ? "Abnehmend" : p < .78 ? "Letztes Viertel" : "Alte Sichel";
+}
+function mondBild(cx, cy, r, p) {
+  const hell = rgb(238, 234, 210);
+  kreis(cx, cy, r + 4, hell, 30 / 255);
+  kreis(cx, cy, r, rgb(56, 55, 49));
+  const k = Math.cos(p * 2 * Math.PI);
+  c.fillStyle = hell;
+  for (let y = -r + 1; y < r; y++) {
+    const wd = Math.sqrt(r * r - y * y), a = p < .5 ? wd * k : -wd, b = p < .5 ? wd : -wd * k;
+    if (b > a) c.fillRect(cx + a, cy + y, b - a, 1);
+  }
+}
+const minuten = s => +s.slice(0, 2) * 60 + +s.slice(3, 5);
+function seiteSonne(ox, t) {
+  titel(ox, "Sonne & Mond", t);
+  const CX = ox + 62, CY = 96, R = 46, auf = minuten(w.sonneAuf), unter = minuten(w.sonneUnter);
+  const z = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Berlin" }));
+  const frac = (z.getHours() * 60 + z.getMinutes() - auf) / (unter - auf);
+  c.fillStyle = "rgba(255,255,255,.47)"; c.fillRect(ox + 6, CY, 112, 1);
+  c.fillStyle = "rgba(255,255,255,.43)";
+  for (let i = 0; i <= 60; i += 2) { const a = Math.PI * i / 60; c.fillRect(CX - R * Math.cos(a), CY - R * Math.sin(a), 1, 1); }
+  if (frac >= 0 && frac <= 1) {
+    c.strokeStyle = rgb(255, 205, 90); c.lineWidth = 2; c.beginPath(); c.arc(CX, CY, R, Math.PI, Math.PI + Math.PI * frac); c.stroke();
+    zeichneBild("KLAR", true, CX - R * Math.cos(Math.PI * frac), CY - R * Math.sin(Math.PI * frac), 34, t);
+  } else zeichneBild("KLAR", false, CX, CY - 24, 30, t);
+  schrift("f2");
+  schreibe(w.sonneAuf, ox + 6, 112, WEISS, "l"); schreibe(w.sonneUnter, ox + 118, 112, WEISS, "r");
+  const d = unter - auf;
+  schreibe(`Tag ${Math.floor(d / 60)} h ${String(d % 60).padStart(2, "0")} min`, ox + 6, 128, HELL, "l");
+  const p = mondphase(Date.now());
+  mondBild(ox + 185, 54, 22, p);
+  schreibe(mondName(p), ox + 185, 96, WEISS, "m");
+  schreibe(`${Math.round((1 - Math.cos(p * 2 * Math.PI)) / 2 * 100)} % beleuchtet`, ox + 185, 112, HELL, "m");
+  schreibe(`UV-Index ${Math.round(w.uv)}`, ox + 185, 128, w.uv >= 6 ? rgb(255, 160, 40) : HELL, "m");
+}
+
+// Seite 5: Luft & Pollen (wie seiteLuft in main.cpp)
+const POLLEN = ["Erle", "Birke", "Gräser", "Beifuß", "Ambrosia"];
+function seiteLuft(ox, t) {
+  titel(ox, "Luft & Pollen", t);
+  const STUFE = ["Sehr gut", "Gut", "Mäßig", "Schlecht", "Sehr schlecht", "Extrem"];
+  const FARBE = [rgb(72, 233, 82), rgb(136, 233, 66), rgb(255, 208, 33), rgb(255, 140, 33), rgb(255, 60, 66), rgb(160, 0, 255)];
+  const stufe = Math.min(5, Math.floor(w.aqi / 20)), f = FARBE[stufe];
+  const CX = ox + 56, CY = 70, R = 36;
+  let fort = Math.min(1, (t - seiteSeit) / 900); fort = 1 - Math.pow(1 - fort, 3);
+  // TFT_eSPI-Winkel: 0 = unten, im Uhrzeigersinn -> Canvas: +90 Grad
+  const winkel = g => (g + 90) * Math.PI / 180;
+  c.lineCap = "round"; c.lineWidth = 7;
+  c.strokeStyle = "rgba(255,255,255,.24)"; c.beginPath(); c.arc(CX, CY, R - 3.5, winkel(30), winkel(330)); c.stroke();
+  const ende = 30 + 300 * Math.min(1, w.aqi / 100) * fort;
+  if (ende > 31) { c.strokeStyle = f; c.beginPath(); c.arc(CX, CY, R - 3.5, winkel(30), winkel(ende)); c.stroke(); }
+  schrift("b12"); schreibe(String(w.aqi), CX, CY + 8, WEISS, "m");
+  schrift("f2"); schreibe(STUFE[stufe], CX, 118, f, "m");
+  schreibe(`Feinstaub ${Math.round(w.pm25)}`, CX, 133, HELL, "m");
+  const PF = [null, rgb(136, 233, 66), rgb(255, 208, 33), rgb(255, 60, 66)];
+  for (let i = 0; i < 5; i++) {
+    const y = 40 + i * 18, k = w.pollen[i], lvl = k < 1 ? 0 : k <= 10 ? 1 : k <= 50 ? 2 : 3;
+    schreibe(POLLEN[i], ox + 116, y, lvl ? WEISS : HELL, "l");
+    for (let s = 0; s < 3; s++) rundRechteck(ox + 178 + s * 19, y - 9, 16, 7, 3, s < lvl ? PF[lvl] : "#fff", s < lvl ? 1 : 50 / 255);
+  }
+}
+
 function zeichneSeite(s, ox, t) {
   if (ox <= -240 || ox >= 240) return;
-  [seiteJetzt, seiteStunden, seiteTage][s](ox, t);
+  [seiteJetzt, seiteStunden, seiteTage, seiteSonne, seiteLuft][s](ox, t);
 }
 
 function statusLeiste() {
@@ -535,7 +634,7 @@ function statusLeiste() {
   }
 }
 function seitenPunkte() {
-  for (let i = 0; i < 3; i++) kreis(112 + i * 8, 131, 2, WEISS, i === seite ? 1 : 90 / 255);
+  for (let i = 0; i < SEITEN; i++) kreis(120 - (SEITEN - 1) * 4 + i * 8, 131, 2, WEISS, i === seite ? 1 : 90 / 255);
 }
 function lichtAnzeige(t) {
   if (lichtAnzeigeBis - t <= 0) return;
@@ -589,7 +688,7 @@ function ortBild(t) {
 }
 
 // ---------- Ablauf ----------
-const SEITEN = 3, AUTO_WEITER = 12000, WECHSEL_DAUER = 380;
+const SEITEN = 5, AUTO_WEITER = 12000, WECHSEL_DAUER = 380;
 const HELLIGKEIT = [255, 140, 60, 15];
 let seite = 0, alteSeite = 0, wechsel = false, wechselStart = 0, seiteSeit = 0, letzterTastendruck = -1e9;
 let lichtStufe = 0, lichtAnzeigeBis = 0, startSeit = 0;

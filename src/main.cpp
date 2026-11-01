@@ -1,11 +1,12 @@
 // TTGO T-Display - Wetterstation
 // Standort: am Handy gewaehlt (Einrichtung), sonst grob ueber die Internet-Adresse, sonst Cottbus
-//   Taster GPIO 0:  naechste Seite
-//   Taster GPIO 35: kurz = Helligkeit, 3 s halten = WLAN neu einrichten
-// Seiten: Jetzt, naechste 24 Stunden, naechste Tage (wechseln auch von allein)
-// Wetterdaten: open-meteo.com
+//   Taster GPIO 0:  kurz = naechste Seite, 2 s halten = Info (Adresse der Einstellungsseite, Build)
+//   Taster GPIO 35: kurz = Helligkeit, 3 s halten = WLAN und Ort neu einrichten
+// Seiten: Jetzt, 24 Stunden, naechste Tage, Sonne & Mond, Luft & Pollen (wechseln auch von allein)
+// Wetterdaten: open-meteo.com, Warnungen: Deutscher Wetterdienst ueber brightsky.dev
 // WLAN: Einrichtung per Handy ueber das WLAN "Wetterstation-Setup" (siehe wlan.cpp)
-// Updates ueber WLAN: Umgebung "env:tdisplay_wlan" (Passwort in geheim.ini)
+// Einstellungen: http://wetterstation.local (siehe web.cpp)
+// Updates: von selbst aus dem Internet (netzupdate.cpp) oder ueber WLAN mit "env:tdisplay_wlan"
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -16,12 +17,12 @@
 #include "bilder.h"
 #include "wlan.h"
 #include "ort.h"
+#include "einstellungen.h"
+#include "netzupdate.h"
+#include "web.h"
 
 #ifndef OTA_PASSWORT
 #define OTA_PASSWORT ""
-#endif
-#ifndef FIRMWARE_BUILD
-#define FIRMWARE_BUILD 0  // setzt GitHub beim Bauen (Build-Nummer)
 #endif
 
 // Pins (siehe INFO.md)
@@ -32,7 +33,6 @@ const int AKKU_EIN     = 14;  // schaltet den Spannungsteiler am Akku ein
 const int LICHT_PIN    = 4;   // Hintergrundlicht
 
 const float AKKU_FAKTOR = 2.0f;        // Teiler 1:2 - mit Multimeter nachmessen und anpassen
-const uint32_t AUTO_WEITER = 12000;    // so lange bleibt eine Seite stehen
 const uint32_t WECHSEL_DAUER = 380;    // Schiebe-Animation zwischen den Seiten
 
 const uint16_t WEISS = TFT_WHITE;
@@ -41,7 +41,6 @@ const uint16_t HELL  = 0xDF7E;  // helles Blaugrau
 TFT_eSPI tft;
 TFT_eSprite bild(&tft);  // ganzer Bildschirm im Speicher - so flackert nichts
 
-const int SEITEN = 3;
 int seite = 0, alteSeite = 0;
 bool wechsel = false;
 uint32_t wechselStart = 0;
@@ -49,8 +48,9 @@ uint32_t seiteSeit = 0;
 uint32_t letzterTastendruck = 0;
 
 const int HELLIGKEIT[] = {255, 140, 60, 15};
-int lichtStufe = 0;
+const int HELLIGKEIT_NACHT = 4;
 uint32_t lichtAnzeigeBis = 0;
+uint32_t infoBis = 0;
 
 float akkuVolt = 0;
 uint32_t akkuZeit = 0;
@@ -59,14 +59,6 @@ static Wetter w;
 
 static const char *WOCHENTAG[] = {"Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"};
 static const char *WOCHENTAG_KURZ[] = {"So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"};
-
-// Taster mit Entprellung: true nur beim Druecken, nicht beim Halten
-bool gedrueckt(int pin, bool &vorher) {
-  bool jetzt = digitalRead(pin) == LOW;
-  bool neu = jetzt && !vorher;
-  vorher = jetzt;
-  return neu;
-}
 
 float akkuSpannung() {
   uint32_t summe = 0;
@@ -94,12 +86,27 @@ void tropfenSymbol(int x, int y, uint16_t f) {
   bild.fillSmoothCircle(x, y, 3, f);
 }
 
+// Minuten seit Mitternacht aus "06:56"
+int minuten(const char *hhmm) { return atoi(hhmm) * 60 + atoi(hhmm + 3); }
+
+// Titel oben links. Gibt es eine DWD-Warnung, wechselt er alle 2,5 s mit der Warnung.
+void titel(int ox, const char *text, uint32_t t) {
+  bild.setTextFont(2);
+  if (w.warnung[0] && (t / 2500) % 2) {
+    uint16_t f = w.warnStufe >= 3 ? farbe(255, 80, 70) : farbe(255, 160, 40);
+    float blink = 0.6f + 0.4f * sinf(t * 0.012f);
+    zeichneWarnzeichen(bild, ox + 12, 8, 12, bild.alphaBlend(255 * blink, f, hintergrund(ox + 12, 8)));
+    schreibe(bild, kuerzen(w.warnung, 170).c_str(), ox + 22, 13, f, LINKS);
+  } else {
+    schreibe(bild, kuerzen(text, 175).c_str(), ox + 6, 13, WEISS, LINKS);
+  }
+}
+
 // ------------------------------------------------------------
 // Seite 1: Jetzt
 // ------------------------------------------------------------
 void seiteJetzt(int ox, uint32_t t) {
-  bild.setTextFont(2);
-  schreibe(bild, kuerzen(w.ort, 160).c_str(), ox + 6, 13, WEISS, LINKS);
+  titel(ox, w.ort, t);
 
   zeichneBild(bild, bildFuerCode(w.code), w.tag, ox + 58, 74, 96, t);
 
@@ -115,7 +122,13 @@ void seiteJetzt(int ox, uint32_t t) {
   schreibe(bild, "Gefühlt", ox + 118, 106, HELL, LINKS);
   schreibeTemp(bild, w.gefuehlt, ox + 122 + breite(bild, "Gefühlt"), 106, HELL, LINKS);
 
+  // Regen in den naechsten 2 Stunden hat Vorrang vor Wind und Luftfeuchte
   char z[24];
+  if (w.regenHinweis[0]) {
+    tropfenSymbol(ox + 122, 118, farbe(130, 190, 255));
+    schreibe(bild, w.regenHinweis, ox + 130, 122, farbe(150, 205, 255), LINKS);
+    return;
+  }
   snprintf(z, sizeof(z), "Wind %d km/h", (int)lroundf(w.wind));
   schreibe(bild, z, ox + 118, 122, HELL, LINKS);
   snprintf(z, sizeof(z), "%d%%", w.feuchte);
@@ -127,8 +140,7 @@ void seiteJetzt(int ox, uint32_t t) {
 // Seite 2: naechste 24 Stunden als Kurve
 // ------------------------------------------------------------
 void seiteStunden(int ox, uint32_t t) {
-  bild.setTextFont(2);
-  schreibe(bild, "Nächste 24 Stunden", ox + 6, 13, WEISS, LINKS);
+  titel(ox, "Nächste 24 Stunden", t);
 
   int n = w.stunden;
   if (n < 2) return;
@@ -218,8 +230,7 @@ void seiteStunden(int ox, uint32_t t) {
 // Seite 3: heute, morgen, uebermorgen
 // ------------------------------------------------------------
 void seiteTage(int ox, uint32_t t) {
-  bild.setTextFont(2);
-  schreibe(bild, "Die nächsten Tage", ox + 6, 13, WEISS, LINKS);
+  titel(ox, "Die nächsten Tage", t);
 
   for (int i = 0; i < 3; i++) {
     int x = ox + 6 + i * 78, mx = x + 36;
@@ -245,17 +256,118 @@ void seiteTage(int ox, uint32_t t) {
   }
 }
 
+// ------------------------------------------------------------
+// Seite 4: Sonne & Mond
+// ------------------------------------------------------------
+void seiteSonne(int ox, uint32_t t) {
+  titel(ox, "Sonne & Mond", t);
+
+  // Sonnenbogen: links Aufgang, rechts Untergang, die Sonne steht dort, wo sie gerade ist
+  const int CX = ox + 62, CY = 96, R = 46;
+  int auf = minuten(w.sonneAuf), unter = minuten(w.sonneUnter);
+  struct tm zeit;
+  int jetzt = getLocalTime(&zeit, 0) ? zeit.tm_hour * 60 + zeit.tm_min : -1;
+  float frac = unter > auf && jetzt >= 0 ? float(jetzt - auf) / (unter - auf) : -1;
+
+  bild.drawFastHLine(ox + 6, CY, 112, bild.alphaBlend(120, WEISS, hintergrund(CX, CY)));
+  for (int i = 0; i <= 60; i++) {  // gestrichelter Bogen
+    if (i % 2) continue;
+    float a = PI * i / 60;
+    bild.drawPixel(CX - R * cosf(a), CY - R * sinf(a), bild.alphaBlend(110, WEISS, hintergrund(CX, CY - R)));
+  }
+  if (frac >= 0 && frac <= 1) {
+    // schon gelaufenes Stueck hell nachzeichnen
+    for (float a = 0; a < PI * frac; a += 0.02f) {
+      bild.drawWideLine(CX - R * cosf(a), CY - R * sinf(a), CX - R * cosf(a + 0.02f), CY - R * sinf(a + 0.02f), 2,
+                        farbe(255, 205, 90));
+    }
+    zeichneBild(bild, KLAR, true, CX - R * cosf(PI * frac), CY - R * sinf(PI * frac), 34, t);
+  } else {
+    zeichneBild(bild, KLAR, false, CX, CY - 24, 30, t);  // nachts: Mond ueber dem Horizont
+  }
+
+  bild.setTextFont(2);
+  schreibe(bild, w.sonneAuf, ox + 6, 112, WEISS, LINKS);
+  schreibe(bild, w.sonneUnter, ox + 118, 112, WEISS, RECHTS);
+  int dauer = unter - auf;
+  if (dauer > 0) {
+    char z[24];
+    snprintf(z, sizeof(z), "Tag %d h %02d min", dauer / 60, dauer % 60);
+    schreibe(bild, z, ox + 6, 128, HELL, LINKS);
+  }
+
+  // Mondphase rechts
+  time_t sek;
+  time(&sek);
+  float p = mondphase(sek);
+  zeichneMondphase(bild, ox + 185, 54, 22, p);
+  schreibe(bild, mondName(p), ox + 185, 96, WEISS, MITTE);
+  char z[32];
+  snprintf(z, sizeof(z), "%d %% beleuchtet", (int)lroundf((1 - cosf(p * 2 * PI)) / 2 * 100));
+  schreibe(bild, z, ox + 185, 112, HELL, MITTE);
+  snprintf(z, sizeof(z), "UV-Index %d", (int)lroundf(w.uv));
+  schreibe(bild, z, ox + 185, 128, w.uv >= 6 ? farbe(255, 160, 40) : HELL, MITTE);
+}
+
+// ------------------------------------------------------------
+// Seite 5: Luft & Pollen
+// ------------------------------------------------------------
+void seiteLuft(int ox, uint32_t t) {
+  titel(ox, "Luft & Pollen", t);
+  bild.setTextFont(2);
+  if (!w.luftGueltig) {
+    schreibe(bild, "Für diesen Ort gibt es", ox + 120, 64, HELL, MITTE);
+    schreibe(bild, "keine Luftdaten", ox + 120, 82, HELL, MITTE);
+    return;
+  }
+
+  // Europaeischer Luftqualitaetsindex als Ring
+  static const char *STUFE[] = {"Sehr gut", "Gut", "Mäßig", "Schlecht", "Sehr schlecht", "Extrem"};
+  static const uint16_t FARBE[] = {0x4F6A, 0x8F68, 0xFE84, 0xFC64, 0xF9E8, 0xA01F};
+  int stufe = constrain(w.aqi / 20, 0, 5);
+  uint16_t f = FARBE[stufe];
+  const int CX = ox + 56, CY = 70, R = 36;
+  float fort = min(1.0f, (t - seiteSeit) / 900.0f);  // Ring fuellt sich beim Umblaettern
+  uint16_t hg = hintergrund(CX, CY - R);
+  bild.drawSmoothArc(CX, CY, R, R - 7, 30, 330, bild.alphaBlend(60, WEISS, hg), hg, true);
+  int ende = 30 + 300 * min(1.0f, w.aqi / 100.0f) * (1 - powf(1 - fort, 3));
+  if (ende > 31) bild.drawSmoothArc(CX, CY, R, R - 7, 30, ende, f, hg, true);
+  bild.setFreeFont(&FreeSansBold12pt7b);
+  char z[24];
+  snprintf(z, sizeof(z), "%d", w.aqi);
+  schreibe(bild, z, CX, CY + 8, WEISS, MITTE);
+  bild.setTextFont(2);
+  schreibe(bild, STUFE[stufe], CX, 118, f, MITTE);
+  snprintf(z, sizeof(z), "Feinstaub %d", (int)lroundf(w.pm25));
+  schreibe(bild, z, CX, 133, HELL, MITTE);
+
+  // Pollen: drei Stufen je Art
+  for (int i = 0; i < 5; i++) {
+    int y = 40 + i * 18;
+    float k = w.pollen[i];
+    int lvl = k < 1 ? 0 : k <= 10 ? 1 : k <= 50 ? 2 : 3;
+    schreibe(bild, POLLEN_NAME[i], ox + 116, y, lvl ? WEISS : HELL, LINKS);
+    static const uint16_t PF[] = {0, 0x8F68, 0xFE84, 0xF9E8};
+    for (int s = 0; s < 3; s++) {
+      uint16_t c = s < lvl ? PF[lvl] : bild.alphaBlend(50, WEISS, hintergrund(ox + 180, y - 5));
+      bild.fillSmoothRoundRect(ox + 178 + s * 19, y - 9, 16, 7, 3, c);
+    }
+  }
+}
+
 void zeichneSeite(int s, int ox, uint32_t t) {
   if (ox <= -240 || ox >= 240) return;
   switch (s) {
     case 0: seiteJetzt(ox, t); break;
     case 1: seiteStunden(ox, t); break;
     case 2: seiteTage(ox, t); break;
+    case 3: seiteSonne(ox, t); break;
+    case 4: seiteLuft(ox, t); break;
   }
 }
 
 // ------------------------------------------------------------
-// Immer sichtbar: Uhrzeit, Akku, Seitenpunkte, Helligkeit
+// Immer sichtbar: Uhrzeit, Akku, Seitenpunkte, Helligkeit, Info
 // ------------------------------------------------------------
 void statusLeiste() {
   struct tm zeit;
@@ -278,10 +390,17 @@ void statusLeiste() {
   }
 }
 
+bool seiteAn(int s) { return einst.seiten >> s & 1; }
+
 void seitenPunkte() {
-  for (int i = 0; i < SEITEN; i++) {
-    int x = 112 + i * 8;
+  int n = 0;
+  for (int i = 0; i < SEITEN_ANZAHL; i++) n += seiteAn(i);
+  if (n < 2) return;
+  int x = 120 - (n - 1) * 4;
+  for (int i = 0; i < SEITEN_ANZAHL; i++) {
+    if (!seiteAn(i)) continue;
     bild.fillSmoothCircle(x, 131, 2, i == seite ? WEISS : bild.alphaBlend(90, WEISS, hintergrund(x, 131)));
+    x += 8;
   }
 }
 
@@ -289,9 +408,26 @@ void lichtAnzeige(uint32_t t) {
   if ((int32_t)(lichtAnzeigeBis - t) <= 0) return;
   bild.fillSmoothRoundRect(70, 104, 100, 20, 10, bild.alphaBlend(200, TFT_BLACK, hintergrund(120, 114)));
   for (int k = 0; k < 4; k++) {
-    bool an = k < 4 - lichtStufe;
+    bool an = k < 4 - einst.licht;
     bild.fillSmoothRoundRect(80 + k * 21, 110, 17, 8, 3, an ? farbe(255, 210, 70) : farbe(70, 74, 84));
   }
+}
+
+// Taste IO0 lange halten: wo die Einstellungsseite ist
+void infoAnzeige(uint32_t t) {
+  if ((int32_t)(infoBis - t) <= 0) return;
+  bild.fillSmoothRoundRect(14, 22, 212, 96, 12, bild.alphaBlend(225, TFT_BLACK, hintergrund(120, 70)));
+  bild.setTextFont(2);
+  schreibe(bild, "Einstellungen im Browser:", 120, 42, HELL, MITTE);
+  bild.setFreeFont(&FreeSansBold9pt7b);
+  schreibe(bild, WLAN_HOSTNAME ".local", 120, 64, farbe(255, 198, 44), MITTE);
+  bild.setTextFont(2);
+  schreibe(bild, ("oder " + WiFi.localIP().toString()).c_str(), 120, 84, WEISS, MITTE);
+  char z[40];
+  if (FIRMWARE_BUILD) snprintf(z, sizeof(z), "Build %d", FIRMWARE_BUILD);
+  else strcpy(z, "eigener Build");
+  if (updateNeuerBuild()) snprintf(z, sizeof(z), "Build %d - neu: %d", FIRMWARE_BUILD, updateNeuerBuild());
+  schreibe(bild, z, 120, 106, HELL, MITTE);
 }
 
 // ------------------------------------------------------------
@@ -406,14 +542,14 @@ void wlanBild(WlanPhase phase, const char *netz) {
 }
 
 // ------------------------------------------------------------
-// Update ueber WLAN
+// Updates (ueber WLAN aus VS Code oder selbst aus dem Internet)
 // ------------------------------------------------------------
-// Waehrend des Updates laeuft loop() nicht weiter - deshalb zeichnet onProgress selbst.
+// Waehrend des Updates laeuft loop() nicht weiter - deshalb wird hier selbst gezeichnet.
 void updateBild(int prozent, const char *text) {
   uint32_t t = millis();
   zeichneHimmel(bild, KLAR, false, t, false);
   bild.setFreeFont(&FreeSansBold9pt7b);
-  schreibe(bild, "Update über WLAN", 120, 48, WEISS, MITTE);
+  schreibe(bild, "Neue Version", 120, 48, WEISS, MITTE);
 
   bild.fillSmoothRoundRect(30, 64, 180, 14, 7, farbe(40, 48, 80));
   if (prozent > 0) bild.fillSmoothRoundRect(30, 64, max(14, 180 * prozent / 100), 14, 7, farbe(255, 198, 44));
@@ -447,18 +583,85 @@ void updateStart() {
     Serial.printf("Update-Fehler %u\n", fehler);
     updateBild(0, "Fehler - nochmal versuchen");
     delay(2000);
-    ledcWrite(LICHT_PIN, HELLIGKEIT[lichtStufe]);
   });
   ArduinoOTA.begin();
   Serial.printf("Update ueber WLAN bereit: wetterstation.local (%s)\n", WiFi.localIP().toString().c_str());
 }
 
+// ------------------------------------------------------------
+// Seiten, Licht, Tasten
+// ------------------------------------------------------------
 void naechsteSeite(uint32_t t) {
+  int neu = seite;
+  for (int i = 0; i < SEITEN_ANZAHL; i++) {
+    neu = (neu + 1) % SEITEN_ANZAHL;
+    if (seiteAn(neu)) break;
+  }
+  if (neu == seite) return;
   alteSeite = seite;
-  seite = (seite + 1) % SEITEN;
+  seite = neu;
   wechsel = true;
   wechselStart = t;
   seiteSeit = t;
+}
+
+// Nachtmodus: zwischen "von" und "bis" sehr dunkel. Ein Tastendruck macht es fuer 20 s hell.
+bool istNacht() {
+  struct tm zeit;
+  if (!einst.nacht || einst.nachtVon == einst.nachtBis || !getLocalTime(&zeit, 0)) return false;
+  int h = zeit.tm_hour;
+  return einst.nachtVon < einst.nachtBis ? h >= einst.nachtVon && h < einst.nachtBis
+                                         : h >= einst.nachtVon || h < einst.nachtBis;
+}
+
+void lichtSetzen(uint32_t t) {
+  static int zuletzt = -1;
+  static uint32_t geprueft = 0;
+  static bool nacht = false;
+  if (t - geprueft > 1000) {
+    nacht = istNacht();
+    geprueft = t;
+  }
+  int soll = nacht && t - letzterTastendruck > 20000 ? HELLIGKEIT_NACHT : HELLIGKEIT[einst.licht];
+  if (soll != zuletzt) {
+    ledcWrite(LICHT_PIN, soll);
+    zuletzt = soll;
+  }
+}
+
+void tasten(uint32_t t, bool hatDaten) {
+  // IO0: kurz = naechste Seite (beim Loslassen), 2 s halten = Info
+  static uint32_t seiteSeitDruck = 0;
+  bool s = digitalRead(TASTER_SEITE) == LOW;
+  if (s && !seiteSeitDruck) seiteSeitDruck = t ? t : 1;
+  if (s && t - seiteSeitDruck > 2000 && (int32_t)(infoBis - t) <= 0) infoBis = t + 10000;
+  if (!s && seiteSeitDruck) {
+    if (t - seiteSeitDruck < 1000) {
+      if ((int32_t)(infoBis - t) > 0) infoBis = t;  // Info wieder zu
+      else if (hatDaten && !wechsel) naechsteSeite(t);
+    }
+    seiteSeitDruck = 0;
+    letzterTastendruck = t;
+  }
+
+  // IO35: kurz = Helligkeit (beim Loslassen), 3 s halten = WLAN und Ort neu einrichten
+  static uint32_t lichtSeitDruck = 0;
+  bool l = digitalRead(TASTER_LICHT) == LOW;
+  if (l && !lichtSeitDruck) lichtSeitDruck = t ? t : 1;
+  if (l && t - lichtSeitDruck > 3000) {
+    wlanBild(WLAN_EINRICHTUNG, "");
+    wlanEinrichtungAnfordern();
+  }
+  if (!l && lichtSeitDruck) {
+    bool warDunkel = istNacht() && t - letzterTastendruck > 20000;
+    if (t - lichtSeitDruck < 1000 && !warDunkel) {  // nachts weckt der erste Druck nur auf
+      einst.licht = (einst.licht + 1) % 4;
+      einstellungenSpeichern();
+      lichtAnzeigeBis = t + 1500;
+    }
+    lichtSeitDruck = 0;
+    letzterTastendruck = t;
+  }
 }
 
 void setup() {
@@ -473,12 +676,14 @@ void setup() {
   analogSetPinAttenuation(AKKU_PIN, ADC_11db);
   akkuVolt = akkuSpannung();
 
+  einstellungenLaden();
+
   tft.init();
   tft.setRotation(1);  // quer
   tft.fillScreen(TFT_BLACK);
 
   ledcAttach(LICHT_PIN, 5000, 8);
-  ledcWrite(LICHT_PIN, HELLIGKEIT[lichtStufe]);
+  ledcWrite(LICHT_PIN, HELLIGKEIT[einst.licht]);
 
   // Bildspeicher vor dem WLAN holen, solange noch genug am Stueck frei ist
   if (!bild.createSprite(240, 135)) {
@@ -494,38 +699,26 @@ void setup() {
 
   configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "de.pool.ntp.org", "pool.ntp.org");
   updateStart();
+  webStart();
   wetterStart();
+  if (!seiteAn(seite)) naechsteSeite(millis());
 }
 
 void loop() {
-  static bool seiteVorher = false;
-  static uint32_t lichtGedruecktSeit = 0;
   uint32_t t = millis();
 
   ArduinoOTA.handle();
+  webLoop();
 
   bool hatDaten = wetterHolen(w);
+  tasten(t, hatDaten);
+  lichtSetzen(t);
 
-  if (gedrueckt(TASTER_SEITE, seiteVorher) && hatDaten && !wechsel) {
-    naechsteSeite(t);
-    letzterTastendruck = t;
-  }
-
-  // GPIO 35: kurz = Helligkeit (beim Loslassen), 3 s halten = WLAN neu einrichten
-  bool licht = digitalRead(TASTER_LICHT) == LOW;
-  if (licht && !lichtGedruecktSeit) lichtGedruecktSeit = t ? t : 1;
-  if (licht && t - lichtGedruecktSeit > 3000) {
-    wlanBild(WLAN_EINRICHTUNG, "");
-    wlanEinrichtungAnfordern();
-  }
-  if (!licht && lichtGedruecktSeit) {
-    if (t - lichtGedruecktSeit < 1000) {
-      lichtStufe = (lichtStufe + 1) % 4;
-      ledcWrite(LICHT_PIN, HELLIGKEIT[lichtStufe]);
-      lichtAnzeigeBis = t + 1500;
-      letzterTastendruck = t;
-    }
-    lichtGedruecktSeit = 0;
+  // Neue Version aus dem Internet: auf Wunsch sofort, sonst wenn gerade niemand die Tasten benutzt
+  bool gewuenscht = updateInstallierenGewuenscht();
+  if (updateNeuerBuild() && (gewuenscht || (einst.autoUpdate && t - letzterTastendruck > 60000))) {
+    ledcWrite(LICHT_PIN, 255);
+    updateInstallieren(updateBild);
   }
 
   if (t - akkuZeit > 2000) {
@@ -536,6 +729,7 @@ void loop() {
   if (!hatDaten) {
     startBild(t);
   } else {
+    if (!seiteAn(seite) && !wechsel) naechsteSeite(t);  // Seite wurde gerade abgeschaltet
     Bild b = bildFuerCode(w.code);
     zeichneHimmel(bild, b, w.tag, t, b == GEWITTER && blitzAktiv(t));
 
@@ -554,9 +748,11 @@ void loop() {
     statusLeiste();
     seitenPunkte();
 
-    if (!wechsel && t - seiteSeit > AUTO_WEITER && t - letzterTastendruck > 30000) naechsteSeite(t);
+    if (einst.wechsel && !wechsel && t - seiteSeit > einst.wechsel * 1000UL && t - letzterTastendruck > 30000)
+      naechsteSeite(t);
   }
   lichtAnzeige(t);
+  infoAnzeige(t);
 
   bild.pushSprite(0, 0);
 }
