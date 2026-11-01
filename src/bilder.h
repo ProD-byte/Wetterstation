@@ -17,6 +17,10 @@ const char *textFuerCode(int code, bool tag);
 void zeichneHimmel(TFT_eSprite &s, Bild b, bool tag, uint32_t t, bool blitz, float daemmerung = 0);
 bool blitzAktiv(uint32_t t);
 
+// Farbe hinter (x, y) zum Mischen - Median aus 5 Punkten im X-Muster, damit ein einzelner Regenstreifen
+// oder eine Schneeflocke nicht die Farbe eines ganzen Kastens umspringen laesst (sonst zuckt es)
+uint16_t grundFarbe(TFT_eSprite &s, int x, int y);
+
 // Wetterbild um (cx, cy), groesse = ungefaehre Breite in Pixeln, t = millis() fuer die Animation
 void zeichneBild(TFT_eSprite &s, Bild b, bool tag, int cx, int cy, int groesse, uint32_t t);
 

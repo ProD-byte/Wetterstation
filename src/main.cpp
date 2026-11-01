@@ -104,9 +104,8 @@ void lichtStufe(int wert) {
   stufe = wert;
 }
 
-uint16_t hintergrund(int x, int y) {
-  return bild.readPixel(constrain(x, 0, bild.width() - 1), constrain(y, 0, bild.height() - 1));
-}
+// Farbe hinter (x, y) fuer Kaesten, Balken und Kanten - unempfindlich gegen Regen/Schnee (siehe grundFarbe)
+uint16_t hintergrund(int x, int y) { return grundFarbe(bild, x, y); }
 
 // Text auf eine Breite kuerzen (mit der gerade eingestellten Schrift), lange Ortsnamen z. B.
 String kuerzen(String text, int maxBreite) {
@@ -738,7 +737,12 @@ void statusLeiste() {
   int x = B - 31, y = 6;
   bild.drawRoundRect(x, y, 22, 12, 2, WEISS);
   bild.fillRect(x + 22, y + 4, 2, 4, WEISS);
-  if (akkuVolt > 4.3f) {  // haengt am USB
+  // haengt am USB? Mit Abstand zwischen Ein- und Ausschalten, sonst springt das Symbol hin und her,
+  // wenn die Spannung knapp an der Schwelle liegt
+  static bool usb = false;
+  if (akkuVolt > 4.3f) usb = true;
+  else if (akkuVolt < 4.15f) usb = false;
+  if (usb) {
     uint16_t g = farbe(255, 214, 60);
     bild.fillTriangle(x + 12, y + 1, x + 6, y + 7, x + 12, y + 7, g);
     bild.fillTriangle(x + 10, y + 5, x + 16, y + 5, x + 10, y + 11, g);
@@ -1161,7 +1165,7 @@ void loop() {
   }
 
   if (t - akkuZeit > 2000) {
-    akkuVolt = akkuSpannung();
+    akkuVolt = akkuVolt * 0.7f + akkuSpannung() * 0.3f;  // geglaettet, damit der Balken nicht zappelt
     akkuZeit = t;
   }
 

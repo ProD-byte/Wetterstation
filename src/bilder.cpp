@@ -180,6 +180,23 @@ void zeichneHimmel(TFT_eSprite &s, Bild b, bool tag, uint32_t t, bool blitz, flo
   himmelEffekte(s, b, tag, t);
 }
 
+uint16_t grundFarbe(TFT_eSprite &s, int x, int y) {
+  static const int8_t PUNKTE[5][2] = {{0, 0}, {-7, -7}, {7, -7}, {-7, 7}, {7, 7}};
+  uint16_t c[5];
+  int hell[5];
+  for (int i = 0; i < 5; i++) {
+    c[i] = s.readPixel(constrain(x + PUNKTE[i][0], 0, s.width() - 1), constrain(y + PUNKTE[i][1], 0, s.height() - 1));
+    hell[i] = ((c[i] >> 11) & 31) * 2 + ((c[i] >> 5) & 63) + (c[i] & 31) * 2;  // grob die Helligkeit
+  }
+  // den Punkt mit der mittleren Helligkeit nehmen
+  for (int i = 0; i < 5; i++) {
+    int kleiner = 0, gleich = 0;
+    for (int j = 0; j < 5; j++) kleiner += hell[j] < hell[i], gleich += hell[j] == hell[i];
+    if (kleiner <= 2 && kleiner + gleich > 2) return c[i];
+  }
+  return c[0];
+}
+
 // ------------------------------------------------------------
 // Bausteine
 // ------------------------------------------------------------
@@ -187,12 +204,13 @@ void zeichneHimmel(TFT_eSprite &s, Bild b, bool tag, uint32_t t, bool blitz, flo
 static void sonne(TFT_eSprite &s, float cx, float cy, float g, uint32_t t) {
   float r = g * 0.2f;
   uint16_t gelb = farbe(255, 198, 44);
-  uint16_t hg = s.readPixel(cx, cy);
+  uint16_t hg = grundFarbe(s, cx, cy);
   float puls = 0.5f + 0.5f * sinf(t * 0.0025f);
 
   // Schein in zwei Stufen (aussen ganz zart)
-  s.fillSmoothCircle(cx, cy, r * (2.1f + 0.15f * puls), s.alphaBlend(18 + 12 * puls, gelb, hg));
-  s.fillSmoothCircle(cx, cy, r * (1.55f + 0.12f * puls), s.alphaBlend(45 + 25 * puls, gelb, s.readPixel(cx, cy)));
+  uint16_t schein = s.alphaBlend(18 + 12 * puls, gelb, hg);
+  s.fillSmoothCircle(cx, cy, r * (2.1f + 0.15f * puls), schein);
+  s.fillSmoothCircle(cx, cy, r * (1.55f + 0.12f * puls), s.alphaBlend(45 + 25 * puls, gelb, schein));
 
   // Strahlen drehen sich langsam und werden mal laenger, mal kuerzer
   float dreh = t * 0.0004f;
@@ -213,7 +231,7 @@ static void sonne(TFT_eSprite &s, float cx, float cy, float g, uint32_t t) {
 static void mond(TFT_eSprite &s, float cx, float cy, float g, uint32_t t) {
   float r = g * 0.21f;
   uint16_t hell = farbe(238, 234, 210);
-  uint16_t hg = s.readPixel(cx, cy);
+  uint16_t hg = grundFarbe(s, cx, cy);
   float puls = 0.5f + 0.5f * sinf(t * 0.0018f);
   s.fillSmoothCircle(cx, cy, r * (1.5f + 0.1f * puls), s.alphaBlend(35 + 20 * puls, hell, hg));
   s.fillSmoothCircle(cx, cy, r, hell);
@@ -243,9 +261,10 @@ static void wolke(TFT_eSprite &s, float cx, float cy, float w, RGB c) {
 
 static void blitzZeichen(TFT_eSprite &s, float cx, float cy, float g, uint16_t c, bool leuchtet) {
   if (leuchtet) {  // Leuchten um den Blitz
-    uint16_t hg = s.readPixel(cx, cy + g * 0.2f);
-    s.fillSmoothCircle(cx, cy + g * 0.2f, g * 0.3f, s.alphaBlend(40, farbe(255, 240, 160), hg));
-    s.fillSmoothCircle(cx, cy + g * 0.2f, g * 0.18f, s.alphaBlend(70, farbe(255, 240, 160), s.readPixel(cx, cy + g * 0.2f)));
+    uint16_t hg = grundFarbe(s, cx, cy + g * 0.2f);
+    uint16_t schein = s.alphaBlend(40, farbe(255, 240, 160), hg);
+    s.fillSmoothCircle(cx, cy + g * 0.2f, g * 0.3f, schein);
+    s.fillSmoothCircle(cx, cy + g * 0.2f, g * 0.18f, s.alphaBlend(70, farbe(255, 240, 160), schein));
   }
   s.fillTriangle(cx + g * 0.04f, cy, cx - g * 0.09f, cy + g * 0.2f, cx + g * 0.01f, cy + g * 0.2f, c);
   s.fillTriangle(cx - g * 0.03f, cy + g * 0.17f, cx + g * 0.08f, cy + g * 0.17f, cx - g * 0.07f, cy + g * 0.4f, c);
@@ -373,7 +392,7 @@ const char *mondName(float p) {
 
 void zeichneMondphase(TFT_eSprite &s, int cx, int cy, int r, float phase) {
   uint16_t hell = farbe(238, 234, 210);
-  uint16_t hg = s.readPixel(cx, cy);
+  uint16_t hg = grundFarbe(s, cx, cy);
   s.fillSmoothCircle(cx, cy, r + 4, s.alphaBlend(30, hell, hg));   // Schein
   s.fillSmoothCircle(cx, cy, r, s.alphaBlend(60, hell, TFT_BLACK)); // dunkle Seite
   // Beleuchteter Teil zeilenweise: zunehmend rechts hell, abnehmend links (Nordhalbkugel)
