@@ -15,6 +15,7 @@ struct Einstellungen {
   bool autoUpdate = true;     // neue Builds von GitHub selbst installieren
   uint8_t sprache = 0;        // 0 = Deutsch, 1 = Englisch
   bool gedreht = false;       // Bild um 180 Grad drehen (Board andersherum eingebaut)
+  uint8_t radarZoom = 0;      // Ausschnitt des Regenradars: 0 = nah, 1 = mittel, 2 = weit
 };
 
 extern Einstellungen einst;

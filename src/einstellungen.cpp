@@ -17,6 +17,7 @@ void einstellungenLaden() {
   e.autoUpdate = p.getBool("auto", e.autoUpdate);
   e.sprache = p.getUChar("sprache", e.sprache) % 2;
   e.gedreht = p.getBool("gedreht", e.gedreht);
+  e.radarZoom = p.getUChar("radarzoom", e.radarZoom) % 3;
   p.end();
   einst = e;
 }
@@ -33,5 +34,6 @@ void einstellungenSpeichern() {
   p.putBool("auto", einst.autoUpdate);
   p.putUChar("sprache", einst.sprache);
   p.putBool("gedreht", einst.gedreht);
+  p.putUChar("radarzoom", einst.radarZoom);
   p.end();
 }

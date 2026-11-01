@@ -34,7 +34,7 @@ static void status() {
              ",\"einst\":{\"licht\":" + einst.licht + ",\"seiten\":" + einst.seiten + ",\"wechsel\":" + einst.wechsel +
              ",\"nacht\":" + (einst.nacht ? "true" : "false") + ",\"von\":" + einst.nachtVon + ",\"bis\":" +
              einst.nachtBis + ",\"auto\":" + (einst.autoUpdate ? "true" : "false") + ",\"sprache\":" + einst.sprache +
-             ",\"gedreht\":" + (einst.gedreht ? "true" : "false") + "}}";
+             ",\"gedreht\":" + (einst.gedreht ? "true" : "false") + ",\"radarzoom\":" + einst.radarZoom + "}}";
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", j);
 }
@@ -57,6 +57,7 @@ static void einstellungenSetzen() {
   einst.autoUpdate = janein("auto", einst.autoUpdate);
   einst.sprache = constrain(zahl("sprache", einst.sprache), 0, 1);
   einst.gedreht = janein("gedreht", einst.gedreht);
+  einst.radarZoom = constrain(zahl("radarzoom", einst.radarZoom), 0, 2);
   einstellungenSpeichern();
   server.send(200, "text/plain", "ok");
 }

@@ -239,10 +239,12 @@ static void aufgabe(void *) {
       naechsteOrte = millis() + ABSTAND_OK;
     }
 
-    // Regenradar alle 10 Minuten (RainViewer erneuert seine Bilder in diesem Takt)
+    // Regenradar alle 10 Minuten (RainViewer erneuert seine Bilder in diesem Takt) - und sofort, wenn der Zoom geaendert wurde
+    static int radarZoom = einst.radarZoom;
+    if (radarZoom != einst.radarZoom) radarZoom = einst.radarZoom, naechstesRadar = millis();
     if (aktuell.gueltig && (int32_t)(millis() - naechstesRadar) >= 0) {
       Ort ort = ortAktuell();
-      radarAktualisieren(ort.lat, ort.lon);
+      radarAktualisieren(ort.lat, ort.lon, radarZoom);
       naechstesRadar = millis() + ABSTAND_RADAR;
     }
 

@@ -4,9 +4,10 @@
 #include <ArduinoJson.h>
 #include <PNGdec.h>
 
-// Karte: Zoomstufe 7 (256er-Kacheln, Ausschnitt ca. 240 x 110 km). Radar: Zoom 6 mit 512er-Kachel auf den Ort zentriert -
-// das ist derselbe Massstab, die Bildmitte liegt genau auf dem Ort.
-static const int KARTE_ZOOM = 7;
+// Karte: Zoomstufe 8/7/6 (256er-Kacheln) je nach Einstellung - Ausschnitt ca. 120 x 55, 240 x 110 oder 480 x 220 km.
+// Radar: eine Stufe kleiner mit 512er-Kachel auf den Ort zentriert - das ist derselbe Massstab,
+// die Bildmitte liegt genau auf dem Ort.
+static int karteZoom(int stufe) { return 8 - constrain(stufe, 0, 2); }
 // OpenStreetMap-Kacheln (eigene Kennung, nur 4 Kacheln je Ortswechsel - passt zur Nutzungsrichtlinie).
 // Die Station macht daraus eine dunkle Karte (invertierte Graustufen), damit das Radar leuchtet.
 static const char *KARTE_URL = "https://tile.openstreetmap.org/%d/%d/%d.png";
@@ -20,6 +21,7 @@ struct Satz {
   int regen = 0;  // Pixel mit Regen im Ausschnitt (alle Bilder zusammen)
   bool karteDa = false;
   float lat = 0, lon = 0;
+  int zoom = 0;
 };
 
 static Satz satz[2];
@@ -136,9 +138,9 @@ static bool entpacken(size_t laenge, Ziel &z, PNG_DRAW_CALLBACK *zeile) {
 
 // ---------- Karte ----------
 
-static bool karteLaden(Satz &s, float lat, float lon) {
-  // Mitte des Ausschnitts als Weltpixel (Web-Mercator) bei KARTE_ZOOM
-  double n = 256.0 * (1 << KARTE_ZOOM);
+static bool karteLaden(Satz &s, float lat, float lon, int zoom) {
+  // Mitte des Ausschnitts als Weltpixel (Web-Mercator) bei dieser Zoomstufe
+  double n = 256.0 * (1 << zoom);
   double la = lat * PI / 180;
   double X = (lon + 180.0) / 360.0 * n;
   double Y = (1 - log(tan(la) + 1 / cos(la)) / PI) / 2 * n;
@@ -147,18 +149,18 @@ static bool karteLaden(Satz &s, float lat, float lon) {
   for (int ty = y0 / 256; ty <= (y0 + RADAR_H - 1) / 256; ty++) {
     for (int tx = x0 / 256; tx <= (x0 + RADAR_B - 1) / 256; tx++) {
       char url[96];
-      snprintf(url, sizeof(url), KARTE_URL, KARTE_ZOOM, tx, ty);
+      snprintf(url, sizeof(url), KARTE_URL, zoom, tx, ty);
       Ziel z{tx * 256 - x0, ty * 256 - y0, s.karte, nullptr};
       if (!entpacken(herunterladen(url), z, zeileKarte)) return false;
     }
   }
-  s.lat = lat, s.lon = lon, s.karteDa = true;
+  s.lat = lat, s.lon = lon, s.zoom = zoom, s.karteDa = true;
   return true;
 }
 
 // ---------- Radarbilder ----------
 
-static int radarLaden(Satz &s, float lat, float lon) {
+static int radarLaden(Satz &s, float lat, float lon, int zoom) {
   JsonDocument doc;
   {
     WiFiClientSecure client;
@@ -180,7 +182,7 @@ static int radarLaden(Satz &s, float lat, float lon) {
     const char *pfad = vergangen[i]["path"];
     if (!pfad) continue;
     // auf den Ort zentrierte 512er-Kachel; Farbschema 2, geglaettet, Schnee eigene Farbe
-    String url = host + pfad + "/512/6/" + String(lat, 4) + "/" + String(lon, 4) + "/2/1_1.png";
+    String url = host + pfad + "/512/" + String(zoom - 1) + "/" + String(lat, 4) + "/" + String(lon, 4) + "/2/1_1.png";
     memset(s.bild[n], 0, RADAR_B * RADAR_H * 3);
     Ziel z{RADAR_B / 2 - 256, RADAR_H / 2 - 256, nullptr, s.bild[n]};
     if (!entpacken(herunterladen(url), z, zeileRadar)) continue;
@@ -191,21 +193,22 @@ static int radarLaden(Satz &s, float lat, float lon) {
   return n;
 }
 
-void radarAktualisieren(float lat, float lon) {
+void radarAktualisieren(float lat, float lon, int stufe) {
   if (!psramFound() || !speicherHolen()) return;
+  int zoom = karteZoom(stufe);
   int neu = aktiv == 0 ? 1 : 0;
   Satz &s = satz[neu];
   const Satz *alt = aktiv >= 0 ? &satz[aktiv] : nullptr;
 
-  // Karte nur neu laden, wenn sich der Ort geaendert hat
-  if (alt && alt->karteDa && fabsf(alt->lat - lat) < 0.001f && fabsf(alt->lon - lon) < 0.001f) {
+  // Karte nur neu laden, wenn sich Ort oder Zoom geaendert haben
+  if (alt && alt->karteDa && alt->zoom == zoom && fabsf(alt->lat - lat) < 0.001f && fabsf(alt->lon - lon) < 0.001f) {
     memcpy(s.karte, alt->karte, RADAR_B * RADAR_H * 2);
-    s.lat = lat, s.lon = lon, s.karteDa = true;
+    s.lat = lat, s.lon = lon, s.zoom = zoom, s.karteDa = true;
   } else {
     s.karteDa = false;
-    if (!karteLaden(s, lat, lon)) Serial.println("Radar: Karte nicht geladen");
+    if (!karteLaden(s, lat, lon, zoom)) Serial.println("Radar: Karte nicht geladen");
   }
-  s.bilder = radarLaden(s, lat, lon);
+  s.bilder = radarLaden(s, lat, lon, zoom);
   Serial.printf("Radar: %d Bilder, %d Regenpixel, Karte %s\n", s.bilder, s.regen, s.karteDa ? "ok" : "fehlt");
   if (!s.bilder && !s.karteDa) return;
 

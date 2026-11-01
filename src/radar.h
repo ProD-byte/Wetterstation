@@ -18,5 +18,6 @@ struct RadarStand {
 };
 
 // Aus der Wetter-Aufgabe: Karte (nur bei neuem Ort) und Radarbilder neu laden. Dauert einige Sekunden.
-void radarAktualisieren(float lat, float lon);
+// stufe: 0 = nah (ca. 120 x 55 km), 1 = mittel (240 x 110 km), 2 = weit (480 x 220 km)
+void radarAktualisieren(float lat, float lon, int stufe);
 bool radarHolen(RadarStand &r);  // false solange noch nichts da ist

@@ -18,7 +18,7 @@ Geschrieben mit **VS Code + PlatformIO** (Arduino-Kern 2.0.14 – TFT_eSPI läuf
 | ⚠️ **Warnungen** | Unwetterwarnungen des Deutschen Wetterdienstes ([brightsky.dev](https://brightsky.dev/)) blinken oben |
 | 🌙 **Himmel** | Farbverlauf passend zum Wetter, Morgen- und Abendrot, ziehende Wolken, Regen/Schnee/Nebel über den ganzen Himmel, nachts funkelnde Sterne; Nachtmodus dimmt das Display |
 | 📶 **WLAN** | Einrichtung per Handy (WLAN „Wetterstation-Setup“), merkt sich bis zu 5 Netze |
-| ⚙️ **Einstellungen** | im Browser unter **http://wetterstation.local**: Sprache, Bild drehen, Ort, Helligkeit, Seiten, Blättern, Nachtmodus, Updates |
+| ⚙️ **Einstellungen** | im Browser unter **http://wetterstation.local**: Sprache, Bild drehen, Ort, Ausschnitt des Regenradars (nah/mittel/weit), Helligkeit, Seiten, Blättern, Nachtmodus, Updates |
 | 🔃 **Einbaulage** | Bild um 180° drehen (Einstellungsseite), wenn das Board andersherum im Gehäuse sitzt. Das T-Display-S3 hat keinen Lagesensor, deshalb dreht es sich nicht von selbst |
 | 🌍 **Sprache** | Deutsch oder Englisch – Display, Einstellungsseite und Einrichtung. Bei der Einrichtung übernimmt die Station die Sprache des Handys |
 | 🔄 **Updates** | von selbst aus dem Internet (neue Builds von GitHub), über WLAN (OTA) oder mit dem Online-Flasher |

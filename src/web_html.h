@@ -88,6 +88,7 @@ select{font:inherit;font-size:15px;padding:8px 10px;border-radius:12px;border:1p
     <div class="seg" id="seiten" style="margin-bottom:6px"></div>
     <div class="zeile"><span data-t="blaettern">Weiterblättern</span><select id="wechsel"></select></div>
     <div class="zeile"><span><span data-t="drehen">Bild um 180° drehen</span><small data-t="drehenKlein">wenn das Board andersherum eingebaut ist und das Bild auf dem Kopf steht</small></span><label class="schalter"><input type="checkbox" id="gedreht"><i></i></label></div>
+    <div class="zeile"><span><span data-t="radar">Regenradar</span><small id="radarKlein"></small></span><div class="seg" id="radarzoom"></div></div>
   </div>
 
   <div class="card">
@@ -118,7 +119,7 @@ const EN = {
   orteTitel: 'More places', hinzu: 'Add', orteHinweis: 'Up to 3 places the station compares with yours on a page of its own.',
   verlaufTitel: 'Last 7 days', legT: 'Temperature', legD: 'Air pressure', legR: 'Rain',
   anzeige: 'Display', sprache: 'Language', helligkeit: 'Brightness', seiten: 'Pages', blaettern: 'Next page',
-  drehen: 'Rotate picture by 180°', drehenKlein: 'if the board is mounted the other way round and the picture is upside down',
+  radar: 'Rain radar', drehen: 'Rotate picture by 180°', drehenKlein: 'if the board is mounted the other way round and the picture is upside down',
   nachtmodus: 'Night mode', nachtDunkel: 'Dark display at night', nachtKlein: 'strongly dimmed, buttons light it up briefly',
   von: 'from', bis: 'until', autoUpd: 'Install new versions by itself', autoKlein: 'gets them from GitHub, no computer needed',
   wlan: 'Wi-Fi', neuEinrichten: 'Set up again', wlanHinweis: 'Restarts and opens the Wi-Fi “Wetterstation-Setup” – then set it up with your phone like the first time.'
@@ -156,6 +157,10 @@ function zeigen() {
   $('#nacht').checked = e.nacht; $('#von').value = e.von; $('#bis').value = e.bis;
   $('#auto').checked = e.auto;
   $('#gedreht').checked = e.gedreht;
+  const ZOOM = [[L('Nah', 'Near'), '120 × 55 km'], [L('Mittel', 'Medium'), '240 × 110 km'], [L('Weit', 'Far'), '480 × 220 km']];
+  $('#radarzoom').innerHTML = ZOOM.map(([t], i) => `<button data-i="${i}" class="${i === e.radarzoom ? 'an' : ''}">${t}</button>`).join('');
+  $('#radarKlein').textContent = L('Ausschnitt etwa ', 'area about ') + ZOOM[e.radarzoom || 0][1];
+  document.querySelectorAll('#radarzoom button').forEach(b => b.onclick = () => { speichern({radarzoom: +b.dataset.i}); melden(L('Radar wird neu geladen', 'Reloading radar')); });
   $('#updText').innerHTML = !st.build ? L('Selbst gebaute Firmware – keine Updates von GitHub', 'Self-built firmware – no updates from GitHub')
     : st.neu ? `<b>Build ${st.neu}</b> ${L('ist verfügbar', 'is available')}` : `${L('Aktuell', 'Up to date')} (Build ${st.build})`;
   $('#updBtn').textContent = st.neu ? L('Installieren', 'Install') : L('Jetzt suchen', 'Check now');
