@@ -915,6 +915,7 @@ const ORT_HOCH = [["3. Jetzt am Handy:", "3. Now on your phone:", 0], ["Wo steht
 function hochZeilen(liste) {
   liste.forEach(([de, en, gelb], i) => {
     schrift(gelb ? "b9" : "f2"); if (breite(L(de, en)) > W - 8) schrift("s9");  // fett zu breit -> normal
+    if (breite(L(de, en)) > W - 8) schrift("f2");
     schreibe(L(de, en), W / 2, 162 + i * 21, gelb ? rgb(255, 198, 44) : HELL, "m");
   });
 }

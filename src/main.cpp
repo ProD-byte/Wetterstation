@@ -890,6 +890,7 @@ void wlanBild(WlanPhase phase, const char *netz) {
       const char *txt = TX(z[i].de, z[i].en);
       schrift(bild, z[i].gelb ? S_MF : S_K);
       if (breite(bild, txt) > B - 8) schrift(bild, S_M);  // "Wetterstation-Setup" ist fett zu breit
+      if (breite(bild, txt) > B - 8) schrift(bild, S_K);
       schreibe(bild, txt, B / 2, 162 + i * 21, z[i].gelb ? gelb : HELL, MITTE);
     }
   } else if (phase == WLAN_SUCHE) {

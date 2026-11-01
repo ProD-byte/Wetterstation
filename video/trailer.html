@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Weather Station – Trailer</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; background: #000; }
+  #video { display: block; width: 100vw; height: auto; aspect-ratio: 16 / 9; }
+  #sim { position: absolute; left: -4000px; top: 0; width: 1000px; height: 900px; border: 0; }
+  #info { position: fixed; left: 8px; bottom: 8px; font: 12px monospace; color: #8a8; }
+</style></head><body>
+<canvas id="video" width="1920" height="1080"></canvas>
+<iframe id="sim" src="sim.html"></iframe>
+<div id="info"></div>
+<script>
+// Trailer: steuert die echte Simulation (sim.html = simulation/wetterstation.html) Bild fuer Bild.
+// Zeitachse in Sekunden, Takt = 2,4 s (Musik 100 BPM) - Szenenwechsel liegen auf Taktgrenzen.
+const V = document.getElementById("video"), x = V.getContext("2d");
+const BW = 1920, BH = 1080, FPS = 30, DAUER = 62.4, TAKT = 2.4;
+const ORANGE = "#f0a04b";
+const img = s => { const i = new Image(); i.src = s; return i; };
+const QUER = img("board_quer.webp"), HOCH = img("board_hoch.webp");
+
+// ---------- Hilfen ----------
+const klemm = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const glatt = v => { v = klemm(v); return v * v * (3 - 2 * v); };
+const raus = v => 1 - Math.pow(1 - klemm(v), 3);
+const fenster = (t, a, b, ein = 0.5, aus = 0.4) => klemm((t - a) / ein) * klemm((b - t) / aus);  // ein-/ausblenden
+const mischen = (a, b, f) => a + (b - a) * f;
+
+// ---------- Simulation steuern ----------
+let S = null, simCv = null;
+function simBereit() {
+  const fw = document.getElementById("sim").contentWindow;
+  // Zeit und Uhr der Simulation uebernehmen: jetzt() = Videozeit, Uhr steht auf 14:41 (Berlin)
+  fw.eval(`
+    var __simT = 0; const __t0 = t0; performance.now = () => __t0 + __simT;
+    const __RD = Date, __BASIS = __RD.UTC(2026, 10, 1, 13, 41, 0);
+    window.Date = class extends __RD { constructor(...a) { if (a.length) super(...a); else super(__BASIS + __simT); } static now() { return __BASIS + __simT; } };
+    window.__ctl = {
+      zeit(ms) { __simT = ms; },
+      klick(id) { document.getElementById(id).click(); },
+      seite(n, animiert) { const t = jetzt(); if (animiert) { alteSeite = seite; wechsel = true; wechselStart = t; } else wechsel = false; seite = n; seiteSeit = t; },
+      englisch() { englisch = true; },
+      zeichnen() { letzterTastendruck = jetzt(); frame(); }
+    };
+    __ctl.klick("pixelWahl-glatt");
+    englisch = true;
+  `);
+  S = fw.__ctl;
+  simCv = fw.document.getElementById("lcd");
+}
+
+// ---------- Ablauf (Zeit in s -> Aktion) ----------
+const T = n => n * TAKT;
+const EREIGNISSE = [
+  [0,        () => { S.klick("wetterWahl-0"); S.klick("tagWahl-tag"); S.seite(0); }],
+  [T(4),     () => { S.klick("tagWahl-abend"); }],
+  [T(5),     () => { S.klick("tagWahl-nacht"); }],
+  [T(6),     () => { S.klick("tagWahl-tag"); S.klick("wetterWahl-63"); S.seite(0); }],
+  [T(7),     () => { S.klick("wetterWahl-73"); }],
+  [T(8),     () => { S.klick("wetterWahl-95"); }],
+  [T(9),     () => { S.klick("wetterWahl-45"); }],
+  [T(10),    () => { S.klick("wetterWahl-2"); S.seite(0); S.seite(1, true); }],
+  [T(11),    () => { S.seite(2, true); }],
+  [T(12),    () => { S.seite(3, true); }],
+  [T(13),    () => { S.klick("wetterWahl-0"); S.seite(3); S.seite(4, true); }],
+  [T(14),    () => { S.seite(5, true); }],
+  [T(16),    () => { S.seite(6, true); }],
+  [T(17),    () => { S.seite(7, true); }],
+  [T(18) - 0.05, () => { S.klick("wetterWahl-2"); S.seite(0); }],  // vor der Drehung zur Seite "Jetzt"
+  [T(18) + 1.45, () => { schnappschuss(); S.klick("lageWahl-hoch"); S.seite(0); }],
+  [T(20),    () => { S.klick("wetterWahl-wlan"); }],
+  [T(22),    () => { S.klick("wetterWahl-0"); S.seite(0); }],
+  [T(24),    () => { S.klick("lageWahl-quer"); S.klick("wetterWahl-0"); S.seite(0); }],
+];
+let naechstes = 0;
+
+// Bild der Simulation kurz vor dem Umschalten auf hochkant (fuer die Ueberblendung nach der Drehung)
+const SCHNAPP = document.createElement("canvas");
+function schnappschuss() { SCHNAPP.width = simCv.width; SCHNAPP.height = simCv.height; SCHNAPP.getContext("2d").drawImage(simCv, 0, 0); }
+
+// ---------- Zeichnen ----------
+function hintergrund(t) {
+  const g = x.createLinearGradient(0, 0, 0, BH);
+  g.addColorStop(0, "#0d1222"); g.addColorStop(1, "#06080f");
+  x.fillStyle = g; x.fillRect(0, 0, BW, BH);
+  // zwei weiche Lichter, die langsam wandern
+  const lichter = [[0.25 + 0.06 * Math.sin(t * 0.21), 0.3, 700, "rgba(240,160,75,0.13)"],
+                   [0.78 + 0.05 * Math.cos(t * 0.17), 0.7, 800, "rgba(70,120,255,0.12)"]];
+  for (const [fx, fy, r, f] of lichter) {
+    const rg = x.createRadialGradient(fx * BW, fy * BH, 0, fx * BW, fy * BH, r);
+    rg.addColorStop(0, f); rg.addColorStop(1, "rgba(0,0,0,0)");
+    x.fillStyle = rg; x.fillRect(0, 0, BW, BH);
+  }
+}
+
+// Board mit Display. hoch = senkrechtes Foto; quelle = was auf dem Display ist
+function board(cx, cy, breite, winkel, hoch, alpha, quelle = simCv, ueber = null, ueberAlpha = 0) {
+  if (alpha <= 0) return;
+  const bild = hoch ? HOCH : QUER;
+  const bw = breite, bh = hoch ? breite * 730 / 311 : breite * 311 / 730;
+  x.save(); x.globalAlpha = alpha;
+  x.translate(cx, cy); x.rotate(winkel);
+  x.shadowColor = "rgba(0,0,0,0.55)"; x.shadowBlur = 70; x.shadowOffsetY = 30;
+  x.drawImage(bild, -bw / 2, -bh / 2, bw, bh);
+  x.shadowColor = "transparent";
+  // Displayflaeche wie im Simulator (CSS .glass)
+  let sx, sy, sw, sh;
+  if (hoch) { sx = -bw / 2 + 0.056 * bw; sy = -bh / 2 + 0.084 * bh; sw = 0.907 * bw; sh = sw * 320 / 170; }
+  else { sx = -bw / 2 + 0.084 * bw; sy = -bh / 2 + 0.037 * bh; sw = 0.724 * bw; sh = sw * 170 / 320; }
+  x.fillStyle = "#050607"; x.fillRect(sx, sy, sw, sh);
+  x.imageSmoothingQuality = "high";
+  if (ueber && ueberAlpha > 0) {  // Ueberblendung: altes Bild (quer, mitgedreht) -> neues Bild (hochkant)
+    x.save(); x.translate(sx + sw / 2, sy + sh / 2); x.rotate(Math.PI / 2);
+    x.globalAlpha = alpha * ueberAlpha; x.drawImage(ueber, -sh / 2, -sw / 2, sh, sw); x.restore();
+    x.globalAlpha = alpha * (1 - ueberAlpha);
+  }
+  x.drawImage(quelle, sx, sy, sw, sh);
+  // leichte Spiegelung auf dem Glas
+  x.globalAlpha = alpha * 0.9;
+  const sp = x.createLinearGradient(sx, sy, sx + sw * 0.6, sy + sh);
+  sp.addColorStop(0, "rgba(255,255,255,0.07)"); sp.addColorStop(0.45, "rgba(255,255,255,0)");
+  x.fillStyle = sp; x.fillRect(sx, sy, sw, sh);
+  x.restore();
+}
+
+function text(s, px, py, groesse, gewicht, farbe, alpha, ausr = "center", abstand = 0) {
+  if (alpha <= 0) return;
+  x.save(); x.globalAlpha = alpha;
+  x.font = `${gewicht} ${groesse}px Inter, sans-serif`;
+  x.fillStyle = farbe; x.textAlign = ausr; x.textBaseline = "alphabetic";
+  if (abstand) x.letterSpacing = abstand + "px";
+  x.fillText(s, px, py);
+  x.restore();
+}
+
+// Bildunterschrift: grosse Zeile + kleine Zeile, blendet mit kleiner Bewegung ein
+function unterschrift(t, a, b, gross, klein, px = BW / 2, py = 880, ausr = "center") {
+  const f = fenster(t, a, b, 0.5, 0.35);
+  if (f <= 0) return;
+  const hub = (1 - raus((t - a) / 0.6)) * 24;
+  text(gross, px, py + hub, 64, 800, "#ffffff", f, ausr, -1);
+  if (klein) text(klein, px, py + 52 + hub, 30, 500, "#aab4c8", f, ausr);
+  // feine orange Linie
+  const lw = 90 * raus((t - a - 0.15) / 0.5);
+  x.save(); x.globalAlpha = f; x.fillStyle = ORANGE;
+  const lx = ausr === "center" ? px - lw / 2 : px;
+  x.fillRect(lx, py - 86 + hub, lw, 4); x.restore();
+}
+
+function browserKarte(t, a) {
+  const f = raus((t - a) / 0.7), alpha = klemm((t - a) / 0.5) * klemm((T(24) + 0.3 - t) / 0.3);
+  if (alpha <= 0) return;
+  const kx = 980 + (1 - f) * 60, ky = 270, kw = 780, kh = 470;
+  x.save(); x.globalAlpha = alpha;
+  x.shadowColor = "rgba(0,0,0,0.5)"; x.shadowBlur = 50; x.shadowOffsetY = 20;
+  x.fillStyle = "#161b26"; x.beginPath(); x.roundRect(kx, ky, kw, kh, 18); x.fill();
+  x.shadowColor = "transparent";
+  // Fensterleiste
+  x.fillStyle = "#1f2533"; x.beginPath(); x.roundRect(kx, ky, kw, 56, [18, 18, 0, 0]); x.fill();
+  ["#ff5f57", "#febc2e", "#28c840"].forEach((c, i) => { x.fillStyle = c; x.beginPath(); x.arc(kx + 28 + i * 22, ky + 28, 7, 0, 7); x.fill(); });
+  x.fillStyle = "#0f131b"; x.beginPath(); x.roundRect(kx + 110, ky + 13, kw - 140, 30, 15); x.fill();
+  x.restore();
+  text("prod-byte.github.io/Wetterstation", kx + 130, ky + 34, 18, 500, "#c5cbd8", alpha, "left");
+  text("Weather Station", kx + 50, ky + 130, 44, 800, "#ffffff", alpha, "left", -0.5);
+  text("Online flasher for the LILYGO T-Display-S3", kx + 50, ky + 172, 22, 500, "#8b95a8", alpha, "left");
+  // Knopf, Mauszeiger klickt, dann Fortschritt
+  const klick = a + 1.6, bx = kx + 50, by = ky + 220, bwid = 360, bhh = 70;
+  const gedrueckt = t > klick && t < klick + 0.15;
+  x.save(); x.globalAlpha = alpha;
+  const kg = x.createLinearGradient(bx, 0, bx + bwid, 0); kg.addColorStop(0, "#f0a030"); kg.addColorStop(1, "#e5642e");
+  x.fillStyle = kg; x.beginPath(); x.roundRect(bx, by + (gedrueckt ? 2 : 0), bwid, bhh, 16); x.fill(); x.restore();
+  text("Install", bx + bwid / 2, by + 46 + (gedrueckt ? 2 : 0), 28, 700, "#fff", alpha);
+  const p = klemm((t - klick - 0.3) / 2.2);
+  if (p > 0) {
+    x.save(); x.globalAlpha = alpha;
+    x.fillStyle = "#262d3b"; x.beginPath(); x.roundRect(bx, by + 110, kw - 100, 14, 7); x.fill();
+    x.fillStyle = ORANGE; x.beginPath(); x.roundRect(bx, by + 110, Math.max(14, (kw - 100) * glatt(p)), 14, 7); x.fill();
+    x.restore();
+    text(p < 1 ? `Installing …  ${Math.round(glatt(p) * 100)} %` : "✓  Done – your weather station is ready", bx, by + 166, 24, 600, p < 1 ? "#c5cbd8" : "#5fd38a", alpha, "left");
+  }
+  // Mauszeiger
+  const mz = raus((t - a - 0.5) / 1.0);
+  const mx = mischen(kx + kw - 60, bx + bwid * 0.6, mz), my = mischen(ky + kh - 40, by + bhh * 0.6, mz);
+  if (t < klick + 1.2) {
+    x.save(); x.globalAlpha = alpha * klemm((klick + 1.2 - t) / 0.4); x.translate(mx, my);
+    x.fillStyle = "#fff"; x.strokeStyle = "#000"; x.lineWidth = 2;
+    x.beginPath(); x.moveTo(0, 0); x.lineTo(0, 34); x.lineTo(9, 26); x.lineTo(16, 40); x.lineTo(22, 37); x.lineTo(15, 23); x.lineTo(27, 23); x.closePath();
+    x.fill(); x.stroke(); x.restore();
+  }
+}
+
+// ---------- ein Videobild ----------
+function zeichne(t) {
+  while (naechstes < EREIGNISSE.length && EREIGNISSE[naechstes][0] <= t) EREIGNISSE[naechstes++][1]();
+  S.zeit(100000 + t * 1000);
+  S.zeichnen();
+
+  hintergrund(t);
+
+  // --- Intro (Takt 1-2) ---
+  const intro = fenster(t, 0.3, T(2) - 0.2, 0.8, 0.5);
+  text("DAVESLAB", BW / 2, 420, 30, 700, ORANGE, fenster(t, 0.3, T(2) - 0.2, 0.6, 0.5), "center", 14);
+  text("Weather Station", BW / 2, 560 + (1 - raus((t - 0.9) / 1)) * 30, 140, 800, "#fff", fenster(t, 0.9, T(2) - 0.2, 0.8, 0.5), "center", -4);
+  text("An animated weather display for the LILYGO T-Display-S3", BW / 2, 640, 34, 500, "#aab4c8", fenster(t, 1.8, T(2) - 0.2, 0.7, 0.5));
+
+  // --- Board: Lage, Groesse, Drehung ---
+  const QB = 1100;                          // Breite quer
+  const drehA = T(18) + 0.05, drehE = T(18) + 1.45;
+  const zurueck = T(24);                    // Schlusskarte: wieder quer, klein
+  let cx = BW / 2, cy = 470, breite = QB, winkel = 0, hoch = false, alpha = 0;
+  alpha = raus((t - T(2)) / 0.8);
+  cy += (1 - raus((t - T(2)) / 0.9)) * 80;
+  if (t >= drehA && t < zurueck) {
+    const d = glatt((t - drehA) / (drehE - drehA));
+    winkel = d * Math.PI / 2;
+    breite = mischen(QB, 860, d);           // Laenge des Boards: quer 1100 breit -> hochkant 860 hoch
+    cx = mischen(BW / 2, 620, d); cy = mischen(470, 540, d);
+    if (t >= drehE) { hoch = true; winkel = 0; breite = 860 * 311 / 730; }
+  }
+  if (t >= zurueck) {  // Schluss: klein, quer, oben
+    const e = raus((t - zurueck) / 0.8);
+    breite = 640; cx = BW / 2; cy = 360 - (1 - e) * 20; alpha = e * klemm((DAUER - 0.3 - t) / 1.2);
+  }
+  // Uebergang hochkant -> quer am Schluss: kurz ausblenden
+  if (t >= T(24) - 0.35 && t < T(24)) alpha *= klemm((T(24) - t) / 0.35);
+  const ueberAlpha = hoch ? 1 - klemm((t - drehE) / 0.45) : 0;
+  board(cx, cy, breite, winkel, hoch, alpha, simCv, ueberAlpha > 0 ? SCHNAPP : null, ueberAlpha);
+
+  // --- Bildunterschriften ---
+  unterschrift(t, T(2) + 0.6, T(4) - 0.1, "Animated weather.", "Right on your desk – updated every 15 minutes.");
+  unterschrift(t, T(4) + 0.2, T(6) - 0.1, "Golden hours, starry nights.", "The sky follows the real time of day.");
+  unterschrift(t, T(6) + 0.2, T(10) - 0.1, "Rain, snow, thunder & fog.", "Every sky, beautifully animated.");
+  unterschrift(t, T(10) + 0.3, T(11) - 0.05, "The next 24 hours", "Temperature curve and chance of rain.");
+  unterschrift(t, T(11) + 0.3, T(12) - 0.05, "The days ahead", "Highs, lows and rain at a glance.");
+  unterschrift(t, T(12) + 0.3, T(13) - 0.05, "Sun & moon", "Daylight, UV index and the moon phase.");
+  unterschrift(t, T(13) + 0.3, T(14) - 0.05, "Air quality & pollen", "European air quality index, five kinds of pollen.");
+  unterschrift(t, T(14) + 0.3, T(16) - 0.1, "Live rain radar", "The last hour, animated – near, medium or far.");
+  unterschrift(t, T(16) + 0.3, T(18) - 0.1, "History & places", "The last 7 days – and up to three more towns.");
+  const rx = 1080, ry = 520;
+  unterschrift(t, drehE - 0.2, T(20) - 0.1, "Landscape or portrait.", "Every page has its own layout.", rx, ry, "left");
+  unterschrift(t, T(20) + 0.3, T(22) - 0.1, "Set up in a minute.", "Wi-Fi and location from your phone.", rx, ry, "left");
+  if (t >= T(22) && t < T(24) + 0.3) {
+    text("Flash it from your browser.", 980, 200, 52, 800, "#fff", fenster(t, T(22) + 0.1, T(24), 0.5, 0.3), "left", -1);
+    text("No coding, no drivers – just USB-C and Chrome.", 980, 920, 28, 500, "#aab4c8", fenster(t, T(22) + 0.4, T(24), 0.5, 0.3), "left");
+    browserKarte(t, T(22) + 0.2);
+  }
+
+  // --- Schlusskarte ---
+  if (t >= T(24)) {
+    const e = klemm((DAUER - 0.3 - t) / 1.2);
+    text("Weather Station", BW / 2, 700, 96, 800, "#fff", fenster(t, T(24) + 0.3, DAUER, 0.6, 1.4), "center", -3);
+    text("Open source  ·  Works worldwide  ·  Updates itself", BW / 2, 760, 30, 500, "#aab4c8", fenster(t, T(24) + 0.6, DAUER, 0.6, 1.4));
+    text("github.com/ProD-byte/Wetterstation", BW / 2, 860, 34, 700, ORANGE, fenster(t, T(24) + 0.9, DAUER, 0.6, 1.4));
+    text("daveslab.de/basteln", BW / 2, 908, 30, 500, "#ffffff", fenster(t, T(24) + 1.1, DAUER, 0.6, 1.4));
+  }
+  // ganz am Ende nach Schwarz, ganz am Anfang aus Schwarz
+  const schwarz = Math.max(klemm(1 - t / 0.4), klemm((t - (DAUER - 0.6)) / 0.6));
+  if (schwarz > 0) { x.fillStyle = `rgba(0,0,0,${schwarz})`; x.fillRect(0, 0, BW, BH); }
+}
+
+// ---------- Vorschau (?t=Sekunden) und Rendern (?render) ----------
+async function start() {
+  // warten, bis Seite samt Simulation (iframe) geladen ist
+  await new Promise(r => document.readyState === "complete" ? r() : addEventListener("load", r, { once: true }));
+  // (img.decode() bleibt in Hintergrund-Tabs manchmal haengen - daher nur auf "geladen" warten)
+  const geladen = i => new Promise(r => i.complete ? r() : i.addEventListener("load", r, { once: true }));
+  await Promise.all([geladen(QUER), geladen(HOCH), document.fonts.load("800 64px Inter"), document.fonts.load("500 30px Inter")]);
+  simBereit();
+  await document.getElementById("sim").contentWindow.document.fonts.ready;
+  const q = new URLSearchParams(location.search);
+  if (q.has("render")) return rendern(+(q.get("ab") || 0));
+  if (q.has("stand")) { window.__bereit = true; return; }  // Einzelbilder per __bild(t) (zum Pruefen)
+  // Vorschau: in Echtzeit abspielen (ab ?t=)
+  const ab = +(q.get("t") || 0);
+  while (EREIGNISSE[naechstes] && EREIGNISSE[naechstes][0] <= ab) zeichne(EREIGNISSE[naechstes][0]);  // Zustand bis "ab" herstellen
+  const t0 = performance.now();
+  const lauf = () => { const t = ab + (performance.now() - t0) / 1000; if (t > DAUER) return; zeichne(t); requestAnimationFrame(lauf); };
+  lauf();
+}
+window.__bild = t => { zeichne(t); };
+
+async function rendern(ab) {
+  const n = Math.round(DAUER * FPS);
+  for (let i = 0; i < n; i++) {
+    const t = i / FPS;
+    zeichne(t);
+    if (i < ab) continue;
+    // toDataURL ist hier viel schneller als toBlob (~20 ms statt ~1 s); der Server wandelt Base64 zurueck
+    const daten = V.toDataURL("image/jpeg", 0.95);
+    for (let versuch = 0; ; versuch++) {  // bei einem Verbindungsfehler nochmal senden
+      try { await fetch(`/bild?n=${i}`, { method: "POST", body: daten }); break; }
+      catch (e) { if (versuch > 5) throw e; await new Promise(r => setTimeout(r, 500)); }
+    }
+    document.getElementById("info").textContent = `${i + 1} / ${n}`;
+    window.__fortschritt = i + 1;
+  }
+  await fetch("/fertig", { method: "POST" });
+  window.__fertig = true;
+}
+start();
+</script>
+</body></html>
