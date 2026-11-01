@@ -6,6 +6,8 @@ Den Ort wählst du bei der Einrichtung am Handy (Name oder Postleitzahl). Ohne A
 ungefähr über die Internet-Adresse ([ipapi.co](https://ipapi.co/), ersatzweise [ipwho.is](https://ipwho.is/)); klappt auch das nicht, nimmt sie Cottbus.
 Geschrieben mit **VS Code + PlatformIO** (Arduino-Kern 2.0.14 – TFT_eSPI läuft auf dem T-Display-S3 nicht mit Kern 3.x, siehe INFO.md).
 
+**Open Source** (MIT-Lizenz) · **[Online-Flasher](https://prod-byte.github.io/Wetterstation/)** · **[Simulation](https://prod-byte.github.io/Wetterstation/simulation.html)** · *English below ↓*
+
 ## ✨ Funktionen
 
 | | |
@@ -97,6 +99,17 @@ Bei jedem Hochladen baut GitHub die Firmware automatisch (`.github/workflows/bui
 | `website/basteln-wetter.js` | baut den Abschnitt in daveslab.de/basteln ein |
 | `INFO.md` | Spickzettel zum Board: Pins, Strom, Akku, Macken |
 
+## 🔒 Gut zu wissen
+
+- Die Einstellungsseite hat **kein Passwort** – jeder im selben WLAN kann die Station umstellen. Für ein Heimnetz ist das gedacht, nicht für offene Netze.
+- Die Station prüft die HTTPS-Zertifikate der Wetterdienste nicht (spart Speicher und Pflege). Sie schickt dabei nur ihren Standort.
+- Die Daten kommen von kostenlosen Diensten für private Nutzung (siehe unten). Für kommerzielle Geräte bitte deren Bedingungen beachten.
+
+## 📜 Lizenz
+
+Der Code steht unter der **MIT-Lizenz** ([LICENSE](LICENSE)) – benutzen, ändern, weitergeben, auch in eigenen Projekten; der Hinweis auf die Lizenz muss bleiben.
+Die eingebaute Schrift Lato hat ihre eigene Lizenz: [SIL Open Font License 1.1](lizenzen/OFL-Lato.txt).
+
 ## 📚 Verwendet
 
 - [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI) – Display
@@ -109,3 +122,40 @@ Bei jedem Hochladen baut GitHub die Firmware automatisch (`.github/workflows/bui
 - [Bright Sky](https://brightsky.dev/) – Warnungen des Deutschen Wetterdienstes
 - [ipapi.co](https://ipapi.co/), [ipwho.is](https://ipwho.is/), [Zippopotam.us](https://www.zippopotam.us/) – ungefährer Standort, Postleitzahlen
 - [ESP Web Tools](https://esphome.github.io/esp-web-tools/) – Online-Flasher
+
+---
+
+## 🇬🇧 English
+
+Animated weather station for the **LILYGO T-Display-S3** (ESP32-S3, 1.9″, 320 × 170, 16 MB flash, 8 MB PSRAM) – open source, MIT licensed, works worldwide.
+
+### Install – no programming needed
+1. Open the **[online flasher](https://prod-byte.github.io/Wetterstation/)** in Chrome or Edge on a computer and connect the board via USB-C (no driver needed).
+2. Click **“Löschen & neu installieren”** (erase & install) for a new board, or **“Update installieren”** to keep your Wi-Fi settings.
+3. On your phone, join the Wi-Fi **“Wetterstation-Setup”** – the setup page opens by itself. Pick your Wi-Fi, enter the password, then search your town (or tap the suggestion; without a choice the station locates itself roughly via your internet connection).
+
+The station follows your phone’s language (German or English) and the time zone of the chosen place.
+
+### Pages
+Now (animated weather, feels like, wind, humidity, “rain from 14:15”) · next 24 hours · next days · sun & moon · air quality & pollen (Europe) · **rain radar** (last hour, animated, near/medium/far) · last 7 days · up to 3 more places. Severe-weather warnings from the German Weather Service (Germany only).
+
+### Buttons
+| Button | short | long |
+|---|---|---|
+| **IO0** | next page (at night: wake up first) | hold 2 s = German/English, shows the settings address and build |
+| **IO14** | brightness (4 levels) | hold 3 s = set up Wi-Fi and location again |
+
+### Settings
+Open **http://wetterstation.local** (or the station’s IP address) on the same Wi-Fi: language, location, more places, radar area, warnings, brightness, pages, night mode, rotate picture 180°, automatic updates.
+**Several stations on one Wi-Fi?** Give each one its own name there (e.g. `wetterstation-kitchen`) – it is then reachable as `wetterstation-kitchen.local`.
+
+### Updates
+The station checks GitHub every 6 hours and installs new builds by itself (can be switched off). Updates also work via the online flasher or over Wi-Fi from PlatformIO (`env:tdisplay_s3_wlan`).
+
+### Build it yourself
+VS Code + PlatformIO, environment `env:tdisplay_s3` (Arduino core 2.0.14 / `espressif32 @ 6.5.0` – TFT_eSPI does not run on this board with core 3.x). Copy `geheim.beispiel.ini` to `geheim.ini` first (password for Wi-Fi uploads, may stay empty).
+
+### Good to know
+The settings page has no password (meant for home networks). HTTPS certificates of the weather services are not verified. Data comes from free services for personal use: Open-Meteo, RainViewer, OpenStreetMap, Bright Sky – see the list above.
+
+**License:** MIT ([LICENSE](LICENSE)); the embedded Lato font is under the [SIL Open Font License 1.1](lizenzen/OFL-Lato.txt).
