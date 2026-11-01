@@ -4,9 +4,9 @@
 #include <ArduinoJson.h>
 #include <PNGdec.h>
 
-// Karte: Zoomstufe 8 (256er-Kacheln). Radar: Zoom 7 mit 512er-Kachel auf den Ort zentriert -
+// Karte: Zoomstufe 7 (256er-Kacheln, Ausschnitt ca. 240 x 110 km). Radar: Zoom 6 mit 512er-Kachel auf den Ort zentriert -
 // das ist derselbe Massstab, die Bildmitte liegt genau auf dem Ort.
-static const int KARTE_ZOOM = 8;
+static const int KARTE_ZOOM = 7;
 // OpenStreetMap-Kacheln (eigene Kennung, nur 4 Kacheln je Ortswechsel - passt zur Nutzungsrichtlinie).
 // Die Station macht daraus eine dunkle Karte (invertierte Graustufen), damit das Radar leuchtet.
 static const char *KARTE_URL = "https://tile.openstreetmap.org/%d/%d/%d.png";
@@ -17,6 +17,7 @@ struct Satz {
   uint8_t *bild[RADAR_BILDER] = {};
   time_t zeit[RADAR_BILDER] = {};
   int bilder = 0;
+  int regen = 0;  // Pixel mit Regen im Ausschnitt (alle Bilder zusammen)
   bool karteDa = false;
   float lat = 0, lon = 0;
 };
@@ -79,6 +80,7 @@ struct Ziel {
   int x0, y0;         // wo die Kachel im Ausschnitt liegt (kann negativ sein)
   uint16_t *karte;    // Kartenziel (RGB565) ...
   uint8_t *radar;     // ... oder Radarziel (RGB565 + Deckkraft)
+  int regen;          // gezaehlte Regenpixel (bei Ziel{...} automatisch 0)
 };
 
 static int zeileKarte(PNGDRAW *d) {
@@ -120,6 +122,7 @@ static int zeileRadar(PNGDRAW *d) {
     uint16_t c = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
     uint8_t *ziel = z->radar + (y * RADAR_B + zx) * 3;
     ziel[0] = c & 0xFF, ziel[1] = c >> 8, ziel[2] = a;
+    if (a > 8) z->regen++;
   }
   return 1;
 }
@@ -134,7 +137,7 @@ static bool entpacken(size_t laenge, Ziel &z, PNG_DRAW_CALLBACK *zeile) {
 // ---------- Karte ----------
 
 static bool karteLaden(Satz &s, float lat, float lon) {
-  // Mitte des Ausschnitts als Weltpixel (Web-Mercator) bei Zoom 8
+  // Mitte des Ausschnitts als Weltpixel (Web-Mercator) bei KARTE_ZOOM
   double n = 256.0 * (1 << KARTE_ZOOM);
   double la = lat * PI / 180;
   double X = (lon + 180.0) / 360.0 * n;
@@ -172,15 +175,17 @@ static int radarLaden(Satz &s, float lat, float lon) {
   int gesamt = vergangen.size();
   int anfang = max(0, gesamt - RADAR_BILDER);
   int n = 0;
+  s.regen = 0;
   for (int i = anfang; i < gesamt; i++) {
     const char *pfad = vergangen[i]["path"];
     if (!pfad) continue;
     // auf den Ort zentrierte 512er-Kachel; Farbschema 2, geglaettet, Schnee eigene Farbe
-    String url = host + pfad + "/512/7/" + String(lat, 4) + "/" + String(lon, 4) + "/2/1_1.png";
+    String url = host + pfad + "/512/6/" + String(lat, 4) + "/" + String(lon, 4) + "/2/1_1.png";
     memset(s.bild[n], 0, RADAR_B * RADAR_H * 3);
     Ziel z{RADAR_B / 2 - 256, RADAR_H / 2 - 256, nullptr, s.bild[n]};
     if (!entpacken(herunterladen(url), z, zeileRadar)) continue;
     s.zeit[n] = vergangen[i]["time"] | 0;
+    s.regen += z.regen;
     n++;
   }
   return n;
@@ -201,7 +206,7 @@ void radarAktualisieren(float lat, float lon) {
     if (!karteLaden(s, lat, lon)) Serial.println("Radar: Karte nicht geladen");
   }
   s.bilder = radarLaden(s, lat, lon);
-  Serial.printf("Radar: %d Bilder, Karte %s\n", s.bilder, s.karteDa ? "ok" : "fehlt");
+  Serial.printf("Radar: %d Bilder, %d Regenpixel, Karte %s\n", s.bilder, s.regen, s.karteDa ? "ok" : "fehlt");
   if (!s.bilder && !s.karteDa) return;
 
   xSemaphoreTake(sperre, portMAX_DELAY);
@@ -217,6 +222,7 @@ bool radarHolen(RadarStand &r) {
   const Satz &s = satz[a];
   r.karte = s.karteDa;
   r.bilder = s.bilder;
+  r.regen = s.regen;
   r.kartePixel = s.karte;
   for (int i = 0; i < RADAR_BILDER; i++) {
     r.bild[i] = s.bild[i];

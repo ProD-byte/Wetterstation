@@ -441,6 +441,15 @@ void seiteRadar(int ox, uint32_t t) {
   bild.fillSmoothCircle(mx, my, 5, TFT_BLACK);
   bild.fillSmoothCircle(mx, my, 3, farbe(255, 198, 44));
 
+  // trocken im ganzen Ausschnitt: deutlich sagen, statt nur eine leere Karte zu zeigen
+  if (r.bilder && !r.regen) {
+    const char *txt = TX("Kein Regen in der Nähe", "No rain nearby");
+    schrift(bild, S_M);
+    int w = breite(bild, txt) + 24;
+    bild.fillSmoothRoundRect(mx - w / 2, my + 16, w, 26, 13, farbe(16, 22, 34), hintergrund(mx, my + 16));
+    schreibe(bild, txt, mx, my + 35, WEISS, MITTE);
+  }
+
   // Uhrzeit des gezeigten Bilds und Quellen
   if (nr >= 0) {
     struct tm z;

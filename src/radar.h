@@ -11,6 +11,7 @@ const int RADAR_BILDER = 7;              // letzte Stunde in 10-Minuten-Schritte
 struct RadarStand {
   bool karte = false;                      // Karte geladen
   int bilder = 0;                          // Anzahl Radarbilder (0 = noch keine)
+  int regen = 0;                           // Pixel mit Regen im Ausschnitt (0 = trocken)
   const uint16_t *kartePixel = nullptr;    // RADAR_B * RADAR_H Farben (RGB565)
   const uint8_t *bild[RADAR_BILDER] = {};  // je Pixel 3 Byte: Farbe (RGB565, low/high) + Deckkraft
   time_t zeit[RADAR_BILDER] = {};          // Aufnahmezeit je Bild

@@ -163,7 +163,7 @@ html.einbetten .wrap { padding-block: 4px 8px; gap: 16px; }
     <div><span class="tag">Seite 3</span><h2>Die nächsten Tage</h2><p>Heute, morgen und übermorgen mit kleinem animiertem Bild, Höchst- und Tiefstwert und Regenrisiko.</p></div>
     <div><span class="tag">Seite 4</span><h2>Sonne &amp; Mond</h2><p>Die Sonne wandert über ihren Tagesbogen von Aufgang bis Untergang. Dazu Tageslänge, UV-Index und die aktuelle Mondphase.</p></div>
     <div><span class="tag">Seite 5</span><h2>Luft &amp; Pollen</h2><p>Europäischer Luftqualitätsindex als Ring und fünf Pollenarten in drei Stufen. Wählst du „Sonnig“, siehst du Pollen.</p></div>
-    <div><span class="tag">Seite 6</span><h2>Regenradar</h2><p>Echte Radarbilder der letzten Stunde (RainViewer) auf einer dunklen Karte deiner Gegend, als Animation. Hier mit Beispiel-Regen, auf dem Gerät live.</p></div>
+    <div><span class="tag">Seite 6</span><h2>Regenradar</h2><p>Echte Radarbilder der letzten Stunde (RainViewer) auf einer dunklen Karte deiner Gegend, als Animation. Hier mit erfundenem Beispiel-Regen. Das Gerät zeigt den echten Regen im Umkreis von gut 100 km, und wenn es nirgends regnet, steht „Kein Regen in der Nähe“ auf der Karte.</p></div>
     <div><span class="tag">Seite 7</span><h2>Letzte 7 Tage</h2><p>Temperatur, Luftdruck und Regen der vergangenen Woche – auch als Diagramm auf der Einstellungsseite.</p></div>
     <div><span class="tag">Seite 8</span><h2>Orte im Vergleich</h2><p>Bis zu drei weitere Orte, die du auf der Einstellungsseite einträgst, neben deinem eigenen.</p></div>
     <div><span class="tag">Immer</span><h2>Warnungen &amp; Regen</h2><p>DWD-Unwetterwarnungen blinken oben im Wechsel mit dem Titel. Beginnt oder endet Regen in den nächsten zwei Stunden, steht die Uhrzeit auf Seite 1. Probier „Gewitter“.</p></div>
@@ -703,6 +703,11 @@ function seiteRadar(ox, t) {
     c.fillStyle = g; c.beginPath(); c.ellipse(cx, cy, r * 1.3, r * 0.8, 0.3, 0, 7); c.fill();
   }
   c.restore();
+  // Hinweis: die Wolken hier sind erfunden - das Geraet zeigt den echten Regen (oder "Kein Regen in der Naehe")
+  schrift("f2");
+  const bsp = L("Beispiel-Regen", "Example rain"), bw = c.measureText(bsp).width + 14;
+  c.fillStyle = "rgba(16,22,34,.85)"; c.beginPath(); c.roundRect(ox + W - 6 - bw, Y0 + 6, bw, 18, 9); c.fill();
+  schreibe(bsp, ox + W - 13, Y0 + 19, rgb(255, 198, 44), "r");
   const mx = ox + 160, my = Y0 + 75, puls = (t / 1400) % 1;
   c.globalAlpha = 1 - puls; c.strokeStyle = rgb(255, 198, 44); c.lineWidth = 1.5; c.beginPath(); c.arc(mx, my, 4 + puls * 14, 0, 7); c.stroke(); c.globalAlpha = 1;
   kreis(mx, my, 5, "#000"); kreis(mx, my, 3, rgb(255, 198, 44));
