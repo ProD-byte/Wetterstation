@@ -18,7 +18,8 @@ Geschrieben mit **VS Code + PlatformIO**.
 | ⚠️ **Warnungen** | Unwetterwarnungen des Deutschen Wetterdienstes ([brightsky.dev](https://brightsky.dev/)) blinken oben |
 | 🌙 **Himmel** | Farbverlauf passend zum Wetter, nachts mit funkelnden Sternen; Nachtmodus dimmt das Display |
 | 📶 **WLAN** | Einrichtung per Handy (WLAN „Wetterstation-Setup“), merkt sich bis zu 5 Netze |
-| ⚙️ **Einstellungen** | im Browser unter **http://wetterstation.local**: Sprache, Ort, Helligkeit, Seiten, Blättern, Nachtmodus, Updates |
+| ⚙️ **Einstellungen** | im Browser unter **http://wetterstation.local**: Sprache, Bild drehen, Ort, Helligkeit, Seiten, Blättern, Nachtmodus, Updates |
+| 🔃 **Einbaulage** | Bild um 180° drehen (Einstellungsseite), wenn das Board andersherum im Gehäuse sitzt. Das T-Display hat keinen Lagesensor, deshalb dreht es sich nicht von selbst |
 | 🌍 **Sprache** | Deutsch oder Englisch – Display, Einstellungsseite und Einrichtung. Bei der Einrichtung übernimmt die Station die Sprache des Handys |
 | 🔄 **Updates** | von selbst aus dem Internet (neue Builds von GitHub), über WLAN (OTA) oder mit dem Online-Flasher |
 

@@ -73,6 +73,7 @@ select{font:inherit;font-size:15px;padding:8px 10px;border-radius:12px;border:1p
     <div class="zeile"><span data-t="seiten">Seiten</span></div>
     <div class="seg" id="seiten" style="margin-bottom:6px"></div>
     <div class="zeile"><span data-t="blaettern">Weiterblättern</span><select id="wechsel"></select></div>
+    <div class="zeile"><span><span data-t="drehen">Bild um 180° drehen</span><small data-t="drehenKlein">wenn das Board andersherum eingebaut ist und das Bild auf dem Kopf steht</small></span><label class="schalter"><input type="checkbox" id="gedreht"><i></i></label></div>
   </div>
 
   <div class="card">
@@ -101,6 +102,7 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>'
 const EN = {
   titel: 'Weather station', standort: 'Location', suchen: 'Search', ortAuto: 'Detect location automatically again via your internet connection',
   anzeige: 'Display', sprache: 'Language', helligkeit: 'Brightness', seiten: 'Pages', blaettern: 'Next page',
+  drehen: 'Rotate picture by 180°', drehenKlein: 'if the board is mounted the other way round and the picture is upside down',
   nachtmodus: 'Night mode', nachtDunkel: 'Dark display at night', nachtKlein: 'strongly dimmed, buttons light it up briefly',
   von: 'from', bis: 'until', autoUpd: 'Install new versions by itself', autoKlein: 'gets them from GitHub, no computer needed',
   wlan: 'Wi-Fi', neuEinrichten: 'Set up again', wlanHinweis: 'Restarts and opens the Wi-Fi “Wetterstation-Setup” – then set it up with your phone like the first time.'
@@ -135,6 +137,7 @@ function zeigen() {
   $('#wechsel').value = e.wechsel;
   $('#nacht').checked = e.nacht; $('#von').value = e.von; $('#bis').value = e.bis;
   $('#auto').checked = e.auto;
+  $('#gedreht').checked = e.gedreht;
   $('#updText').innerHTML = !st.build ? L('Selbst gebaute Firmware – keine Updates von GitHub', 'Self-built firmware – no updates from GitHub')
     : st.neu ? `<b>Build ${st.neu}</b> ${L('ist verfügbar', 'is available')}` : `${L('Aktuell', 'Up to date')} (Build ${st.build})`;
   $('#updBtn').textContent = st.neu ? L('Installieren', 'Install') : L('Jetzt suchen', 'Check now');
@@ -162,6 +165,7 @@ $('#nacht').onchange = e => speichern({nacht: e.target.checked ? 1 : 0});
 $('#von').onchange = e => speichern({von: +e.target.value});
 $('#bis').onchange = e => speichern({bis: +e.target.value});
 $('#auto').onchange = e => speichern({auto: e.target.checked ? 1 : 0});
+$('#gedreht').onchange = e => speichern({gedreht: e.target.checked ? 1 : 0});
 
 $('#sucheForm').onsubmit = async e => {
   e.preventDefault();

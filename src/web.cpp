@@ -32,7 +32,7 @@ static void status() {
              ",\"einst\":{\"licht\":" + einst.licht + ",\"seiten\":" + einst.seiten + ",\"wechsel\":" + einst.wechsel +
              ",\"nacht\":" + (einst.nacht ? "true" : "false") + ",\"von\":" + einst.nachtVon + ",\"bis\":" +
              einst.nachtBis + ",\"auto\":" + (einst.autoUpdate ? "true" : "false") + ",\"sprache\":" + einst.sprache +
-             "}}";
+             ",\"gedreht\":" + (einst.gedreht ? "true" : "false") + "}}";
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", j);
 }
@@ -54,6 +54,7 @@ static void einstellungenSetzen() {
   einst.nachtBis = constrain(zahl("bis", einst.nachtBis), 0, 23);
   einst.autoUpdate = janein("auto", einst.autoUpdate);
   einst.sprache = constrain(zahl("sprache", einst.sprache), 0, 1);
+  einst.gedreht = janein("gedreht", einst.gedreht);
   einstellungenSpeichern();
   server.send(200, "text/plain", "ok");
 }

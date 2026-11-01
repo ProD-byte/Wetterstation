@@ -14,6 +14,7 @@ struct Einstellungen {
   uint8_t nachtBis = 6;
   bool autoUpdate = true;     // neue Builds von GitHub selbst installieren
   uint8_t sprache = 0;        // 0 = Deutsch, 1 = Englisch
+  bool gedreht = false;       // Bild um 180 Grad drehen (Board andersherum eingebaut)
 };
 
 extern Einstellungen einst;

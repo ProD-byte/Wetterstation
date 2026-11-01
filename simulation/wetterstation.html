@@ -57,6 +57,11 @@ header p { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
   width: 14px; height: 15%; border-radius: 4px;
   background: linear-gradient(90deg, #8d939a, #c9cdd2 40%, #7b8188);
 }
+/* Einbaulage "gedreht": Board steht auf dem Kopf, die Firmware dreht das Bild mit (setRotation 3) */
+.board, .glass { transition: transform .6s ease; }
+.board.gedreht { transform: rotate(180deg); }
+.board.gedreht .glass { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .board, .glass { transition: none; } }
 .glass {
   background: #050607; border-radius: 6px; padding: 2.2% 2.6%;
   box-shadow: 0 0 0 1px #000, 0 0 0 3px #1c1f22;
@@ -146,6 +151,7 @@ html.einbetten .wrap { padding-block: 4px 8px; gap: 16px; }
     <div class="row"><span>Wetter</span><div class="chips" id="wetterWahl"></div></div>
     <div class="row"><span>Tageszeit</span><div class="chips" id="tagWahl"></div></div>
     <div class="row"><span>Sprache</span><div class="chips" id="sprachWahl"></div></div>
+    <div class="row"><span>Einbaulage</span><div class="chips" id="lageWahl"></div></div>
     <div class="row"><span>Akku</span><div class="chips" id="akkuWahl"></div></div>
     <div class="row"><span>Darstellung</span><div class="chips" id="pixelWahl"></div></div>
     <p class="note" id="quelle"></p>
@@ -812,6 +818,8 @@ chips("wetterWahl", DEMOS.map(d => [d.id, d.name]), "echt", v => {
 });
 chips("tagWahl", [["echt", "Wie in den Daten"], ["tag", "Tag"], ["nacht", "Nacht"]], "echt", v => { tagModus = v; baueWetter(); });
 chips("sprachWahl", [["de", "Deutsch"], ["en", "English"]], "de", v => { englisch = v === "en"; });
+chips("lageWahl", [["normal", "Normal"], ["gedreht", "Andersherum (Bild um 180° gedreht)"]], "normal",
+  v => document.querySelector(".board").classList.toggle("gedreht", v === "gedreht"));
 chips("akkuWahl", [["usb", "Am USB"], ["voll", "Akku 85 %"], ["leer", "Akku 15 %"]], "usb", v => { akkuModus = v; });
 chips("pixelWahl", [["pixel", "Echte Pixel"], ["glatt", "Geglättet"]], "pixel", v => setPixel(v === "pixel"));
 

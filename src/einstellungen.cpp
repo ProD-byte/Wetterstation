@@ -16,6 +16,7 @@ void einstellungenLaden() {
   e.nachtBis = p.getUChar("bis", e.nachtBis) % 24;
   e.autoUpdate = p.getBool("auto", e.autoUpdate);
   e.sprache = p.getUChar("sprache", e.sprache) % 2;
+  e.gedreht = p.getBool("gedreht", e.gedreht);
   p.end();
   einst = e;
 }
@@ -31,5 +32,6 @@ void einstellungenSpeichern() {
   p.putUChar("bis", einst.nachtBis);
   p.putBool("auto", einst.autoUpdate);
   p.putUChar("sprache", einst.sprache);
+  p.putBool("gedreht", einst.gedreht);
   p.end();
 }

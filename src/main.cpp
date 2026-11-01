@@ -695,7 +695,7 @@ void setup() {
   einstellungenLaden();
 
   tft.init();
-  tft.setRotation(1);  // quer
+  tft.setRotation(einst.gedreht ? 3 : 1);  // quer, 3 = um 180 Grad gedreht (Einstellungsseite)
   tft.fillScreen(TFT_BLACK);
 
   ledcAttach(LICHT_PIN, 5000, 8);
@@ -729,6 +729,13 @@ void loop() {
   bool hatDaten = wetterHolen(w);
   tasten(t, hatDaten);
   lichtSetzen(t);
+
+  // Bild drehen wurde auf der Einstellungsseite umgeschaltet -> sofort uebernehmen
+  static bool gedreht = einst.gedreht;
+  if (gedreht != einst.gedreht) {
+    gedreht = einst.gedreht;
+    tft.setRotation(gedreht ? 3 : 1);
+  }
 
   // Neue Version aus dem Internet: auf Wunsch sofort, sonst wenn gerade niemand die Tasten benutzt
   bool gewuenscht = updateInstallierenGewuenscht();
