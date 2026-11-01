@@ -65,6 +65,17 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(240,160,48,.2)}
 .okc{background:rgba(47,210,122,.15);color:var(--ok)}
 .badc{background:rgba(255,84,104,.15);color:var(--bad)}
 .hint{margin-top:18px!important;font-size:14px}
+.okline{display:flex;align-items:center;gap:8px;color:var(--ok);font-size:14px;font-weight:600}
+.okline svg{width:18px;height:18px;stroke-width:3}
+.frage{margin:14px 0 4px;font-size:20px}
+.klein{color:var(--muted);font-size:14px;margin:0 0 10px}
+.ortbtn{display:flex;align-items:center;gap:12px;width:100%;padding:14px;margin-top:8px;border:1px solid var(--line);border-radius:14px;background:var(--card2);color:inherit;font:inherit;text-align:left;cursor:pointer}
+.ortbtn:hover,.ortbtn:active{border-color:var(--accent)}
+.ortbtn svg{width:20px;height:20px;flex:none;color:var(--accent)}
+.ortbtn .t{flex:1;min-width:0}
+.ortbtn b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ortbtn small{display:block;color:var(--muted);font-size:13px}
+.vorschlag{border-color:var(--accent)}
 .foot{text-align:center;color:var(--muted);font-size:13px;margin-top:18px}
 [hidden]{display:none!important}
 </style>
@@ -104,10 +115,28 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(240,160,48,.2)}
     <p>mit <b id="busyName"></b></p>
   </div>
 
+  <div class="card pad" id="ort" hidden>
+    <div class="okline"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>WLAN verbunden</div>
+    <h2 class="frage">Wo steht deine Wetterstation?</h2>
+    <div id="vorschlagWrap" hidden>
+      <p class="klein">Ungefähr ermittelt über deinen Internetanschluss:</p>
+      <button type="button" class="ortbtn vorschlag" id="vorschlag"></button>
+    </div>
+    <form id="sucheForm" autocomplete="off">
+      <label for="suche">Anderen Ort suchen</label>
+      <div class="field">
+        <input id="suche" placeholder="Ort oder Postleitzahl" autocapitalize="words" spellcheck="false">
+        <button type="submit" class="eye" aria-label="Suchen"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+      </div>
+    </form>
+    <div id="treffer"></div>
+    <button type="button" class="ghost" id="spaeter">Überspringen</button>
+  </div>
+
   <div class="card state" id="done" hidden>
     <div class="big okc"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
-    <h2>Verbunden!</h2>
-    <p>Die Wetterstation holt jetzt das Wetter und zeigt es gleich auf dem Display an.</p>
+    <h2>Fertig!</h2>
+    <p>Die Wetterstation zeigt gleich das Wetter für <b id="fertigOrt">deinen Ort</b>.</p>
     <p class="hint">Verbinde dein Handy wieder mit deinem normalen WLAN.</p>
   </div>
 
@@ -122,7 +151,7 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(240,160,48,.2)}
 </div>
 <script>
 const $ = s => document.querySelector(s);
-const VIEWS = ['list', 'form', 'busy', 'done', 'fail'];
+const VIEWS = ['list', 'form', 'busy', 'ort', 'done', 'fail'];
 const show = v => VIEWS.forEach(x => $('#' + x).hidden = x !== v);
 const esc = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const LOCK = '<svg class="lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
@@ -166,7 +195,7 @@ function pick(n) {
 async function poll() {
   try {
     const s = await (await fetch('/status')).json();
-    if (s.state === 'ok') { show('done'); return; }
+    if (s.state === 'ok') { ortFragen(); return; }
     if (s.state === 'failed') { show('fail'); return; }
   } catch (e) {}
   setTimeout(poll, 1000);
@@ -186,6 +215,52 @@ $('#refresh').onclick = scan;
 $('#otherBtn').onclick = () => pick(null);
 $('#back').onclick = () => show('list');
 $('#retry').onclick = () => pick(sel);
+
+// --- Schritt 2: Standort (die Wetterstation ist jetzt im Internet und sucht fuer das Handy) ---
+const PIN = '<svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>';
+const ortKnopf = o => `${PIN}<span class="t"><b>${esc(o.name)}</b><small>${esc(o.info || '')}</small></span>`;
+
+async function ortFragen() {
+  show('ort');
+  try {
+    const o = await (await fetch('/ort')).json();
+    if (o.name) {
+      o.info = o.gewaehlt ? 'zuletzt gewählt' : 'ungefähr';
+      $('#vorschlag').innerHTML = ortKnopf(o);
+      $('#vorschlag').onclick = () => waehle(o);
+      $('#vorschlagWrap').hidden = false;
+    }
+  } catch (e) {}
+}
+
+async function waehle(o) {
+  $('#fertigOrt').textContent = o.name;
+  show('done');
+  try { await fetch('/ort', {method: 'POST', body: new URLSearchParams({name: o.name, lat: o.lat, lon: o.lon})}); } catch (e) {}
+}
+
+$('#sucheForm').onsubmit = async e => {
+  e.preventDefault();
+  const q = $('#suche').value.trim();
+  if (q.length < 2) { $('#suche').focus(); return; }
+  $('#treffer').innerHTML = '<div class="skel" style="border-radius:14px;margin-top:8px"></div>'.repeat(3);
+  try {
+    const liste = await (await fetch('/orte?q=' + encodeURIComponent(q))).json();
+    $('#treffer').innerHTML = liste.length
+      ? liste.map((o, i) => `<button type="button" class="ortbtn" data-i="${i}">${ortKnopf(o)}</button>`).join('')
+      : '<div class="empty">Nichts gefunden – anders schreiben?</div>';
+    document.querySelectorAll('#treffer .ortbtn').forEach(b => b.onclick = () => waehle(liste[b.dataset.i]));
+  } catch (e) {
+    $('#treffer').innerHTML = '<div class="empty">Suche fehlgeschlagen</div>';
+  }
+};
+
+$('#spaeter').onclick = async () => {
+  $('#fertigOrt').textContent = 'den ungefähren Ort';
+  show('done');
+  try { await fetch('/ort', {method: 'POST', body: new URLSearchParams({spaeter: 1})}); } catch (e) {}
+};
+
 scan();
 </script>
 </body>

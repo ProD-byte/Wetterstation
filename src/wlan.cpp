@@ -6,6 +6,7 @@
 // DNS-Umleitung automatisch auf der Einrichtungsseite.
 
 #include "wlan.h"
+#include "ort.h"
 #include "portal_html.h"
 
 #include <algorithm>
@@ -192,6 +193,53 @@ static void seiteStatus() {
   portal->send(200, "application/json", String("{\"state\":\"") + s + "\"}");
 }
 
+// --- Schritt 2: Standort. Die Wetterstation ist jetzt selbst im Internet und sucht fuer das Handy. ---
+
+static bool ortFertig = false;
+static uint32_t ortFertigSeit = 0;
+static String ortGewaehlt;
+
+// Vorschlag: der zuletzt am Handy gewaehlte Ort, sonst grob ueber die Internet-Adresse
+static void seiteOrt() {
+  static bool geholt = false;
+  static Ort vorschlag;
+  if (!geholt) {
+    vorschlag = ortAktuell();
+    if (!vorschlag.vomNutzer && !ortPerIp(vorschlag)) vorschlag.name[0] = 0;
+    geholt = true;
+  }
+  String json = "{}";
+  if (vorschlag.name[0]) {
+    String name = vorschlag.name;
+    name.replace("\"", "'");
+    json = "{\"name\":\"" + name + "\",\"lat\":" + String(vorschlag.lat, 4) + ",\"lon\":" + String(vorschlag.lon, 4) +
+           ",\"gewaehlt\":" + (vorschlag.vomNutzer ? "true" : "false") + "}";
+  }
+  portal->sendHeader("Cache-Control", "no-store");
+  portal->send(200, "application/json", json);
+}
+
+static void seiteOrteSuchen() {
+  portal->sendHeader("Cache-Control", "no-store");
+  portal->send(200, "application/json", ortSuchen(portal->arg("q")));
+}
+
+static void seiteOrtSpeichern() {
+  if (portal->hasArg("lat")) {
+    Ort o;
+    o.lat = portal->arg("lat").toFloat();
+    o.lon = portal->arg("lon").toFloat();
+    strlcpy(o.name, portal->arg("name").c_str(), sizeof(o.name));
+    o.vomNutzer = true;
+    ortSpeichern(o);
+    ortGewaehlt = o.name;
+  }
+  // "Ueberspringen": nichts speichern - dann ermittelt die Wetterstation den Ort selbst
+  ortFertig = true;
+  ortFertigSeit = millis();
+  portal->send(200, "text/plain", "ok");
+}
+
 // Alles andere (Captive-Portal-Erkennung von Android/iOS/Windows) auf die Einrichtungsseite
 // umleiten, damit das Handy sie von selbst oeffnet.
 static void seiteUmleiten() {
@@ -211,6 +259,9 @@ static void portalLaufen(bool bekannte) {
   portal->on("/scan", HTTP_GET, seiteSuche);
   portal->on("/save", HTTP_POST, seiteSpeichern);
   portal->on("/status", HTTP_GET, seiteStatus);
+  portal->on("/ort", HTTP_GET, seiteOrt);
+  portal->on("/ort", HTTP_POST, seiteOrtSpeichern);
+  portal->on("/orte", HTTP_GET, seiteOrteSuchen);
   portal->onNotFound(seiteUmleiten);
   portal->begin();
 
@@ -238,13 +289,20 @@ static void portalLaufen(bool bekannte) {
 
     // Display: "Falsch" ein paar Sekunden zeigen, dann wieder die Anleitung
     WlanPhase phase = WLAN_EINRICHTUNG;
+    String text = versuchSsid;
     if (versuch == Versuch::Verbinde) phase = WLAN_TESTE;
-    else if (versuch == Versuch::Ok) phase = WLAN_OK;
+    else if (versuch == Versuch::Ok && !ortFertig) phase = WLAN_ORT;
+    else if (versuch == Versuch::Ok) {
+      phase = WLAN_OK;
+      text = ortGewaehlt;
+    }
     else if (versuch == Versuch::Falsch && millis() - falschSeit < 6000) phase = WLAN_FALSCH;
-    zeige(phase, versuchSsid);
+    zeige(phase, text);
 
-    // Kurz warten, damit das Handy die Erfolgsmeldung noch abholt
-    if (versuch == Versuch::Ok && millis() - okSeit > 8000) break;
+    // Nach der Ortswahl kurz warten, damit das Handy die Fertig-Meldung noch abholt.
+    // Waehlt niemand einen Ort, geht es nach 3 Minuten ohne weiter.
+    if (ortFertig && millis() - ortFertigSeit > 4000) break;
+    if (versuch == Versuch::Ok && !ortFertig && millis() - okSeit > 3 * 60 * 1000) break;
 
     if (bekannte && versuch != Versuch::Verbinde && versuch != Versuch::Ok &&
         millis() - portalStart > PORTAL_WARTEN_MS) {

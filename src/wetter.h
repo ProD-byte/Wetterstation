@@ -6,6 +6,7 @@
 
 struct Wetter {
   bool gueltig = false;
+  char ort[40] = "";  // Ortsname fuer die Anzeige
 
   // jetzt
   float temp = 0, gefuehlt = 0, wind = 0;
@@ -27,7 +28,7 @@ struct Wetter {
   uint32_t abruf = 0;  // millis() beim letzten Abruf
 };
 
-enum WetterStatus { VERBINDE, LADE, FERTIG, FEHLER };
+enum WetterStatus { VERBINDE, ORTUNG, LADE, FERTIG, FEHLER };
 
 void wetterStart();
 bool wetterHolen(Wetter &w);  // Kopie der neuesten Daten, false solange noch keine da sind

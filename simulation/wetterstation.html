@@ -125,7 +125,7 @@ html.einbetten .wrap { padding-block: 4px 8px; gap: 16px; }
 <div class="wrap">
   <header>
     <h1>Wetterstation Cottbus</h1>
-    <p>So sieht die Firmware auf dem LILYGO T-Display aus: 240 × 135 Pixel, quer. Die runden Tasten rechts funktionieren wie die echten.</p>
+    <p>So sieht die Firmware auf dem LILYGO T-Display aus: 240 × 135 Pixel, quer. Die runden Tasten rechts funktionieren wie die echten. Den Ort wählst du bei der Einrichtung, hier zeigen wir Cottbus.</p>
   </header>
 
   <div class="stage">
@@ -553,8 +553,9 @@ function startBild(t) {
   else schreibe("Hole Wetterdaten" + p, 120, 117, HELL, "m");
 }
 
-// WLAN-Einrichtung (wie wlanBild in main.cpp)
+// WLAN-Einrichtung (wie wlanBild in main.cpp): erst WLAN, dann Standort - wechselt alle 5 s
 function wlanBild(t) {
+  if (Math.floor((t - startSeit) / 5000) % 2 === 1) return ortBild(t);
   zeichneHimmel("KLAR", false, t, false);
   schrift("b9"); schreibe("WLAN einrichten", 120, 20, WEISS, "m");
   const cx = 34, cy = 82;
@@ -570,6 +571,21 @@ function wlanBild(t) {
   schreibe("2. Seite öffnet sich selbst:", 64, 88, HELL, "l");
   schreibe("dein WLAN wählen und", 64, 104, HELL, "l");
   schreibe("Passwort eingeben", 64, 120, HELL, "l");
+}
+
+function ortBild(t) {
+  zeichneHimmel("KLAR", false, t, false);
+  schrift("b9"); schreibe("WLAN verbunden!", 120, 20, rgb(90, 220, 110), "m");
+  const cx = 34, cy = 80, hub = Math.abs(Math.sin(t * 0.004)) * 6, gelb = rgb(255, 198, 44), y = cy - hub;
+  kreis(cx, cy + 20, 9 - hub / 2, "#000", 70 / 255);
+  dreieck(cx - 10, y - 2, cx + 10, y - 2, cx, y + 18, gelb);
+  kreis(cx, y - 6, 11, gelb);
+  kreis(cx, y - 6, 4, rgb(...verlauf("KLAR", false)[0]));
+  schrift("f2");
+  schreibe("3. Jetzt am Handy:", 64, 50, HELL, "l");
+  schreibe("Wo steht die Station?", 64, 68, gelb, "l");
+  schreibe("Ort oder PLZ suchen", 64, 92, HELL, "l");
+  schreibe("oder Vorschlag antippen", 64, 108, HELL, "l");
 }
 
 // ---------- Ablauf ----------
@@ -644,7 +660,7 @@ function zeigeQuelle() {
     : modus === "start"
       ? "So sieht das Display aus, bis die ersten Daten da sind. Unten steht der Name deines WLANs."
       : modus === "wlan"
-        ? "Beim ersten Start (oder Taste IO35 drei Sekunden halten) öffnet die Wetterstation das WLAN „Wetterstation-Setup“. Darin wählst du am Handy dein WLAN aus."
+        ? "Beim ersten Start (oder Taste IO35 drei Sekunden halten) öffnet die Wetterstation das WLAN „Wetterstation-Setup“. Darin wählst du am Handy erst dein WLAN, dann den Ort fürs Wetter. Ohne Auswahl findet sie ihn ungefähr über den Internetanschluss."
         : "Vorführ-Wetter, damit du alle Animationen sehen kannst. Temperaturen und Regen sind teilweise angepasst.";
 }
 chips("wetterWahl", DEMOS.map(d => [d.id, d.name]), "echt", v => {

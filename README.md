@@ -1,7 +1,9 @@
 # 🌦️ Wetterstation
 
 Animierte Wetterstation für das **LILYGO TTGO T-Display** (ESP32, 1,14″, 240 × 135 Pixel).
-Zeigt das Wetter für **03046 Cottbus** mit Daten von [Open-Meteo](https://open-meteo.com/) (kostenlos, ohne Anmeldung).
+Zeigt das Wetter für deinen Ort mit Daten von [Open-Meteo](https://open-meteo.com/) (kostenlos, ohne Anmeldung).
+Den Ort wählst du bei der Einrichtung am Handy (Name oder Postleitzahl). Ohne Auswahl ermittelt die Station ihn
+ungefähr über die Internet-Adresse ([ipapi.co](https://ipapi.co/), ersatzweise [ipwho.is](https://ipwho.is/)); klappt auch das nicht, nimmt sie Cottbus.
 Geschrieben mit **VS Code + PlatformIO**.
 
 ## ✨ Funktionen
@@ -45,7 +47,10 @@ T-Display per USB-C anschließen, Chrome oder Edge am Computer.
 
 1. Board einschalten → das Display zeigt „WLAN einrichten“.
 2. Mit dem Handy ins WLAN **„Wetterstation-Setup“** → die Einrichtungsseite öffnet sich von selbst.
-3. Eigenes WLAN wählen, Passwort eingeben – fertig. Das Wetter erscheint nach ein paar Sekunden.
+3. Eigenes WLAN wählen, Passwort eingeben.
+4. Die Seite fragt: **„Wo steht deine Wetterstation?“** – Ort oder Postleitzahl suchen, oder den ungefähr ermittelten Vorschlag antippen. Fertig.
+
+WLAN oder Ort ändern: Taste **IO35** drei Sekunden halten.
 
 ## 🤖 Automatischer Build (GitHub Actions)
 
@@ -62,7 +67,8 @@ Bei jedem Hochladen baut GitHub die Firmware automatisch (`.github/workflows/bui
 | `src/main.cpp` | Seiten, Tasten, Startbild, Update über WLAN |
 | `src/bilder.cpp` | Himmel, animierte Wetterbilder, Text mit Umlauten |
 | `src/wetter.cpp` | holt das Wetter alle 15 min im Hintergrund |
-| `src/wlan.cpp` | WLAN mit Einrichtung per Handy |
+| `src/wlan.cpp` | WLAN mit Einrichtung per Handy (inkl. Ortswahl) |
+| `src/ort.cpp` | Standort: speichern, über die Internet-Adresse ermitteln, Orte suchen |
 | `simulation/wetterstation.html` | Simulation (zeichnet wie die Firmware) |
 | `docs/` | Online-Flasher (GitHub Pages) |
 | `website/basteln-wetter.js` | baut den Abschnitt in daveslab.de/basteln ein |

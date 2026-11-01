@@ -1,4 +1,5 @@
-// TTGO T-Display - Wetterstation Cottbus
+// TTGO T-Display - Wetterstation
+// Standort: am Handy gewaehlt (Einrichtung), sonst grob ueber die Internet-Adresse, sonst Cottbus
 //   Taster GPIO 0:  naechste Seite
 //   Taster GPIO 35: kurz = Helligkeit, 3 s halten = WLAN neu einrichten
 // Seiten: Jetzt, naechste 24 Stunden, naechste Tage (wechseln auch von allein)
@@ -14,6 +15,7 @@
 #include "wetter.h"
 #include "bilder.h"
 #include "wlan.h"
+#include "ort.h"
 
 #ifndef OTA_PASSWORT
 #define OTA_PASSWORT ""
@@ -76,6 +78,17 @@ uint16_t hintergrund(int x, int y) {
   return bild.readPixel(constrain(x, 0, bild.width() - 1), constrain(y, 0, bild.height() - 1));
 }
 
+// Text auf eine Breite kuerzen (mit der gerade eingestellten Schrift), lange Ortsnamen z. B.
+String kuerzen(String text, int maxBreite) {
+  if (breite(bild, text.c_str()) <= maxBreite) return text;
+  while (text.length() > 1 && breite(bild, (text + ".").c_str()) > maxBreite) {
+    int n = text.length() - 1;
+    while (n > 0 && ((uint8_t)text[n] & 0xC0) == 0x80) n--;  // keinen Umlaut halb abschneiden
+    text.remove(n);
+  }
+  return text + ".";
+}
+
 void tropfenSymbol(int x, int y, uint16_t f) {
   bild.fillTriangle(x - 3, y - 1, x + 3, y - 1, x, y - 7, f);
   bild.fillSmoothCircle(x, y, 3, f);
@@ -86,7 +99,7 @@ void tropfenSymbol(int x, int y, uint16_t f) {
 // ------------------------------------------------------------
 void seiteJetzt(int ox, uint32_t t) {
   bild.setTextFont(2);
-  schreibe(bild, "Cottbus", ox + 6, 13, WEISS, LINKS);
+  schreibe(bild, kuerzen(w.ort, 160).c_str(), ox + 6, 13, WEISS, LINKS);
 
   zeichneBild(bild, bildFuerCode(w.code), w.tag, ox + 58, 74, 96, t);
 
@@ -289,7 +302,7 @@ void startBild(uint32_t t) {
   zeichneBild(bild, HEITER, true, 120, 50, 76, t);
 
   bild.setFreeFont(&FreeSansBold9pt7b);
-  schreibe(bild, "Wetter Cottbus", 120, 100, WEISS, MITTE);
+  schreibe(bild, kuerzen(String("Wetter ") + ortAktuell().name, 230).c_str(), 120, 100, WEISS, MITTE);
 
   char zeile1[40], zeile2[40] = "";
   const char *punkte[] = {"", ".", "..", "..."};
@@ -298,6 +311,9 @@ void startBild(uint32_t t) {
     case VERBINDE:
       snprintf(zeile1, sizeof(zeile1), "Verbinde mit WLAN%s", p);
       snprintf(zeile2, sizeof(zeile2), "%s", WiFi.SSID().c_str());
+      break;
+    case ORTUNG:
+      snprintf(zeile1, sizeof(zeile1), "Suche Standort%s", p);
       break;
     case LADE:
       snprintf(zeile1, sizeof(zeile1), "Hole Wetterdaten%s", p);
@@ -326,6 +342,17 @@ void wlanSymbol(int cx, int cy, uint32_t t) {
   bild.fillSmoothCircle(cx, cy, 4, farbe(255, 198, 44));
 }
 
+// Standort-Nadel, die sanft auf und ab huepft
+void ortSymbol(int cx, int cy, uint32_t t) {
+  float hub = fabsf(sinf(t * 0.004f)) * 6;
+  uint16_t gelb = farbe(255, 198, 44);
+  bild.fillSmoothCircle(cx, cy + 20, 9 - hub / 2, bild.alphaBlend(70, TFT_BLACK, hintergrund(cx, cy + 20)));  // Schatten
+  int y = cy - hub;
+  bild.fillTriangle(cx - 10, y - 2, cx + 10, y - 2, cx, y + 18, gelb);
+  bild.fillSmoothCircle(cx, y - 6, 11, gelb);
+  bild.fillSmoothCircle(cx, y - 6, 4, hintergrund(cx, cy - 30));
+}
+
 void wlanBild(WlanPhase phase, const char *netz) {
   static uint32_t zuletzt = 0;
   uint32_t t = millis();
@@ -337,7 +364,7 @@ void wlanBild(WlanPhase phase, const char *netz) {
 
   if (phase == WLAN_SUCHE) {
     zeichneBild(bild, HEITER, true, 120, 50, 76, t);
-    schreibe(bild, "Wetter Cottbus", 120, 100, WEISS, MITTE);
+    schreibe(bild, kuerzen(String("Wetter ") + ortAktuell().name, 230).c_str(), 120, 100, WEISS, MITTE);
     bild.setTextFont(2);
     schreibe(bild, "Verbinde mit WLAN ...", 120, 117, HELL, MITTE);
     schreibe(bild, netz, 120, 132, farbe(150, 160, 190), MITTE);
@@ -355,11 +382,20 @@ void wlanBild(WlanPhase phase, const char *netz) {
     schreibe(bild, "Verbinde ...", 120, 100, WEISS, MITTE);
     bild.setTextFont(2);
     schreibe(bild, netz, 120, 120, farbe(255, 198, 44), MITTE);
+  } else if (phase == WLAN_ORT) {
+    schreibe(bild, "WLAN verbunden!", 120, 20, farbe(90, 220, 110), MITTE);
+    ortSymbol(34, 80, t);
+    bild.setTextFont(2);
+    schreibe(bild, "3. Jetzt am Handy:", 64, 50, HELL, LINKS);
+    schreibe(bild, "Wo steht die Station?", 64, 68, farbe(255, 198, 44), LINKS);
+    schreibe(bild, "Ort oder PLZ suchen", 64, 92, HELL, LINKS);
+    schreibe(bild, "oder Vorschlag antippen", 64, 108, HELL, LINKS);
   } else if (phase == WLAN_OK) {
     zeichneBild(bild, KLAR, true, 120, 50, 76, t);
-    schreibe(bild, "Verbunden!", 120, 100, farbe(90, 220, 110), MITTE);
+    schreibe(bild, "Fertig!", 120, 100, farbe(90, 220, 110), MITTE);
     bild.setTextFont(2);
-    schreibe(bild, "Handy wieder ins eigene WLAN", 120, 120, HELL, MITTE);
+    schreibe(bild, *netz ? kuerzen(String("Wetter für ") + netz, 230).c_str() : "Handy wieder ins eigene WLAN", 120, 120,
+             HELL, MITTE);
   } else {
     zeichneBild(bild, GEWITTER, true, 120, 48, 70, t);
     schreibe(bild, "Hat nicht geklappt", 120, 100, farbe(255, 110, 100), MITTE);
@@ -427,7 +463,7 @@ void naechsteSeite(uint32_t t) {
 
 void setup() {
   Serial.begin(115200);
-  Serial.printf("\nWetterstation Cottbus, Build %d\n", FIRMWARE_BUILD);
+  Serial.printf("\nWetterstation, Build %d\n", FIRMWARE_BUILD);
 
   pinMode(TASTER_SEITE, INPUT_PULLUP);
   pinMode(TASTER_LICHT, INPUT);  // GPIO 35 hat einen Pull-up auf dem Board
@@ -453,6 +489,7 @@ void setup() {
 
   // GPIO 35 beim Einschalten gedrueckt halten = WLAN neu einrichten
   bool einrichten = digitalRead(TASTER_LICHT) == LOW;
+  ortLaden();
   wlanVerbinden(einrichten, wlanBild);
 
   configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "de.pool.ntp.org", "pool.ntp.org");

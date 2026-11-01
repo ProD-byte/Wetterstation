@@ -12,7 +12,8 @@ enum WlanPhase {
   WLAN_SUCHE,        // verbindet mit einem bekannten WLAN
   WLAN_EINRICHTUNG,  // Setup-WLAN ist offen, wartet aufs Handy
   WLAN_TESTE,        // probiert das am Handy gewaehlte WLAN
-  WLAN_OK,           // verbunden
+  WLAN_ORT,          // verbunden, wartet auf die Ortswahl am Handy
+  WLAN_OK,           // fertig eingerichtet (netz = gewaehlter Ort)
   WLAN_FALSCH        // Passwort falsch oder Netz nicht erreichbar
 };
 

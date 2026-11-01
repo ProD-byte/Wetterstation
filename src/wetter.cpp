@@ -1,16 +1,16 @@
 #include "wetter.h"
+#include "ort.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
-// 03046 Cottbus
-static const char *URL =
-    "https://api.open-meteo.com/v1/forecast?latitude=51.7563&longitude=14.3329"
+// Ort kommt aus ort.cpp (am Handy gewaehlt, sonst ueber die Internet-Adresse, sonst Cottbus)
+static const char *URL_REST =
     "&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m"
     "&hourly=temperature_2m,precipitation_probability"
     "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
-    "&timezone=Europe%2FBerlin&forecast_days=4&forecast_hours=24";
+    "&timezone=auto&forecast_days=4&forecast_hours=24";
 
 const uint32_t ABSTAND_OK     = 15 * 60 * 1000;  // alle 15 min neu
 const uint32_t ABSTAND_FEHLER = 60 * 1000;       // nach Fehler in 1 min nochmal
@@ -27,11 +27,16 @@ static int wochentag(int j, int m, int t) {
 }
 
 static bool abrufen(Wetter &w) {
+  Ort ort = ortAktuell();
+  String url = "https://api.open-meteo.com/v1/forecast?latitude=" + String(ort.lat, 4) +
+               "&longitude=" + String(ort.lon, 4) + URL_REST;
+  strlcpy(w.ort, ort.name, sizeof(w.ort));
+
   WiFiClientSecure client;
   client.setInsecure();  // Zertifikat nicht pruefen - reicht fuer Wetterdaten
   HTTPClient http;
   http.setTimeout(10000);
-  if (!http.begin(client, URL)) return false;
+  if (!http.begin(client, url)) return false;
 
   int code = http.GET();
   if (code != 200) {
@@ -84,11 +89,21 @@ static bool abrufen(Wetter &w) {
 
 static void aufgabe(void *) {
   uint32_t naechster = 0;
+  bool ortGeprueft = false;
   for (;;) {
     if (WiFi.status() != WL_CONNECTED) {
       if (!aktuell.gueltig) status = VERBINDE;
       vTaskDelay(pdMS_TO_TICKS(500));
       continue;
+    }
+    // Kein Ort am Handy gewaehlt -> einmal pro Start grob ueber die Internet-Adresse bestimmen
+    if (!ortGeprueft) {
+      ortGeprueft = true;
+      Ort o = ortAktuell();
+      if (!o.vomNutzer) {
+        if (!aktuell.gueltig) status = ORTUNG;
+        if (ortPerIp(o)) ortSpeichern(o);
+      }
     }
     if ((int32_t)(millis() - naechster) >= 0) {
       if (!aktuell.gueltig) status = LADE;
