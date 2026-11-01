@@ -1,6 +1,6 @@
 // TTGO T-Display - Wetterstation
 // Standort: am Handy gewaehlt (Einrichtung), sonst grob ueber die Internet-Adresse, sonst Cottbus
-//   Taster GPIO 0:  kurz = naechste Seite, 2 s halten = Info (Adresse der Einstellungsseite, Build)
+//   Taster GPIO 0:  kurz = naechste Seite, 2 s halten = Sprache Deutsch/Englisch (zeigt auch Adresse + Build)
 //   Taster GPIO 35: kurz = Helligkeit, 3 s halten = WLAN und Ort neu einrichten
 // Seiten: Jetzt, 24 Stunden, naechste Tage, Sonne & Mond, Luft & Pollen (wechseln auch von allein)
 // Wetterdaten: open-meteo.com, Warnungen: Deutscher Wetterdienst ueber brightsky.dev
@@ -420,21 +420,22 @@ void lichtAnzeige(uint32_t t) {
   }
 }
 
-// Taste IO0 lange halten: wo die Einstellungsseite ist
+// Taste IO0 lange halten: neue Sprache, dazu wo die Einstellungsseite ist
 void infoAnzeige(uint32_t t) {
   if ((int32_t)(infoBis - t) <= 0) return;
   bild.fillSmoothRoundRect(14, 22, 212, 96, 12, bild.alphaBlend(225, TFT_BLACK, hintergrund(120, 70)));
-  bild.setTextFont(2);
-  schreibe(bild, TX("Einstellungen im Browser:", "Settings in your browser:"), 120, 42, HELL, MITTE);
+  // oben die (gerade gewaehlte) Sprache, darunter wo die Einstellungsseite ist
   bild.setFreeFont(&FreeSansBold9pt7b);
-  schreibe(bild, WLAN_HOSTNAME ".local", 120, 64, farbe(255, 198, 44), MITTE);
+  schreibe(bild, TX("Deutsch", "English"), 120, 42, farbe(255, 198, 44), MITTE);
   bild.setTextFont(2);
-  schreibe(bild, (String(TX("oder ", "or ")) + WiFi.localIP().toString()).c_str(), 120, 84, WEISS, MITTE);
+  schreibe(bild, TX("Einstellungen im Browser:", "Settings in your browser:"), 120, 60, HELL, MITTE);
+  schreibe(bild, WLAN_HOSTNAME ".local", 120, 77, WEISS, MITTE);
+  schreibe(bild, (String(TX("oder ", "or ")) + WiFi.localIP().toString()).c_str(), 120, 94, WEISS, MITTE);
   char z[40];
   if (FIRMWARE_BUILD) snprintf(z, sizeof(z), "Build %d", FIRMWARE_BUILD);
   else strcpy(z, TX("eigener Build", "own build"));
   if (updateNeuerBuild()) snprintf(z, sizeof(z), TX("Build %d - neu: %d", "Build %d - new: %d"), FIRMWARE_BUILD, updateNeuerBuild());
-  schreibe(bild, z, 120, 106, HELL, MITTE);
+  schreibe(bild, z, 120, 111, HELL, MITTE);
 }
 
 // ------------------------------------------------------------
@@ -637,12 +638,20 @@ void lichtSetzen(uint32_t t) {
 }
 
 void tasten(uint32_t t, bool hatDaten) {
-  // IO0: kurz = naechste Seite (beim Loslassen), 2 s halten = Info
+  // IO0: kurz = naechste Seite (beim Loslassen), 2 s halten = Sprache Deutsch/Englisch wechseln
+  // (zeigt die neue Sprache zusammen mit Adresse der Einstellungsseite und Build)
   static uint32_t seiteSeitDruck = 0;
+  static bool sprachGewechselt = false;
   bool s = digitalRead(TASTER_SEITE) == LOW;
   if (s && !seiteSeitDruck) seiteSeitDruck = t ? t : 1;
-  if (s && t - seiteSeitDruck > 2000 && (int32_t)(infoBis - t) <= 0) infoBis = t + 10000;
+  if (s && t - seiteSeitDruck > 2000 && !sprachGewechselt) {
+    einst.sprache ^= 1;
+    einstellungenSpeichern();
+    infoBis = t + 6000;
+    sprachGewechselt = true;
+  }
   if (!s && seiteSeitDruck) {
+    sprachGewechselt = false;
     if (t - seiteSeitDruck < 1000) {
       if ((int32_t)(infoBis - t) > 0) infoBis = t;  // Info wieder zu
       else if (hatDaten && !wechsel) naechsteSeite(t);

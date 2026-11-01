@@ -132,8 +132,9 @@ html.einbetten .wrap { padding-block: 4px 8px; gap: 16px; }
     <div class="board">
       <div class="glass"><canvas id="lcd" width="240" height="135" aria-label="Simuliertes Display der Wetterstation"></canvas></div>
       <div class="keys">
+        <div class="silk" style="opacity:.75">2 s = DE/EN</div>
         <div class="silk"><b>IO0</b>Seite</div>
-        <button class="key" id="keySeite" aria-label="Taster GPIO 0: nächste Seite"></button>
+        <button class="key" id="keySeite" aria-label="Taster GPIO 0: kurz nächste Seite, 2 Sekunden halten wechselt die Sprache (Tastatur: Umschalt+Enter)"></button>
         <button class="key" id="keyLicht" aria-label="Taster GPIO 35: Helligkeit"></button>
         <div class="silk">Licht<b>IO35</b></div>
         <div class="silk" style="opacity:.75">3 s = WLAN</div>
@@ -648,6 +649,17 @@ function lichtAnzeige(t) {
   rundRechteck(70, 104, 100, 20, 10, "#000", 200 / 255);
   for (let k2 = 0; k2 < 4; k2++) rundRechteck(80 + k2 * 21, 110, 17, 8, 3, k2 < 4 - lichtStufe ? rgb(255, 210, 70) : rgb(70, 74, 84));
 }
+// Info-Box nach langem Druck auf IO0 (wie infoAnzeige in main.cpp)
+function infoAnzeige(t) {
+  if (infoBis - t <= 0) return;
+  rundRechteck(14, 22, 212, 96, 12, "#000", 225 / 255);
+  schrift("b9"); schreibe(L("Deutsch", "English"), 120, 42, rgb(255, 198, 44), "m");
+  schrift("f2");
+  schreibe(L("Einstellungen im Browser:", "Settings in your browser:"), 120, 60, HELL, "m");
+  schreibe("wetterstation.local", 120, 77, WEISS, "m");
+  schreibe(L("oder 192.168.178.42", "or 192.168.178.42"), 120, 94, WEISS, "m");
+  schreibe("Build 4", 120, 111, HELL, "m");
+}
 function startBild(t) {
   zeichneHimmel("HEITER", false, t, false);
   zeichneBild("HEITER", true, 120, 50, 76, t);
@@ -725,16 +737,42 @@ function frame() {
     if (!wechsel && t - seiteSeit > AUTO_WEITER && t - letzterTastendruck > 30000) naechsteSeite(t);
   }
   lichtAnzeige(t);
+  infoAnzeige(t);
 }
 
 const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 function schleife() { frame(); if (!still) requestAnimationFrame(schleife); }
 
-document.getElementById("keySeite").addEventListener("click", () => {
+// IO0 wie am Geraet: kurz = naechste Seite, 2 s halten = Sprache wechseln (Info-Box zeigt sie an)
+let infoBis = 0, seiteGedrueckt = 0, sprachTimer = null;
+function spracheWechseln() {
+  englisch = !englisch;
+  document.querySelectorAll("#sprachWahl button").forEach(b => b.setAttribute("aria-pressed", String(b.id === (englisch ? "sprachWahl-en" : "sprachWahl-de"))));
+  infoBis = jetzt() + 6000;
+  if (still) frame();
+}
+const keySeite = document.getElementById("keySeite");
+keySeite.addEventListener("pointerdown", e => {
+  keySeite.setPointerCapture(e.pointerId);
+  seiteGedrueckt = jetzt();
+  sprachTimer = setTimeout(() => { sprachTimer = null; spracheWechseln(); }, 2000);
+});
+keySeite.addEventListener("pointerup", () => {
+  if (!sprachTimer) return;  // war lang: Sprache ist schon gewechselt
+  clearTimeout(sprachTimer); sprachTimer = null;
   const t = jetzt();
+  if (infoBis > t) { infoBis = t; return; }  // kurz druecken schliesst die Info
   if (modus === "start" || modus === "wlan" || wechsel) return;
   naechsteSeite(t); letzterTastendruck = t;
   if (still) frame();
+});
+keySeite.addEventListener("pointercancel", () => { clearTimeout(sprachTimer); sprachTimer = null; });
+keySeite.addEventListener("keydown", e => {  // Tastatur: Enter = kurz, Shift+Enter = lang
+  if (e.key !== "Enter" && e.key !== " ") return;
+  e.preventDefault();
+  if (e.shiftKey) return spracheWechseln();
+  const t = jetzt();
+  if (modus !== "start" && modus !== "wlan" && !wechsel) { naechsteSeite(t); letzterTastendruck = t; }
 });
 document.getElementById("keyLicht").addEventListener("click", () => {
   const t = jetzt();

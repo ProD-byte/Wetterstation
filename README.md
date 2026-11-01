@@ -26,7 +26,7 @@ Die Seiten blättern alle 12 s von allein weiter (einstellbar).
 
 | Taste | kurz | lang |
 |---|---|---|
-| **IO0** | nächste Seite | 2 s halten = Adresse der Einstellungsseite und Build anzeigen |
+| **IO0** | nächste Seite | 2 s halten = Sprache Deutsch/Englisch wechseln (zeigt auch Adresse der Einstellungsseite und Build) |
 | **IO35** | Helligkeit (4 Stufen), nachts erst mal aufwecken | 3 s halten = WLAN und Ort neu einrichten |
 
 ### Update aus dem Internet

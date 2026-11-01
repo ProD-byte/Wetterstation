@@ -80,7 +80,7 @@ var WETTER_ABSCHNITT = `  <section class="dl-sec" id="wetter">
         <li class="rv" data-t="wet_s2"><b>Anschluss auswählen.</b> Meist „USB Single Serial“ oder „CH9102“. Fehlt er unter Windows, den Treiber „CH343SER“ von wch.cn installieren.</li>
         <li class="rv" data-t="wet_s3"><b>Keine Verbindung?</b> Taste <b>IO0</b> gedrückt halten, kurz <b>Reset</b> an der Seite drücken, IO0 loslassen – nochmal versuchen.</li>
         <li class="rv" data-t="wet_s4"><b>WLAN einrichten</b> (nur beim ersten Mal): Mit dem Handy ins WLAN <b>„Wetterstation-Setup“</b>, dein WLAN antippen, Passwort eingeben – dann deinen Ort suchen (Name oder PLZ) oder den Vorschlag antippen.</li>
-        <li class="rv" data-t="wet_s5"><b>Bedienen.</b> <b>IO0</b> blättert weiter, <b>IO35</b> ändert die Helligkeit – 3 Sekunden halten richtet das WLAN neu ein.</li>
+        <li class="rv" data-t="wet_s5"><b>Bedienen.</b> <b>IO0</b> blättert weiter (2 Sekunden halten: Deutsch/Englisch), <b>IO35</b> ändert die Helligkeit – 3 Sekunden halten richtet das WLAN neu ein.</li>
       </ol>
       <div class="dl-auto rv">
         <div>
@@ -104,7 +104,7 @@ var WETTER_EN = [
   `wet_s2:'<b>Select the port.</b> Usually “USB Single Serial” or “CH9102”. Missing on Windows? Install the “CH343SER” driver from wch.cn.'`,
   `wet_s3:'<b>No connection?</b> Hold the <b>IO0</b> button, briefly press <b>Reset</b> on the side, release IO0 – try again.'`,
   `wet_s4:'<b>Set up Wi-Fi</b> (first time only): connect your phone to the Wi-Fi <b>“Wetterstation-Setup”</b>, tap your Wi-Fi, enter the password – then search for your town (name or postcode) or tap the suggestion.'`,
-  `wet_s5:'<b>Controls.</b> <b>IO0</b> turns the page, <b>IO35</b> changes the brightness – hold it for 3 seconds to set up Wi-Fi again.'`,
+  `wet_s5:'<b>Controls.</b> <b>IO0</b> turns the page (hold 2 seconds: German/English), <b>IO35</b> changes the brightness – hold it for 3 seconds to set up Wi-Fi again.'`,
   `wet_auto_h:'🌦️ Full-size simulation'`,
   `wet_auto_p:'Every kind of weather, day and night and the setup screen to click through. Weather data from Open-Meteo, refreshed every 15 minutes. Source code and guide: ${WETTER_GH}.'`,
   `wet_auto_btn:'Open simulation →'`,
@@ -119,7 +119,7 @@ var WETTER_ES = [
   `wet_s2:'<b>Elige el puerto.</b> Normalmente «USB Single Serial» o «CH9102». ¿No aparece en Windows? Instala el controlador «CH343SER» de wch.cn.'`,
   `wet_s3:'<b>¿Sin conexión?</b> Mantén pulsado <b>IO0</b>, pulsa brevemente <b>Reset</b> en el lateral, suelta IO0 – y vuelve a intentarlo.'`,
   `wet_s4:'<b>Configura el Wi-Fi</b> (solo la primera vez): conecta el móvil a la red <b>«Wetterstation-Setup»</b>, toca tu Wi-Fi e introduce la contraseña; luego busca tu ciudad (nombre o código postal) o toca la sugerencia.'`,
-  `wet_s5:'<b>Manejo.</b> <b>IO0</b> pasa de página, <b>IO35</b> cambia el brillo – mantenlo 3 segundos para configurar el Wi-Fi de nuevo.'`,
+  `wet_s5:'<b>Manejo.</b> <b>IO0</b> pasa de página (mantenlo 2 segundos: alemán/inglés), <b>IO35</b> cambia el brillo – mantenlo 3 segundos para configurar el Wi-Fi de nuevo.'`,
   `wet_auto_h:'🌦️ Simulación en grande'`,
   `wet_auto_p:'Todos los tipos de tiempo, día y noche y la pantalla de configuración para probar. Datos de Open-Meteo, actualizados cada 15 minutos. Código fuente y guía: ${WETTER_GH}.'`,
   `wet_auto_btn:'Abrir simulación →'`,
@@ -134,7 +134,7 @@ var WETTER_FR = [
   `wet_s2:'<b>Choisis le port.</b> En général « USB Single Serial » ou « CH9102 ». Absent sous Windows ? Installe le pilote « CH343SER » de wch.cn.'`,
   `wet_s3:'<b>Pas de connexion ?</b> Maintiens le bouton <b>IO0</b>, appuie brièvement sur <b>Reset</b> sur le côté, relâche IO0 – puis réessaie.'`,
   `wet_s4:'<b>Configure le Wi-Fi</b> (la première fois seulement) : connecte ton téléphone au Wi-Fi <b>« Wetterstation-Setup »</b>, touche ton Wi-Fi, saisis le mot de passe – puis cherche ta ville (nom ou code postal) ou touche la suggestion.'`,
-  `wet_s5:'<b>Commandes.</b> <b>IO0</b> change de page, <b>IO35</b> règle la luminosité – maintiens-le 3 secondes pour reconfigurer le Wi-Fi.'`,
+  `wet_s5:'<b>Commandes.</b> <b>IO0</b> change de page (maintiens-le 2 secondes : allemand/anglais), <b>IO35</b> règle la luminosité – maintiens-le 3 secondes pour reconfigurer le Wi-Fi.'`,
   `wet_auto_h:'🌦️ Simulation en grand'`,
   `wet_auto_p:'Toutes les météos, le jour et la nuit et l’écran de configuration à tester. Données d’Open-Meteo, mises à jour toutes les 15 minutes. Code source et guide : ${WETTER_GH}.'`,
   `wet_auto_btn:'Ouvrir la simulation →'`,
