@@ -123,13 +123,23 @@ void tropfenSymbol(int x, int y, uint16_t f) {
   bild.fillSmoothCircle(x, y, 4, f);
 }
 
+// Ortszeit, false solange die Uhr noch nicht gestellt ist. Ersetzt getLocalTime(&z, 0): das meldet
+// manchmal ohne Grund "keine Zeit", wenn waehrend des Aufrufs die Millisekunde wechselt - dann
+// stand fuer ein Bild "--:--" da und Abendrot/Sonne/Mond sprangen (das Display zuckte)
+bool ortszeit(struct tm &z) {
+  time_t jetzt = time(nullptr);
+  if (jetzt < 1700000000) return false;  // vor Nov. 2023: noch nicht per NTP gestellt
+  localtime_r(&jetzt, &z);
+  return true;
+}
+
 // Minuten seit Mitternacht aus "06:56"
 int minuten(const char *hhmm) { return atoi(hhmm) * 60 + atoi(hhmm + 3); }
 
 // Morgen-/Abendrot: 1 genau bei Sonnenauf- oder -untergang, 0 ab 50 Minuten Abstand
 float daemmerung() {
   struct tm zeit;
-  if (!getLocalTime(&zeit, 0) || !w.sonneAuf[0] || w.sonneAuf[0] == '-') return 0;
+  if (!ortszeit(zeit) || !w.sonneAuf[0] || w.sonneAuf[0] == '-') return 0;
   int jetzt = zeit.tm_hour * 60 + zeit.tm_min;
   int abstand = min(abs(jetzt - minuten(w.sonneAuf)), abs(jetzt - minuten(w.sonneUnter)));
   return abstand < 50 ? 1 - abstand / 50.0f : 0;
@@ -387,7 +397,7 @@ void seiteSonne(int ox, uint32_t t) {
   const int CX = hk ? ox + B / 2 : ox + 86, CY = hk ? 150 : 124, R = 64;
   int auf = minuten(w.sonneAuf), unter = minuten(w.sonneUnter);
   struct tm zeit;
-  int jetzt = getLocalTime(&zeit, 0) ? zeit.tm_hour * 60 + zeit.tm_min : -1;
+  int jetzt = ortszeit(zeit) ? zeit.tm_hour * 60 + zeit.tm_min : -1;
   float frac = unter > auf && jetzt >= 0 ? float(jetzt - auf) / (unter - auf) : -1;
 
   bild.drawFastHLine(CX - 78, CY, 156, bild.alphaBlend(120, WEISS, hintergrund(CX, CY)));
@@ -728,7 +738,7 @@ void zeichneSeite(int s, int ox, uint32_t t) {
 void statusLeiste() {
   struct tm zeit;
   char uhr[8] = "--:--";
-  if (getLocalTime(&zeit, 0)) strftime(uhr, sizeof(uhr), "%H:%M", &zeit);
+  if (ortszeit(zeit)) strftime(uhr, sizeof(uhr), "%H:%M", &zeit);
   schrift(bild, S_MF);
   if (hoch()) schreibe(bild, uhr, 8, 18, WEISS, LINKS);  // hochkant: Uhr links, Titel eine Zeile tiefer
   else schreibe(bild, uhr, B - 37, 18, WEISS, RECHTS);
@@ -1018,7 +1028,7 @@ void naechsteSeite(uint32_t t) {
 // Nachtmodus: zwischen "von" und "bis" sehr dunkel. Ein Tastendruck macht es fuer 20 s hell.
 bool istNacht() {
   struct tm zeit;
-  if (!einst.nacht || einst.nachtVon == einst.nachtBis || !getLocalTime(&zeit, 0)) return false;
+  if (!einst.nacht || einst.nachtVon == einst.nachtBis || !ortszeit(zeit)) return false;
   int h = zeit.tm_hour;
   return einst.nachtVon < einst.nachtBis ? h >= einst.nachtVon && h < einst.nachtBis
                                          : h >= einst.nachtVon || h < einst.nachtBis;
