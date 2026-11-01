@@ -1,7 +1,8 @@
-"""Musik fuer den Trailer: ruhiger, moderner Elektronik-Track (100 BPM, 26 Takte = 62,4 s).
+"""Musik fuer Trailer + Tutorial: ruhiger, moderner Elektronik-Track (100 BPM, 61 Takte = 146,4 s).
 
 Komplett synthetisch erzeugt (keine Samples) - darf frei im Video verwendet werden.
-Akkorde Am - F - C - G, Schluss auf C-Dur. Die Taktgrenzen sind die Szenenwechsel im Trailer.
+Akkorde Am - F - C - G, Schluss auf C-Dur. Die Taktgrenzen sind die Szenenwechsel im Video:
+Takt 0-1 Intro, 2-13 Teaser (kraeftig), 14 Uebergang, 15-56 Tutorial (ruhiger), 57-60 Schluss.
 
 Aufruf: python musik.py ausgabe.wav
 """
@@ -13,7 +14,8 @@ SR = 44100
 BPM = 100
 BEAT = 60 / BPM          # 0,6 s
 BAR = 4 * BEAT           # 2,4 s
-TAKTE = 26
+TAKTE = 61
+SCHLUSS = 57  # Takt mit dem Schlussakkord
 LAENGE = TAKTE * BAR
 N = int(LAENGE * SR) + SR
 rng = np.random.default_rng(7)
@@ -63,22 +65,22 @@ WURZEL = {id(AM): 45, id(F): 41, id(C): 48, id(G): 43}
 
 
 def akkord(b):
-    if b >= 24: return [48, 55, 60, 64, 67, 74]  # Schluss: C-Dur mit None
+    if b >= SCHLUSS: return [48, 55, 60, 64, 67, 74]  # Schluss: C-Dur mit None
     return PROG[b % 4]
 
 
 def wurzel(b):
-    if b >= 24: return 36
+    if b >= SCHLUSS: return 36
     return WURZEL[id(PROG[b % 4])]
 
 
-# Abschnitte (Takt 0-basiert): Intro 0-1, Strophe 2-9, Refrain 10-17, Pause 18-19, Refrain 20-23, Schluss 24-25
+# Abschnitte (Takt 0-basiert): Intro 0-1, Strophe 2-5, Refrain 6-13, Pause 14, Tutorial 15-56, Schluss 57-60
 def abschnitt(b):
     if b < 2: return "intro"
-    if b < 10: return "strophe"
-    if b < 18: return "refrain"
-    if b < 20: return "pause"
-    if b < 24: return "refrain"
+    if b < 6: return "strophe"
+    if b < 14: return "refrain"
+    if b < 15: return "pause"
+    if b < SCHLUSS: return "tutorial"
     return "schluss"
 
 
@@ -166,26 +168,31 @@ for b in range(TAKTE):
     start = takt(b)
 
     # Flaechen-Pad (Intro schwillt an)
-    dauer = BAR + 0.9 if a != "schluss" else 4.8
-    laut = {"intro": 0.05 + 0.03 * b, "strophe": 0.07, "refrain": 0.075, "pause": 0.09, "schluss": 0.09}[a]
-    if b == 25: continue  # Schlussakkord klingt aus Takt 24 durch
+    dauer = BAR + 0.9 if a != "schluss" else 8.5
+    laut = {"intro": 0.05 + 0.03 * b, "strophe": 0.07, "refrain": 0.075, "pause": 0.09, "tutorial": 0.065,
+            "schluss": 0.09}[a]
+    if b > SCHLUSS: continue  # Schlussakkord klingt bis zum Ende durch
     for m in ak:
         pl, pr = pad(m, dauer, laut / len(ak) * 3)
         mix(pl, pr, start, hall=0.5)
 
-    # Bass
+    # Bass (Tutorial: halbe Noten, ruhiger)
     if a in ("strophe", "refrain"):
         for beat in range(4):
             mix(*(bass(wurzel(b), BEAT * 0.9, 0.22),) * 2, takt(b, beat))
+    if a == "tutorial":
+        for beat in (0, 2):
+            mix(*(bass(wurzel(b), BEAT * 1.8, 0.18),) * 2, takt(b, beat))
     if a == "schluss":
-        bs = bass(wurzel(b), 4.5, 0.25) * np.exp(-t_arr(4.5) * 0.6)
+        bs = bass(wurzel(b), 6.0, 0.25) * np.exp(-t_arr(6.0) * 0.5)
         mix(bs, bs, start)
 
-    # Arpeggio (Strophe Achtel, Refrain Sechzehntel, Pause leise Achtel)
-    if a in ("intro", "strophe", "refrain", "pause"):
+    # Arpeggio (Strophe Achtel, Refrain Sechzehntel, Pause/Tutorial leiser; ab Schritt 4 Sechzehntel)
+    if a in ("intro", "strophe", "refrain", "pause", "tutorial"):
         toene = [ak[0] + 12, ak[1] + 12, ak[2] + 12, ak[1] + 24, ak[2] + 12, ak[1] + 12, ak[0] + 24, ak[2] + 12]
-        schritt = 0.25 if a == "refrain" else 0.5
-        laut = {"intro": 0.05 if b == 1 else 0.0, "strophe": 0.07, "refrain": 0.06, "pause": 0.045}[a]
+        schritt = 0.25 if a == "refrain" or (a == "tutorial" and b >= 41) else 0.5
+        laut = {"intro": 0.05 if b == 1 else 0.0, "strophe": 0.07, "refrain": 0.06, "pause": 0.045,
+                "tutorial": 0.042 if b >= 41 else 0.055}[a]
         if laut:
             for i in range(int(4 / schritt)):
                 m = toene[i % len(toene)]
@@ -197,10 +204,11 @@ for b in range(TAKTE):
                     mix(s * 0.35 ** e * (e % 2), s * 0.35 ** e * ((e + 1) % 2), takt(b, i * schritt + e * 0.75), hall=0.2)
 
     # Glocken-Melodie im Refrain
-    if a == "refrain":
+    # (im Tutorial leise waehrend der Handy-Einrichtung und am Ende vor dem Schluss)
+    if a == "refrain" or (a == "tutorial" and (27 <= b < 41 or b >= 53)):
         MELODIE = {0: [76, 72], 1: [69, 72], 2: [67, 72], 3: [74, 71]}
         for i, m in enumerate(MELODIE[b % 4]):
-            s = glocke(m, 0.09)
+            s = glocke(m, 0.09 if a == "refrain" else 0.055)
             mix(s * 0.9, s * 1.1, takt(b, i * 2), hall=0.6)
     if a == "schluss":
         for i, m in enumerate([76, 79, 84]):
@@ -208,27 +216,27 @@ for b in range(TAKTE):
             mix(s, s, takt(b, i * 0.5), hall=0.8)
 
     # Schlagzeug
-    if a in ("strophe", "refrain"):
+    if a in ("strophe", "refrain", "tutorial"):
         beats = [0, 1, 2, 3] if a == "refrain" else [0, 2]
         for beat in beats:
-            k = kick(0.55 if a == "refrain" else 0.42)
+            k = kick({"refrain": 0.55, "strophe": 0.42, "tutorial": 0.34}[a])
             mix(k, k, takt(b, beat))
             kick_zeiten.append(takt(b, beat))
-        if a == "refrain" or b >= 6:
+        if a in ("refrain", "tutorial") or b >= 4:
             for i in range(8):
                 laut = 0.035 if i % 2 else 0.018
-                hh = hihat(laut if a == "refrain" else laut * 0.7)
-                mix(hh * 0.8, hh * 1.2, takt(b, i * 0.5 + (0.0 if i % 2 == 0 else 0.0)))
+                hh = hihat(laut * {"refrain": 1.0, "strophe": 0.7, "tutorial": 0.55}[a])
+                mix(hh * 0.8, hh * 1.2, takt(b, i * 0.5))
         if a == "refrain":
             for beat in (1, 3):
                 cl = clap(0.12)
                 mix(cl * 1.1, cl * 0.9, takt(b, beat), hall=0.4)
 
 # Uebergaenge: Riser vor Strophe, Refrain und nach der Pause, Crash auf dem Einsatz
-for b_ziel, dauer in ((2, BAR), (10, BAR / 2), (20, BAR * 1.5), (24, BAR / 2)):
+for b_ziel, dauer in ((2, BAR), (6, BAR / 2), (15, BAR), (SCHLUSS, BAR / 2)):
     rs = riser(dauer, 0.12)
     mix(rs * 0.9, rs * 1.1, takt(b_ziel) - dauer, hall=0.3)
-for b_ziel in (2, 10, 20, 24):
+for b_ziel in (2, 6, 15, SCHLUSS):
     cr = crash(0.08)
     mix(cr * 1.1, cr * 0.9, takt(b_ziel), hall=0.5)
     k = kick(0.6)

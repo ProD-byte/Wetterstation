@@ -41,11 +41,11 @@
 <div class="rahmen">
   <div class="kopf">
     <div class="logo"><svg viewBox="0 0 24 24"><circle cx="15" cy="8" r="3"/><path d="M15 2v1M20.2 4.8l-.7.7M22 9h-1M7 20h10a4 4 0 0 0 0-8 5 5 0 0 0-9.6 1.2A3.5 3.5 0 0 0 7 20z"/></svg></div>
-    <div><h1>Wetterstation</h1><p>Online-Flasher &middot; animiertes Wetter f&uuml;r das LILYGO T-Display-S3</p></div>
+    <div><h1 data-en="Weather Station">Wetterstation</h1><p data-en="Online flasher &middot; animated weather for the LILYGO T-Display-S3">Online-Flasher &middot; animiertes Wetter f&uuml;r das LILYGO T-Display-S3</p></div>
   </div>
 
   <div class="karte sim">
-    <h2>So sieht es aus</h2>
+    <h2 data-en="See it in action">So sieht es aus</h2>
     <iframe id="sim" src="simulation.html?einbetten" title="Simulation der Wetterstation" loading="lazy"></iframe>
   </div>
 
@@ -54,41 +54,51 @@
     <div class="wahl">
       <div class="option">
         <div class="titel">&#128260; Update</div>
-        <p>Neue Firmware aufspielen &ndash; <b>gespeicherte WLANs bleiben erhalten.</b><br><span style="color:#f0a030">&#9888;&#65039; Bei der Frage &bdquo;Erase device?&ldquo; den Haken <b>nicht</b> setzen.</span></p>
+        <p data-en="Install new firmware &ndash; <b>saved Wi-Fi networks are kept.</b><br><span style=&quot;color:#f0a030&quot;>&#9888;&#65039; When asked &bdquo;Erase device?&ldquo;, do <b>not</b> tick the box.</span>">Neue Firmware aufspielen &ndash; <b>gespeicherte WLANs bleiben erhalten.</b><br><span style="color:#f0a030">&#9888;&#65039; Bei der Frage &bdquo;Erase device?&ldquo; den Haken <b>nicht</b> setzen.</span></p>
         <esp-web-install-button manifest="manifest-update.json">
-          <button slot="activate">&#9889; Update installieren</button>
-          <span slot="unsupported"><b>Dieser Browser kann das leider nicht.</b><br><span class="leise">Bitte Chrome oder Edge am PC/Mac verwenden.</span></span>
-          <span slot="not-allowed"><b>Nur &uuml;ber https m&ouml;glich.</b></span>
+          <button slot="activate" data-en="&#9889; Install update">&#9889; Update installieren</button>
+          <span slot="unsupported" data-en="<b>Sorry, this browser can&rsquo;t do that.</b><br><span class=&quot;leise&quot;>Please use Chrome or Edge on a PC/Mac.</span>"><b>Dieser Browser kann das leider nicht.</b><br><span class="leise">Bitte Chrome oder Edge am PC/Mac verwenden.</span></span>
+          <span slot="not-allowed" data-en="<b>Only works over https.</b>"><b>Nur &uuml;ber https m&ouml;glich.</b></span>
         </esp-web-install-button>
       </div>
       <div class="option loeschen">
-        <div class="titel">&#129529; Neuinstallation</div>
-        <p>Speicher komplett l&ouml;schen und neu aufspielen &ndash; f&uuml;r <b>neue Boards</b> oder wenn gar nichts mehr geht. <b>Gespeicherte WLANs sind danach weg.</b></p>
+        <div class="titel" data-en="&#129529; Fresh install">&#129529; Neuinstallation</div>
+        <p data-en="Erase everything and install from scratch &ndash; for <b>new boards</b> or when nothing works anymore. <b>Saved Wi-Fi networks will be gone.</b>">Speicher komplett l&ouml;schen und neu aufspielen &ndash; f&uuml;r <b>neue Boards</b> oder wenn gar nichts mehr geht. <b>Gespeicherte WLANs sind danach weg.</b></p>
         <esp-web-install-button manifest="manifest-neu.json">
-          <button slot="activate">&#128465;&#65039; L&ouml;schen &amp; neu installieren</button>
-          <span slot="unsupported"><b>Dieser Browser kann das leider nicht.</b></span>
-          <span slot="not-allowed"><b>Nur &uuml;ber https m&ouml;glich.</b></span>
+          <button slot="activate" data-en="&#128465;&#65039; Erase &amp; install">&#128465;&#65039; L&ouml;schen &amp; neu installieren</button>
+          <span slot="unsupported" data-en="<b>Sorry, this browser can&rsquo;t do that.</b>"><b>Dieser Browser kann das leider nicht.</b></span>
+          <span slot="not-allowed" data-en="<b>Only works over https.</b>"><b>Nur &uuml;ber https m&ouml;glich.</b></span>
         </esp-web-install-button>
       </div>
     </div>
-    <span class="leise">Funktioniert mit Chrome und Edge am Computer &middot; T-Display-S3 per USB-C anschlie&szlig;en.</span>
+    <span class="leise" data-en="Works with Chrome and Edge on a computer &middot; connect the T-Display-S3 via USB-C.">Funktioniert mit Chrome und Edge am Computer &middot; T-Display-S3 per USB-C anschlie&szlig;en.</span>
   </div>
 
   <div class="karte">
-    <h2>So geht&rsquo;s</h2>
+    <h2 data-en="How it works">So geht&rsquo;s</h2>
     <ol>
-      <li>T-Display-S3 per <b>USB-C</b> mit dem Computer verbinden (Kabel mit Datenleitungen, kein reines Ladekabel).</li>
-      <li><b>&bdquo;Update installieren&ldquo;</b> oder <b>&bdquo;L&ouml;schen &amp; neu installieren&ldquo;</b> klicken und den Anschluss ausw&auml;hlen (meist &bdquo;USB JTAG/serial debug unit&ldquo;).</li>
-      <li>Der ESP32-S3 hat USB direkt eingebaut &ndash; ein Treiber ist nicht n&ouml;tig.</li>
-      <li>Verbindung klappt nicht? Die <b>BOOT-Taste</b> (IO0) gedr&uuml;ckt halten, kurz die <b>RST-Taste</b> an der Seite dr&uuml;cken, BOOT loslassen &ndash; dann nochmal versuchen.</li>
-      <li>Nach dem Aufspielen startet das Display. Beim ersten Mal mit dem Handy ins WLAN <b>&bdquo;Wetterstation-Setup&ldquo;</b> gehen, dein WLAN antippen und das Passwort eingeben.</li>
-      <li>Danach fragt die Seite, <b>wo die Wetterstation steht</b>: Ort oder Postleitzahl suchen oder den Vorschlag antippen. Ohne Auswahl findet sie den Ort ungef&auml;hr &uuml;ber deinen Internetanschluss.</li>
+      <li data-en="Connect the T-Display-S3 to your computer via <b>USB-C</b> (a cable with data lines, not a charge-only cable).">T-Display-S3 per <b>USB-C</b> mit dem Computer verbinden (Kabel mit Datenleitungen, kein reines Ladekabel).</li>
+      <li data-en="Click <b>&bdquo;Install update&ldquo;</b> or <b>&bdquo;Erase &amp; install&ldquo;</b> and pick the port (usually &bdquo;USB JTAG/serial debug unit&ldquo;)."><b>&bdquo;Update installieren&ldquo;</b> oder <b>&bdquo;L&ouml;schen &amp; neu installieren&ldquo;</b> klicken und den Anschluss ausw&auml;hlen (meist &bdquo;USB JTAG/serial debug unit&ldquo;).</li>
+      <li data-en="The ESP32-S3 has USB built in &ndash; no driver needed.">Der ESP32-S3 hat USB direkt eingebaut &ndash; ein Treiber ist nicht n&ouml;tig.</li>
+      <li data-en="No connection? Hold the <b>BOOT button</b> (IO0), briefly press <b>RST</b> on the side, release BOOT &ndash; then try again.">Verbindung klappt nicht? Die <b>BOOT-Taste</b> (IO0) gedr&uuml;ckt halten, kurz die <b>RST-Taste</b> an der Seite dr&uuml;cken, BOOT loslassen &ndash; dann nochmal versuchen.</li>
+      <li data-en="After flashing, the display starts. The first time, connect your phone to the Wi-Fi <b>&bdquo;Wetterstation-Setup&ldquo;</b>, tap your Wi-Fi and enter the password.">Nach dem Aufspielen startet das Display. Beim ersten Mal mit dem Handy ins WLAN <b>&bdquo;Wetterstation-Setup&ldquo;</b> gehen, dein WLAN antippen und das Passwort eingeben.</li>
+      <li data-en="Then the page asks <b>where the station is</b>: search your town or postcode, or tap the suggestion. Without a choice it finds your location roughly via your internet connection.">Danach fragt die Seite, <b>wo die Wetterstation steht</b>: Ort oder Postleitzahl suchen oder den Vorschlag antippen. Ohne Auswahl findet sie den Ort ungef&auml;hr &uuml;ber deinen Internetanschluss.</li>
     </ol>
   </div>
 
   <div class="karte">
-    <h2>Was die Wetterstation kann</h2>
-    <div class="merkmale">
+    <h2 data-en="What it can do">Was die Wetterstation kann</h2>
+    <div class="merkmale" data-en="<span>&#9728;&#65039; Animated weather pictures</span><span>&#127777;&#65039; Temperature, feels like, wind, humidity</span>
+      <span>&#128200; Temperature curve for 24 hours</span><span>&#127783;&#65039; Chance of rain</span>
+      <span>&#128197; Forecast for the next days</span><span>&#127769; Night sky with stars, night mode</span>
+      <span>&#127749; Sun &amp; moon with moon phase</span><span>&#127807; Air quality and pollen</span>
+      <span>&#128225; Animated rain radar</span><span>&#128201; History of the last 7 days</span>
+      <span>&#128506;&#65039; Compare several places</span><span>&#127748; Morning and evening glow</span>
+      <span>&#9888;&#65039; Weather warnings (Germany, DWD)</span><span>&#9748; &bdquo;Rain from 14:15&ldquo;</span>
+      <span>&#128246; Wi-Fi and location set up by phone</span><span>&#9881;&#65039; Settings at wetterstation.local</span>
+      <span>&#128260; Updates itself from the internet</span><span>&#128225; Updates over Wi-Fi</span>
+      <span>&#127760; Works worldwide &ndash; time follows your location</span><span>&#127991;&#65039; Several stations on one Wi-Fi</span>
+      <span>&#128241; Landscape or portrait</span><span>&#128269; Rain radar near, medium or far</span>">
       <span>&#9728;&#65039; Animierte Wetterbilder</span><span>&#127777;&#65039; Temperatur, gef&uuml;hlt, Wind, Luftfeuchte</span>
       <span>&#128200; Temperaturkurve f&uuml;r 24 Stunden</span><span>&#127783;&#65039; Regenwahrscheinlichkeit</span>
       <span>&#128197; Vorschau f&uuml;r die n&auml;chsten Tage</span><span>&#127769; Nachthimmel mit Sternen, Nachtmodus</span>
@@ -101,11 +111,21 @@
       <span>&#127760; L&auml;uft weltweit &ndash; Uhrzeit passend zum Ort</span><span>&#127991;&#65039; Mehrere Stationen im selben WLAN</span>
       <span>&#128241; Quer oder hochkant aufstellen</span><span>&#128269; Regenradar nah, mittel oder weit</span>
     </div>
-    <p class="leise" style="margin:12px 0 0">Wetterdaten f&uuml;r deinen Ort von <a href="https://open-meteo.com/">Open-Meteo</a>, alle 15 Minuten neu. Tasten: <b>IO0</b> = n&auml;chste Seite (2&nbsp;s halten = Sprache Deutsch/Englisch), <b>IO14</b> kurz = Helligkeit, 3&nbsp;s halten = WLAN und Ort neu einrichten.</p>
+    <p class="leise" style="margin:12px 0 0" data-en="Weather data for your location from <a href=&quot;https://open-meteo.com/&quot;>Open-Meteo</a>, refreshed every 15 minutes. Buttons: <b>IO0</b> = next page (hold 2&nbsp;s = German/English), <b>IO14</b> short = brightness, hold 3&nbsp;s = set up Wi-Fi and location again.">Wetterdaten f&uuml;r deinen Ort von <a href="https://open-meteo.com/">Open-Meteo</a>, alle 15 Minuten neu. Tasten: <b>IO0</b> = n&auml;chste Seite (2&nbsp;s halten = Sprache Deutsch/Englisch), <b>IO14</b> kurz = Helligkeit, 3&nbsp;s halten = WLAN und Ort neu einrichten.</p>
   </div>
-  <p class="leise" style="text-align:center">LILYGO T-Display-S3 (ESP32-S3, 1,9&Prime;, 320&times;170) &middot; gebaut mit PlatformIO &middot; <a href="https://github.com/ProD-byte/Wetterstation">Quellcode auf GitHub</a> &middot; Online-Flasher: <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a></p>
+  <p class="leise" style="text-align:center" data-en="LILYGO T-Display-S3 (ESP32-S3, 1.9&Prime;, 320&times;170) &middot; built with PlatformIO &middot; <a href=&quot;https://github.com/ProD-byte/Wetterstation&quot;>Source code on GitHub</a> (MIT) &middot; Online flasher: <a href=&quot;https://esphome.github.io/esp-web-tools/&quot;>ESP Web Tools</a>">LILYGO T-Display-S3 (ESP32-S3, 1,9&Prime;, 320&times;170) &middot; gebaut mit PlatformIO &middot; <a href="https://github.com/ProD-byte/Wetterstation">Quellcode auf GitHub</a> &middot; Online-Flasher: <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a></p>
 </div>
 <script>
+/* Englisch fuer alle, deren Browser nicht auf Deutsch steht (oder ?lang=en) */
+(function(){
+  var q = new URLSearchParams(location.search).get('lang');
+  var en = q ? q === 'en' : !/^de/i.test(navigator.language || 'de');
+  if (!en) return;
+  document.documentElement.lang = 'en';
+  document.title = 'Weather Station – Online flasher';
+  document.querySelectorAll('[data-en]').forEach(function(e){ e.innerHTML = e.getAttribute('data-en'); });
+  var sim = document.getElementById('sim'); sim.src = sim.getAttribute('src') + '&en';  // Simulation auch auf Englisch
+})();
 /* Flasher-Einstellungen immer frisch laden (nie aus dem Browser-Zwischenspeicher) */
 document.querySelectorAll('esp-web-install-button').forEach(function(b){ var m=b.getAttribute('manifest').split('?')[0]; b.setAttribute('manifest', m+'?t='+Date.now()); });
 /* Hoehe der Simulation anpassen */

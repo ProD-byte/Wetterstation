@@ -1,18 +1,21 @@
 """Kleiner Server zum Rendern des Trailers.
 
 Liefert trailer.html, die Board-Fotos und sim.html (= ../simulation/wetterstation.html mit HTML-Kopf)
-und speichert die Bilder, die trailer.html?render per POST schickt, nach bilder/00000.jpg ...
+und speichert die Bilder, die video.html?render (oder trailer.html?render) per POST schickt,
+nach %TEMP%/wetterstation-video/bilder/00000.jpg ...
 
 Aufruf: python server.py   (dann http://127.0.0.1:8795/trailer.html?render oeffnen)
 """
 import base64
 import http.server
 import pathlib
+import tempfile
 import urllib.parse
 
 HIER = pathlib.Path(__file__).parent
-BILDER = HIER / "bilder"
-BILDER.mkdir(exist_ok=True)
+# Einzelbilder ausserhalb des Projekts (der Ordner wird von Bitrix24 synchronisiert - tausende Dateien)
+BILDER = pathlib.Path(tempfile.gettempdir()) / "wetterstation-video" / "bilder"
+BILDER.mkdir(parents=True, exist_ok=True)
 SIM = (HIER.parent / "simulation" / "wetterstation.html").read_text(encoding="utf-8")
 
 

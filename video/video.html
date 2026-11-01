@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Weather Station – Trailer &amp; Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; background: #000; }
+  #video { display: block; width: 100vw; height: auto; aspect-ratio: 16 / 9; }
+  #sim { position: absolute; left: -4000px; top: 0; width: 1000px; height: 900px; border: 0; }
+  #info { position: fixed; left: 8px; bottom: 8px; font: 12px monospace; color: #8a8; }
+</style></head><body>
+<canvas id="video" width="1920" height="1080"></canvas>
+<iframe id="sim" src="sim.html"></iframe>
+<div id="info"></div>
+<script>
+// Trailer + Tutorial (2:26): steuert die echte Simulation (sim.html) Bild fuer Bild und zeigt die echten
+// Seiten (seiten/*.png aus seiten.py). Zeitachse in Sekunden, Takt = 2,4 s (Musik 100 BPM).
+const V = document.getElementById("video"), x = V.getContext("2d");
+const BW = 1920, BH = 1080, FPS = 30, TAKT = 2.4, DAUER = 61 * TAKT;
+const ORANGE = "#f0a04b", GRAU = "#aab4c8";
+const img = s => { const i = new Image(); i.src = s; return i; };
+const QUER = img("board_quer.webp"), HOCH = img("board_hoch.webp");
+const FLASHER = img("seiten/flasher.png"), EINST = img("seiten/einstellungen.png");
+const PORTAL = { liste: img("seiten/portal_liste.png"), passwort: img("seiten/portal_passwort.png"),
+                 ort: img("seiten/portal_ort.png"), fertig: img("seiten/portal_fertig.png") };
+const T = n => n * TAKT;
+
+// ---------- Hilfen ----------
+const klemm = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const glatt = v => { v = klemm(v); return v * v * (3 - 2 * v); };
+const raus = v => 1 - Math.pow(1 - klemm(v), 3);
+const fenster = (t, a, b, ein = 0.5, aus = 0.4) => klemm((t - a) / ein) * klemm((b - t) / aus);
+const mischen = (a, b, f) => a + (b - a) * f;
+// Wert, der zwischen Haltepunkten [[zeit, wert], ...] weich wandert
+function stufen(t, punkte, dauer = 0.9) {
+  let v = punkte[0][1];
+  for (const [z, w] of punkte) if (t >= z) v = mischen(v, w, glatt((t - z) / dauer));
+  return v;
+}
+
+// ---------- Simulation steuern ----------
+let S = null, simCv = null;
+function simBereit() {
+  const fw = document.getElementById("sim").contentWindow;
+  fw.eval(`
+    var __simT = 0; const __t0 = t0; performance.now = () => __t0 + __simT;
+    const __RD = Date, __BASIS = __RD.UTC(2026, 10, 1, 13, 41, 0);
+    window.Date = class extends __RD { constructor(...a) { if (a.length) super(...a); else super(__BASIS + __simT); } static now() { return __BASIS + __simT; } };
+    window.__ctl = {
+      zeit(ms) { __simT = ms; },
+      klick(id) { document.getElementById(id).click(); },
+      seite(n, animiert) { const t = jetzt(); if (animiert) { alteSeite = seite; wechsel = true; wechselStart = t; } else wechsel = false; seite = n; seiteSeit = t; },
+      phase(ort) { startSeit = jetzt() - (ort ? 5500 : 0); },        // Einrichtung: WLAN- oder Ort-Bildschirm festhalten
+      licht() { lichtStufe = (lichtStufe + 1) % 4; lichtAnzeigeBis = jetzt() + 1500; },
+      zeichnen() { letzterTastendruck = jetzt(); frame(); }
+    };
+    __ctl.klick("pixelWahl-glatt");
+    englisch = true;
+  `);
+  S = fw.__ctl;
+  simCv = fw.document.getElementById("lcd");
+}
+
+// ---------- Ablauf der Simulation ----------
+const DREH_A = T(13) + 0.05, DREH_E = T(13) + 1.4;
+const EREIGNISSE = [
+  [0,      () => { S.klick("wetterWahl-0"); S.klick("tagWahl-tag"); S.seite(0); }],
+  [T(4),   () => S.klick("tagWahl-abend")],
+  [T(5),   () => S.klick("tagWahl-nacht")],
+  [T(6),   () => { S.klick("tagWahl-tag"); S.klick("wetterWahl-63"); S.seite(0); }],
+  [T(7),   () => S.klick("wetterWahl-73")],
+  [T(8),   () => S.klick("wetterWahl-95")],
+  [T(9),   () => { S.klick("wetterWahl-2"); S.seite(0); S.seite(1, true); }],
+  [T(10),  () => S.seite(2, true)],
+  [T(11),  () => { S.klick("wetterWahl-0"); S.seite(2); S.seite(4, true); }],
+  [T(12),  () => S.seite(5, true)],
+  [T(13) - 0.05, () => { S.klick("wetterWahl-2"); S.seite(0); }],
+  [DREH_E, () => { schnappschuss(); S.klick("lageWahl-hoch"); S.seite(0); }],
+  [T(14),  () => { S.klick("lageWahl-quer"); S.klick("wetterWahl-0"); S.seite(0); }],
+  [T(26),  () => S.klick("wetterWahl-start")],          // nach dem Aufspielen: Startbild ...
+  [T(26) + 1.4, () => S.klick("wetterWahl-wlan")],      // ... dann "WLAN einrichten"
+  [90.0,   () => { S.klick("wetterWahl-echt"); S.klick("tagWahl-tag"); S.seite(0); }],
+  [T(53),  () => { S.klick("wetterWahl-0"); S.seite(0); }],
+  [129.2,  () => S.seite(1, true)],
+  [131.6,  () => S.seite(2, true)],
+  [133.8,  () => S.licht()],
+  [T(57),  () => { S.klick("wetterWahl-0"); S.seite(0); }],
+];
+let naechstes = 0;
+const SCHNAPP = document.createElement("canvas");
+function schnappschuss() { SCHNAPP.width = simCv.width; SCHNAPP.height = simCv.height; SCHNAPP.getContext("2d").drawImage(simCv, 0, 0); }
+
+// ---------- Grundbausteine ----------
+function hintergrund(t) {
+  const g = x.createLinearGradient(0, 0, 0, BH);
+  g.addColorStop(0, "#0d1222"); g.addColorStop(1, "#06080f");
+  x.fillStyle = g; x.fillRect(0, 0, BW, BH);
+  for (const [fx, fy, r, f] of [[0.25 + 0.06 * Math.sin(t * 0.21), 0.3, 700, "rgba(240,160,75,0.12)"],
+                                 [0.78 + 0.05 * Math.cos(t * 0.17), 0.7, 800, "rgba(70,120,255,0.11)"]]) {
+    const rg = x.createRadialGradient(fx * BW, fy * BH, 0, fx * BW, fy * BH, r);
+    rg.addColorStop(0, f); rg.addColorStop(1, "rgba(0,0,0,0)");
+    x.fillStyle = rg; x.fillRect(0, 0, BW, BH);
+  }
+}
+
+function text(s, px, py, groesse, gewicht, farbe, alpha, ausr = "left", abstand = 0) {
+  if (alpha <= 0 || !s) return;
+  x.save(); x.globalAlpha = alpha;
+  x.font = `${gewicht} ${groesse}px Inter, sans-serif`;
+  x.fillStyle = farbe; x.textAlign = ausr; x.textBaseline = "alphabetic";
+  if (abstand) x.letterSpacing = abstand + "px";
+  x.fillText(s, px, py);
+  x.restore();
+}
+
+function rund(px, py, w, h, r, farbe, alpha = 1) {
+  x.save(); x.globalAlpha *= alpha; x.fillStyle = farbe; x.beginPath(); x.roundRect(px, py, w, h, r); x.fill(); x.restore();
+}
+
+// Board mit Display. quelle = Canvas fuer das Display (null = aus, schwarz)
+function board(cx, cy, breite, winkel, hoch, alpha, quelle = simCv, ueber = null, ueberAlpha = 0) {
+  if (alpha <= 0) return null;
+  const bild = hoch ? HOCH : QUER;
+  const bw = breite, bh = hoch ? breite * 730 / 311 : breite * 311 / 730;
+  x.save(); x.globalAlpha = alpha;
+  x.translate(cx, cy); x.rotate(winkel);
+  x.shadowColor = "rgba(0,0,0,0.55)"; x.shadowBlur = 70; x.shadowOffsetY = 30;
+  x.drawImage(bild, -bw / 2, -bh / 2, bw, bh);
+  x.shadowColor = "transparent";
+  let sx, sy, sw, sh;
+  if (hoch) { sx = -bw / 2 + 0.056 * bw; sy = -bh / 2 + 0.084 * bh; sw = 0.907 * bw; sh = sw * 320 / 170; }
+  else { sx = -bw / 2 + 0.084 * bw; sy = -bh / 2 + 0.037 * bh; sw = 0.724 * bw; sh = sw * 170 / 320; }
+  x.fillStyle = "#050607"; x.fillRect(sx, sy, sw, sh);
+  x.imageSmoothingQuality = "high";
+  if (ueber && ueberAlpha > 0) {
+    x.save(); x.translate(sx + sw / 2, sy + sh / 2); x.rotate(Math.PI / 2);
+    x.globalAlpha = alpha * ueberAlpha; x.drawImage(ueber, -sh / 2, -sw / 2, sh, sw); x.restore();
+    x.globalAlpha = alpha * (1 - ueberAlpha);
+  }
+  if (quelle) x.drawImage(quelle, sx, sy, sw, sh);
+  x.globalAlpha = alpha * 0.9;
+  const sp = x.createLinearGradient(sx, sy, sx + sw * 0.6, sy + sh);
+  sp.addColorStop(0, "rgba(255,255,255,0.07)"); sp.addColorStop(0.45, "rgba(255,255,255,0)");
+  x.fillStyle = sp; x.fillRect(sx, sy, sw, sh);
+  x.restore();
+  // Lage der beiden Taster (quer) fuer Markierungen
+  return { io14: [cx - bw / 2 + 0.944 * bw, cy - bh / 2 + 0.164 * bh], io0: [cx - bw / 2 + 0.944 * bw, cy - bh / 2 + 0.855 * bh],
+           usb: [cx + bw / 2, cy], bw, bh };
+}
+
+// grosse Bildunterschrift (Teaser)
+function unterschrift(t, a, b, gross, klein, px = BW / 2, py = 880, ausr = "center") {
+  const f = fenster(t, a, b, 0.5, 0.35);
+  if (f <= 0) return;
+  const hub = (1 - raus((t - a) / 0.6)) * 24;
+  text(gross, px, py + hub, 64, 800, "#fff", f, ausr, -1);
+  text(klein, px, py + 52 + hub, 30, 500, GRAU, f, ausr);
+  const lw = 90 * raus((t - a - 0.15) / 0.5);
+  x.save(); x.globalAlpha = f; x.fillStyle = ORANGE;
+  x.fillRect(ausr === "center" ? px - lw / 2 : px, py - 86 + hub, lw, 4); x.restore();
+}
+
+// Kopf eines Tutorial-Schritts oben links
+function schrittKopf(t, a, b, marke, titel, unter = "") {
+  const f = fenster(t, a, b, 0.5, 0.4);
+  if (f <= 0) return;
+  const hub = (1 - raus((t - a) / 0.6)) * 16;
+  x.save(); x.font = "700 22px Inter"; x.letterSpacing = "4px"; const mw = x.measureText(marke).width + 36; x.restore();
+  rund(120, 88 + hub, mw, 40, 20, "rgba(240,160,75,0.15)", f);
+  text(marke, 138, 116 + hub, 22, 700, ORANGE, f, "left", 4);
+  text(titel, 120, 196 + hub, 60, 800, "#fff", f, "left", -1);
+  text(unter, 122, 240 + hub, 28, 500, GRAU, f, "left");
+}
+
+// Anweisung (Tutorial): Zeile + kleine Zeile, blendet von unten ein
+function anweisung(t, a, b, gross, klein, px = 120, py = 890) {
+  const f = fenster(t, a, b, 0.45, 0.3);
+  if (f <= 0) return;
+  const hub = (1 - raus((t - a) / 0.5)) * 18;
+  x.save(); x.globalAlpha = f; x.fillStyle = ORANGE; x.fillRect(px, py - 44 + hub, 5, 84); x.restore();
+  text(gross, px + 26, py + hub, 40, 700, "#fff", f, "left", -0.5);
+  text(klein, px + 26, py + 40 + hub, 26, 500, GRAU, f, "left");
+}
+
+// Browserfenster mit Inhalt (zeichne(innenX, innenY, innenB, innenH))
+function browser(px, py, w, h, url, alpha, zeichne) {
+  if (alpha <= 0) return;
+  x.save(); x.globalAlpha = alpha;
+  x.shadowColor = "rgba(0,0,0,0.5)"; x.shadowBlur = 60; x.shadowOffsetY = 24;
+  x.fillStyle = "#0d1017"; x.beginPath(); x.roundRect(px, py, w, h, 16); x.fill();
+  x.shadowColor = "transparent";
+  x.fillStyle = "#1f2533"; x.beginPath(); x.roundRect(px, py, w, 52, [16, 16, 0, 0]); x.fill();
+  ["#ff5f57", "#febc2e", "#28c840"].forEach((c, i) => { x.fillStyle = c; x.beginPath(); x.arc(px + 26 + i * 21, py + 26, 6.5, 0, 7); x.fill(); });
+  x.fillStyle = "#0f131b"; x.beginPath(); x.roundRect(px + 100, py + 12, w - 130, 28, 14); x.fill();
+  x.font = "500 17px Inter"; x.fillStyle = "#c5cbd8"; x.textBaseline = "middle"; x.fillText(url, px + 120, py + 27);
+  x.beginPath(); x.roundRect(px, py + 52, w, h - 52, [0, 0, 16, 16]); x.clip();
+  zeichne(px, py + 52, w, h - 52);
+  x.restore();
+}
+
+// Handy-Rahmen mit Bildschirm (zeichne(innenX, innenY, innenB, innenH))
+function handy(px, py, w, h, alpha, zeichne) {
+  if (alpha <= 0) return;
+  x.save(); x.globalAlpha = alpha;
+  x.shadowColor = "rgba(0,0,0,0.6)"; x.shadowBlur = 60; x.shadowOffsetY = 26;
+  x.fillStyle = "#1a1d24"; x.beginPath(); x.roundRect(px, py, w, h, 56); x.fill();
+  x.shadowColor = "transparent";
+  x.strokeStyle = "#3a3f4a"; x.lineWidth = 2; x.beginPath(); x.roundRect(px + 1, py + 1, w - 2, h - 2, 55); x.stroke();
+  const r = 14, ix = px + r, iy = py + r, iw = w - 2 * r, ih = h - 2 * r;
+  x.save(); x.beginPath(); x.roundRect(ix, iy, iw, ih, 44); x.clip();
+  x.fillStyle = "#0b0d12"; x.fillRect(ix, iy, iw, ih);
+  zeichne(ix, iy + 36, iw, ih - 36);
+  // Statusleiste
+  x.fillStyle = "#0b0d12"; x.fillRect(ix, iy, iw, 36);
+  x.font = "600 16px Inter"; x.fillStyle = "#e8ebf1"; x.textBaseline = "middle"; x.fillText("14:42", ix + 30, iy + 21);
+  x.fillRect(ix + iw - 54, iy + 15, 24, 11);
+  x.restore();
+  x.fillStyle = "#000"; x.beginPath(); x.roundRect(px + w / 2 - 55, py + 22, 110, 28, 14); x.fill();  // Kamera-Aussparung
+  x.restore();
+}
+
+// Fingertipp: Ring, der sich ausbreitet
+function tipp(t, zeit, px, py) {
+  const d = t - zeit;
+  if (d < -0.35 || d > 0.6) return;
+  const vor = klemm((d + 0.35) / 0.35);
+  x.save();
+  x.globalAlpha = d < 0 ? vor * 0.85 : 0.85 * (1 - d / 0.6);
+  x.fillStyle = "rgba(255,255,255,0.35)"; x.beginPath(); x.arc(px, py, 22, 0, 7); x.fill();
+  if (d >= 0) { x.strokeStyle = "rgba(255,255,255,0.9)"; x.lineWidth = 3; x.beginPath(); x.arc(px, py, 22 + d * 70, 0, 7); x.stroke(); }
+  x.restore();
+}
+
+function mauszeiger(px, py, alpha, gedrueckt = false) {
+  if (alpha <= 0) return;
+  x.save(); x.globalAlpha = alpha; x.translate(px, py); if (gedrueckt) x.scale(0.9, 0.9);
+  x.fillStyle = "#fff"; x.strokeStyle = "#000"; x.lineWidth = 2;
+  x.beginPath(); x.moveTo(0, 0); x.lineTo(0, 34); x.lineTo(9, 26); x.lineTo(16, 40); x.lineTo(22, 37); x.lineTo(15, 23); x.lineTo(27, 23); x.closePath();
+  x.fill(); x.stroke(); x.restore();
+}
+
+// ---------- Szenen ----------
+function teaser(t) {
+  // Intro
+  text("DAVESLAB", BW / 2, 420, 30, 700, ORANGE, fenster(t, 0.3, T(2) - 0.2, 0.6, 0.5), "center", 14);
+  text("Weather Station", BW / 2, 560 + (1 - raus((t - 0.9) / 1)) * 30, 140, 800, "#fff", fenster(t, 0.9, T(2) - 0.2, 0.8, 0.5), "center", -4);
+  text("An animated weather display for the LILYGO T-Display-S3", BW / 2, 640, 34, 500, GRAU, fenster(t, 1.8, T(2) - 0.2, 0.7, 0.5), "center");
+
+  if (t >= T(2) && t < T(14)) {
+    let cx = BW / 2, cy = 470 + (1 - raus((t - T(2)) / 0.9)) * 80, breite = 1100, winkel = 0, hoch = false;
+    let alpha = raus((t - T(2)) / 0.8) * klemm((T(14) - 0.05 - t) / 0.35);
+    if (t >= DREH_A) {
+      const d = glatt((t - DREH_A) / (DREH_E - DREH_A));
+      winkel = d * Math.PI / 2; breite = mischen(1100, 860, d); cx = mischen(BW / 2, 620, d); cy = mischen(470, 540, d);
+      if (t >= DREH_E) { hoch = true; winkel = 0; breite = 860 * 311 / 730; }
+    }
+    const ua = hoch ? 1 - klemm((t - DREH_E) / 0.45) : 0;
+    board(cx, cy, breite, winkel, hoch, alpha, simCv, ua > 0 ? SCHNAPP : null, ua);
+  }
+  unterschrift(t, T(2) + 0.6, T(4) - 0.1, "Animated weather.", "Right on your desk – updated every 15 minutes.");
+  unterschrift(t, T(4) + 0.2, T(6) - 0.1, "Golden hours, starry nights.", "The sky follows the real time of day.");
+  unterschrift(t, T(6) + 0.2, T(9) - 0.1, "Rain, snow & thunder.", "Every sky, beautifully animated.");
+  unterschrift(t, T(9) + 0.3, T(12) - 0.1, "8 pages of weather.", "Forecast, days ahead, sun & moon, air quality & pollen …");
+  unterschrift(t, T(12) + 0.2, T(13) - 0.05, "Live rain radar", "The last hour, animated.");
+  unterschrift(t, DREH_E - 0.2, T(14) - 0.1, "Landscape or portrait.", "Every page has its own layout.", 1080, 520, "left");
+
+  // Uebergang zum Tutorial
+  const f = fenster(t, T(14) + 0.1, T(15) - 0.05, 0.5, 0.4);
+  text("Let’s set it up.", BW / 2, 520 + (1 - raus((t - T(14)) / 0.7)) * 20, 110, 800, "#fff", f, "center", -3);
+  text("No coding  ·  no drivers  ·  about five minutes", BW / 2, 600, 34, 500, GRAU, fenster(t, T(14) + 0.5, T(15) - 0.05, 0.5, 0.4), "center");
+}
+
+// Schritt 1: Was du brauchst
+function schritt1(t) {
+  const a = T(15), b = T(19);
+  schrittKopf(t, a, b, "STEP 1", "What you need");
+  const karten = [
+    ["LILYGO T-Display-S3", "ESP32-S3 with 1.9″ display", k => board(k.x + k.w / 2, k.y + 170, 380, 0, false, k.f, simCv)],
+    ["USB-C cable", "with data lines – not charge-only", k => kabel(k.x + k.w / 2, k.y + 170, k.f)],
+    ["Chrome or Edge", "on a Windows, Mac or Linux computer", k => laptop(k.x + k.w / 2, k.y + 175, k.f)],
+  ];
+  karten.forEach(([titel, unter, bild], i) => {
+    const ein = a + 0.6 + i * 0.7, f = fenster(t, ein, b, 0.5, 0.4);
+    if (f <= 0) return;
+    const hub = (1 - raus((t - ein) / 0.6)) * 30;
+    const k = { x: 140 + i * 560, y: 330 + hub, w: 520, h: 470, f };
+    rund(k.x, k.y, k.w, k.h, 24, "#141925", f);
+    x.save(); x.globalAlpha = f * 0.6; x.strokeStyle = "#262c39"; x.lineWidth = 2; x.beginPath(); x.roundRect(k.x, k.y, k.w, k.h, 24); x.stroke(); x.restore();
+    bild(k);
+    text(titel, k.x + k.w / 2, k.y + 380, 34, 700, "#fff", f, "center");
+    text(unter, k.x + k.w / 2, k.y + 422, 24, 500, GRAU, f, "center");
+  });
+}
+
+function kabel(cx, cy, a) {
+  x.save(); x.globalAlpha = a; x.lineCap = "round";
+  x.strokeStyle = "#2b2f38"; x.lineWidth = 16;
+  x.beginPath(); x.moveTo(cx - 170, cy + 40); x.bezierCurveTo(cx - 60, cy + 120, cx + 40, cy - 120, cx + 150, cy - 40); x.stroke();
+  for (const [px, py, w] of [[cx - 230, cy + 20, 70], [cx + 140, cy - 60, 70]]) {
+    rund(px, py, w, 40, 10, "#3a3f4a", a); rund(px + w - 8, py + 10, 26, 20, 6, "#c9cdd2", a);
+  }
+  x.restore();
+}
+
+function laptop(cx, cy, a) {
+  x.save(); x.globalAlpha = a;
+  rund(cx - 180, cy - 120, 360, 230, 14, "#2b2f38"); rund(cx - 166, cy - 106, 332, 202, 6, "#0f131b");
+  rund(cx - 150, cy - 92, 300, 22, 11, "#1f2533");
+  const g = x.createLinearGradient(cx - 120, 0, cx + 120, 0); g.addColorStop(0, "#f0a030"); g.addColorStop(1, "#e5642e");
+  x.fillStyle = g; x.beginPath(); x.roundRect(cx - 90, cy - 20, 180, 46, 12); x.fill();
+  x.font = "700 20px Inter"; x.fillStyle = "#fff"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText("Install", cx, cy + 3);
+  rund(cx - 220, cy + 110, 440, 22, 10, "#3a3f4a");
+  x.restore();
+}
+
+// Schritt 2: Firmware aufspielen
+const KLICK_ERASE = T(21) + 0.6, PORT_EIN = T(21) + 1.0, PORT_WAHL = T(22) + 0.4, PORT_OK = T(22) + 1.6;
+const ESP_EIN = T(23) + 0.2, ESP_KLICK = T(23) + 1.4, INST_A = ESP_KLICK + 0.4, INST_E = T(26) - 0.3;
+function schritt2(t) {
+  const a = T(19), b = T(27);
+  schrittKopf(t, a, b, "STEP 2", "Flash the firmware");
+  const f = fenster(t, a + 0.2, b, 0.6, 0.4);
+  // Board links mit Kabel nach unten
+  const ein = raus((t - a - 0.2) / 0.7);
+  x.save(); x.globalAlpha = f; x.strokeStyle = "#2b2f38"; x.lineWidth = 14; x.lineCap = "round";
+  x.beginPath(); x.moveTo(760, 600); x.bezierCurveTo(840, 640, 820, 900, 900, 1100); x.stroke(); x.restore();
+  const aus = t < T(26);  // vor dem Neustart ist das Display dunkel
+  board(440 - (1 - ein) * 60, 600, 640, 0, false, f, aus ? null : simCv);
+  // Browser mit der echten Flasher-Seite
+  const bx = 880, by = 250, bw = 960, bh = 640;
+  const scroll = stufen(t, [[a, 0], [a + 2.6, 1030]], 0.9);
+  const skala = bw / 760;  // Ausschnitt x 170..930 der Seite
+  browser(bx + (1 - ein) * 80, by, bw, bh, "prod-byte.github.io/Wetterstation", f, (ix, iy, iw, ih) => {
+    x.fillStyle = "#0d0f13"; x.fillRect(ix, iy, iw, ih);
+    x.drawImage(FLASHER, 170, scroll, 760, ih / skala, ix, iy, iw, ih);
+    // Dialog 1: Anschluss waehlen (vom Browser)
+    const p = fenster(t, PORT_EIN, PORT_OK + 0.25, 0.25, 0.2);
+    if (p > 0) portDialog(ix + iw / 2, iy + 40, p, t);
+    // Dialog 2: ESP Web Tools
+    const e = fenster(t, ESP_EIN, b, 0.3, 0.3);
+    if (e > 0) espDialog(ix + iw / 2, iy + ih / 2, e, t);
+  });
+  // Mauszeiger: zu "Erase & install", dann in die Dialoge
+  const erase = [bx + (721 - 170) * skala, by + 52 + (1277 - 1030) * skala];
+  const portZeile = [bx + bw / 2 - 40, by + 52 + 40 + 128], portOk = [bx + bw / 2 + 170, by + 52 + 40 + 248];
+  const install = [bx + bw / 2 + 150, by + 52 + bh / 2 + 82];
+  const mx = stufen(t, [[a + 3.4, bx + bw - 80], [a + 3.6, erase[0]], [KLICK_ERASE + 0.6, portZeile[0]], [PORT_WAHL + 0.3, portOk[0]], [PORT_OK + 0.6, install[0]]], 0.7);
+  const my = stufen(t, [[a + 3.4, by + bh - 60], [a + 3.6, erase[1]], [KLICK_ERASE + 0.6, portZeile[1]], [PORT_WAHL + 0.3, portOk[1]], [PORT_OK + 0.6, install[1]]], 0.7);
+  const gedrueckt = [KLICK_ERASE, PORT_WAHL, PORT_OK, ESP_KLICK].some(k => t > k && t < k + 0.15);
+  mauszeiger(mx, my, fenster(t, a + 3.4, INST_A + 0.4, 0.3, 0.3) * f, gedrueckt);
+  // Anweisungen
+  anweisung(t, a + 0.4, KLICK_ERASE - 0.5, "Plug in the board, open the flasher", "prod-byte.github.io/Wetterstation – in Chrome or Edge");
+  anweisung(t, KLICK_ERASE - 0.4, PORT_EIN + 0.9, "New board? Click “Erase & install”", "Already set up? “Install update” keeps your Wi-Fi.");
+  anweisung(t, PORT_EIN + 1.0, ESP_EIN, "Pick the port", "usually “USB JTAG/serial debug unit” – no driver needed");
+  anweisung(t, ESP_EIN + 0.1, INST_E + 0.2, "Install – takes about a minute", "Keep the cable plugged in.");
+  anweisung(t, INST_E + 0.3, b, "Done – the board restarts", "It opens its own Wi-Fi for the setup.");
+}
+
+function portDialog(cx, top, a, t) {
+  const w = 560, h = 300, px = cx - w / 2;
+  x.save(); x.globalAlpha *= a;
+  x.shadowColor = "rgba(0,0,0,0.5)"; x.shadowBlur = 30; rund(px, top, w, h, 12, "#2a2f3a"); x.shadowColor = "transparent";
+  text("prod-byte.github.io wants to connect to a serial port", px + 24, top + 40, 19, 600, "#e8ebf1", 1);
+  const gewaehlt = t >= PORT_WAHL;
+  rund(px + 16, top + 64, w - 32, 132, 8, "#1f232c");
+  rund(px + 16, top + 70, w - 32, 52, 6, gewaehlt ? "#3b5bdb" : "rgba(255,255,255,0.04)");
+  text("USB JTAG/serial debug unit (COM5)", px + 34, top + 103, 18, 500, "#fff", 1);
+  text("Bluetooth serial port (COM3)", px + 34, top + 160, 18, 500, "#8b93a5", 1);
+  rund(px + w - 250, top + h - 70, 110, 44, 22, "#3a3f4a"); text("Cancel", px + w - 195, top + h - 41, 18, 600, "#e8ebf1", 1, "center");
+  rund(px + w - 128, top + h - 70, 110, 44, 22, gewaehlt ? "#8ab4f8" : "#4a5060"); text("Connect", px + w - 73, top + h - 41, 18, 700, "#0b1020", 1, "center");
+  x.restore();
+}
+
+function espDialog(cx, cy, a, t) {
+  const w = 600, h = 300, px = cx - w / 2, py = cy - h / 2;
+  x.save(); x.globalAlpha *= a;
+  x.fillStyle = "rgba(0,0,0,0.45)"; x.fillRect(cx - 600, cy - 600, 1200, 1200);
+  x.shadowColor = "rgba(0,0,0,0.5)"; x.shadowBlur = 40; rund(px, py, w, h, 18, "#1e2330"); x.shadowColor = "transparent";
+  text("Weather Station", px + 32, py + 52, 26, 700, "#fff", 1);
+  if (t < INST_A) {
+    text("Install Weather Station?", px + 32, py + 112, 22, 500, "#c5cbd8", 1);
+    text("All data on the device will be erased.", px + 32, py + 146, 18, 500, "#8b93a5", 1);
+    const g = x.createLinearGradient(px, 0, px + w, 0); g.addColorStop(0, "#f0a030"); g.addColorStop(1, "#e5642e");
+    x.fillStyle = g; x.beginPath(); x.roundRect(px + w - 210, py + h - 82, 178, 52, 12); x.fill();
+    text("Install", px + w - 121, py + h - 48, 21, 700, "#fff", 1, "center");
+  } else if (t < INST_E) {
+    const p = glatt((t - INST_A) / (INST_E - INST_A));
+    text("Installing …", px + 32, py + 112, 22, 600, "#c5cbd8", 1);
+    rund(px + 32, py + 150, w - 64, 14, 7, "#2c3240"); rund(px + 32, py + 150, Math.max(14, (w - 64) * p), 14, 7, ORANGE);
+    text(`${Math.round(p * 100)} %`, px + 32, py + 205, 20, 600, "#8b93a5", 1);
+    text("Don’t unplug the device", px + w - 32, py + 205, 18, 500, "#8b93a5", 1, "right");
+  } else {
+    x.fillStyle = "rgba(47,210,122,0.15)"; x.beginPath(); x.arc(px + 62, py + 135, 30, 0, 7); x.fill();
+    x.strokeStyle = "#2fd27a"; x.lineWidth = 5; x.lineCap = "round"; x.beginPath(); x.moveTo(px + 48, py + 135); x.lineTo(px + 58, py + 146); x.lineTo(px + 78, py + 124); x.stroke();
+    text("Installation complete!", px + 110, py + 145, 26, 700, "#fff", 1);
+  }
+  x.restore();
+}
+
+// Schritt 3: mit dem Handy einrichten
+const S3 = { wlan: 68.6, liste: 70.0, heim: 74.6, pass: 75.6, verbinden: 80.4, ort: 81.6, cottbus: 88.0, fertig: 89.0 };
+function schritt3(t) {
+  const a = T(27), b = T(41);
+  schrittKopf(t, a, b, "STEP 3", "Connect it with your phone");
+  const f = fenster(t, a + 0.2, b, 0.6, 0.4);
+  board(470, 560, 640, 0, false, f, simCv);
+  // Handy rechts
+  const hx = 1290, hy = 120, hw = 410, hh = 850, ein = raus((t - a - 0.3) / 0.8);
+  let tippPos = null;
+  handy(hx + (1 - ein) * 80, hy, hw, hh, f, (ix, iy, iw, ih) => {
+    const sk = iw / 1000;  // Bildschirmfotos sind 1000 px breit
+    const seiten = [[0, null], [S3.liste, "liste"], [S3.pass, "passwort"], [S3.ort, "ort"], [S3.fertig, "fertig"]];
+    // aktuelle und vorige Seite, neue schiebt sich von rechts herein
+    let i = 0; for (let k = 0; k < seiten.length; k++) if (t >= seiten[k][0]) i = k;
+    const rein = i > 0 ? raus((t - seiten[i][0]) / 0.45) : 1;
+    const zeigen = (name, dx) => {
+      if (!name) return wlanListe(ix + dx, iy, iw, ih, t);
+      x.drawImage(PORTAL[name], ix + dx, iy, iw, PORTAL[name].height * sk);
+    };
+    if (rein < 1 && i > 0) zeigen(seiten[i - 1][1], -iw * 0.3 * rein);
+    x.save(); if (rein < 1) { x.shadowColor = "rgba(0,0,0,0.6)"; x.shadowBlur = 30; }
+    x.fillStyle = "#0b0d12"; x.fillRect(ix + iw * (1 - rein), iy, iw, ih); x.restore();
+    zeigen(seiten[i][1], iw * (1 - rein));
+    // Fingertipps (Koordinaten auf den Bildschirmfotos)
+    const tipps = [[S3.wlan, 200, 330], [S3.heim, 280, 402], [S3.verbinden, 500, 668], [S3.cottbus, 330, 530]];
+    for (const [z, sx, sy] of tipps) tipp(t, z, ix + (sx === 200 ? 160 : sx * sk), sx === 200 ? iy + sy : iy + sy * sk);
+  });
+  anweisung(t, a + 0.5, S3.liste - 0.2, "On your phone, open the Wi-Fi settings", "and join the network “Wetterstation-Setup”.");
+  anweisung(t, S3.liste, S3.pass - 0.1, "The setup page opens by itself", "Pick your home Wi-Fi.");
+  anweisung(t, S3.pass, S3.ort - 0.1, "Enter your Wi-Fi password", "and tap Connect.");
+  anweisung(t, S3.ort, S3.fertig - 0.1, "Where is your weather station?", "Tap the suggestion or search your town – works worldwide.");
+  anweisung(t, S3.fertig, b, "Done!", "The station shows the weather for your town.");
+}
+
+// Systemliste der WLANs (wie in den Handy-Einstellungen)
+function wlanListe(ix, iy, iw, ih, t) {
+  x.fillStyle = "#0b0d12"; x.fillRect(ix, iy, iw, ih);
+  text("Wi-Fi", ix + 28, iy + 70, 40, 700, "#e8ebf1", 1);
+  rund(ix + 20, iy + 100, iw - 40, 64, 18, "#1a1e27");
+  text("Wi-Fi", ix + 44, iy + 141, 21, 600, "#e8ebf1", 1);
+  rund(ix + iw - 98, iy + 117, 58, 32, 16, "#2fd27a"); x.fillStyle = "#fff"; x.beginPath(); x.arc(ix + iw - 56, iy + 133, 13, 0, 7); x.fill();
+  text("NETWORKS", ix + 40, iy + 212, 15, 700, "#8b93a5", 1, "left", 2);
+  const netze = ["Wetterstation-Setup", "Home-WiFi", "Garden-AP", "Guest"];
+  rund(ix + 20, iy + 228, iw - 40, 4 * 62, 18, "#1a1e27");
+  netze.forEach((n, i) => {
+    const y = iy + 228 + i * 62;
+    const aktiv = i === 0 && t > S3.wlan;
+    if (aktiv) rund(ix + 20, y, iw - 40, 62, 18, "rgba(240,160,75,0.18)");
+    text(n, ix + 44, y + 39, 20, i === 0 ? 700 : 500, i === 0 ? "#fff" : "#c5cbd8", 1);
+    // WLAN-Zeichen
+    x.save(); x.strokeStyle = "#8b93a5"; x.lineWidth = 2.5; x.lineCap = "round";
+    for (let k = 0; k < 3; k++) { x.beginPath(); x.arc(ix + iw - 60, y + 44, 6 + k * 6, -Math.PI * 0.75, -Math.PI * 0.25); x.stroke(); }
+    x.restore();
+    if (i < netze.length - 1) { x.fillStyle = "#262c39"; x.fillRect(ix + 44, y + 61, iw - 88, 1); }
+  });
+  if (t > S3.wlan + 0.3) text("Connecting …", ix + 44, iy + 520, 18, 500, ORANGE, klemm((t - S3.wlan - 0.3) / 0.3));
+}
+
+// Schritt 4: Einstellungen im Browser
+const S4 = [[T(41), 0, 0], [T(41) + 2.6, 290, 0], [104.4, 600, 1], [108.4, 905, 2], [112.8, 1290, 3], [117.6, 1630, 4], [121.2, 1840, 5], [124.0, 2105, 5]];
+function schritt4(t) {
+  const a = T(41), b = T(53);
+  schrittKopf(t, a, b, "STEP 4", "Fine-tune it", "Open wetterstation.local in your browser.");
+  const f = fenster(t, a + 0.2, b, 0.6, 0.4);
+  const scroll = stufen(t, S4.map(([z, y]) => [z, y]), 1.0);
+  let aktiv = 0; for (const [z, , n] of S4) if (t >= z + 0.3) aktiv = n;
+  const punkte = ["Location & more places", "History of the last 7 days", "Language, brightness & pages",
+                  "Orientation, rain radar & warnings", "Name on the network", "Night mode & automatic updates"];
+  punkte.forEach((p, i) => {
+    const y = 360 + i * 82, ein = fenster(t, a + 0.6 + i * 0.15, b, 0.4, 0.4) * f;
+    const an = i === aktiv;
+    if (an) rund(110, y - 44, 600, 66, 14, "rgba(240,160,75,0.14)", ein);
+    x.save(); x.globalAlpha = ein; x.fillStyle = an ? ORANGE : "#3a4152"; x.beginPath(); x.arc(142, y - 11, 8, 0, 7); x.fill(); x.restore();
+    text(p, 170, y, 30, an ? 700 : 500, an ? "#fff" : "#7d879b", ein);
+  });
+  const bx = 780, by = 130, bw = 1040, bh = 860, ein = raus((t - a - 0.2) / 0.7);
+  const skala = bw / 600;  // Ausschnitt x 250..850 der Seite
+  browser(bx + (1 - ein) * 80, by, bw, bh, "wetterstation.local", f, (ix, iy, iw, ih) => {
+    x.fillStyle = "#0b0d12"; x.fillRect(ix, iy, iw, ih);
+    x.drawImage(EINST, 250, scroll, 600, ih / skala, ix, iy, iw, ih);
+  });
+}
+
+// Gut zu wissen: die beiden Taster
+function tasten(t) {
+  const a = T(53), b = T(57);
+  schrittKopf(t, a, b, "GOOD TO KNOW", "Two buttons");
+  const f = fenster(t, a + 0.2, b, 0.6, 0.4);
+  const p = board(760, 560, 1000, 0, false, f, simCv);
+  if (!p) return;
+  const markieren = ([px, py], titel, unter, ly, druck) => {
+    const ein = fenster(t, a + 0.8, b, 0.5, 0.4) * f;
+    x.save(); x.globalAlpha = ein; x.strokeStyle = ORANGE; x.lineWidth = 3;
+    x.beginPath(); x.arc(px, py, 34, 0, 7); x.stroke();
+    x.beginPath(); x.moveTo(px + 34, py); x.lineTo(1380, ly - 12); x.lineTo(1400, ly - 12); x.stroke(); x.restore();
+    for (const z of druck) {  // Tastendruck: Ring pulsiert
+      const d = t - z; if (d < 0 || d > 0.6) continue;
+      x.save(); x.globalAlpha = (1 - d / 0.6) * f; x.strokeStyle = "#fff"; x.lineWidth = 3; x.beginPath(); x.arc(px, py, 34 + d * 60, 0, 7); x.stroke(); x.restore();
+    }
+    text(titel, 1420, ly, 40, 800, "#fff", ein);
+    text(unter[0], 1420, ly + 42, 26, 500, GRAU, ein);
+    text(unter[1], 1420, ly + 78, 26, 500, GRAU, ein);
+  };
+  markieren(p.io14, "IO14", ["Short: brightness", "Hold 3 s: Wi-Fi setup again"], 330, [133.8]);
+  markieren(p.io0, "IO0", ["Short: next page", "Hold 2 s: German / English"], 760, [129.2, 131.6]);
+}
+
+// Schluss
+function schluss(t) {
+  const a = T(57);
+  const e = raus((t - a) / 0.8);
+  board(BW / 2, 330 - (1 - e) * 20, 620, 0, false, e * klemm((DAUER - 0.3 - t) / 1.4), simCv);
+  const f = d => fenster(t, a + d, DAUER, 0.6, 1.4);
+  text("Weather Station", BW / 2, 640, 92, 800, "#fff", f(0.3), "center", -3);
+  text("Open source  ·  Works worldwide  ·  Updates itself", BW / 2, 698, 30, 500, GRAU, f(0.5), "center");
+  const zeilen = [["Flasher", "prod-byte.github.io/Wetterstation"], ["Code", "github.com/ProD-byte/Wetterstation"], ["More", "daveslab.de/basteln"]];
+  zeilen.forEach(([l, u], i) => {
+    text(l, BW / 2 - 300, 800 + i * 54, 28, 600, "#7d879b", f(0.8 + i * 0.2), "right");
+    text(u, BW / 2 - 270, 800 + i * 54, 32, 700, i === 0 ? ORANGE : "#fff", f(0.8 + i * 0.2), "left");
+  });
+}
+
+// ---------- ein Videobild ----------
+function zeichne(t) {
+  while (naechstes < EREIGNISSE.length && EREIGNISSE[naechstes][0] <= t) EREIGNISSE[naechstes++][1]();
+  S.zeit(100000 + t * 1000);
+  if (t >= T(27) && t < 90) S.phase(t >= S3.ort);  // Einrichtung: passenden Bildschirm halten
+  S.zeichnen();
+  hintergrund(t);
+  if (t < T(15)) teaser(t);
+  else if (t < T(19) + 0.5) schritt1(t);
+  if (t >= T(19) && t < T(27) + 0.5) schritt2(t);
+  if (t >= T(27) && t < T(41) + 0.5) schritt3(t);
+  if (t >= T(41) && t < T(53) + 0.5) schritt4(t);
+  if (t >= T(53) && t < T(57) + 0.5) tasten(t);
+  if (t >= T(57)) schluss(t);
+  const schwarz = Math.max(klemm(1 - t / 0.4), klemm((t - (DAUER - 0.6)) / 0.6));
+  if (schwarz > 0) { x.fillStyle = `rgba(0,0,0,${schwarz})`; x.fillRect(0, 0, BW, BH); }
+}
+
+// ---------- Start: Vorschau (?t=), Einzelbilder (?stand) oder Rendern (?render[&ab=]) ----------
+async function start() {
+  await new Promise(r => document.readyState === "complete" ? r() : addEventListener("load", r, { once: true }));
+  const geladen = i => new Promise(r => i.complete ? r() : i.addEventListener("load", r, { once: true }));
+  await Promise.all([QUER, HOCH, FLASHER, EINST, ...Object.values(PORTAL)].map(geladen));
+  await Promise.all([document.fonts.load("800 64px Inter"), document.fonts.load("500 30px Inter"), document.fonts.load("700 22px Inter"), document.fonts.load("600 18px Inter")]);
+  simBereit();
+  await document.getElementById("sim").contentWindow.document.fonts.ready;
+  const q = new URLSearchParams(location.search);
+  if (q.has("render")) return rendern(+(q.get("ab") || 0));
+  if (q.has("stand")) { window.__bereit = true; return; }
+  const ab = +(q.get("t") || 0), t0 = performance.now();
+  const lauf = () => { const t = ab + (performance.now() - t0) / 1000; if (t > DAUER) return; zeichne(t); requestAnimationFrame(lauf); };
+  lauf();
+}
+window.__bild = t => zeichne(t);
+
+async function rendern(ab) {
+  const n = Math.round(DAUER * FPS);
+  for (let i = 0; i < n; i++) {
+    zeichne(i / FPS);
+    if (i < ab) continue;
+    const daten = V.toDataURL("image/jpeg", 0.95);
+    for (let versuch = 0; ; versuch++) {
+      try { await fetch(`/bild?n=${i}`, { method: "POST", body: daten }); break; }
+      catch (e) { if (versuch > 5) throw e; await new Promise(r => setTimeout(r, 500)); }
+    }
+    document.getElementById("info").textContent = `${i + 1} / ${n}`;
+    window.__fortschritt = i + 1;
+  }
+  await fetch("/fertig", { method: "POST" });
+  window.__fertig = true;
+}
+start();
+</script>
+</body></html>

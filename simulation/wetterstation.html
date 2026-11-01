@@ -1093,6 +1093,7 @@ chips("pixelWahl", [["pixel", "Echte Pixel"], ["glatt", "Geglättet"]], "pixel",
 setPixel(true);
 baueWetter();
 zeigeQuelle();
+if (/[?&]en\b/.test(location.search)) document.getElementById("sprachWahl-en").click();  // englische Flasher-Seite
 schleife();
 document.fonts && document.fonts.ready.then(() => { if (still) frame(); });
 </script>
