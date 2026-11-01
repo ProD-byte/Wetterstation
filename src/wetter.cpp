@@ -2,6 +2,9 @@
 #include "ort.h"
 #include "einstellungen.h"
 #include "netzupdate.h"
+#include "radar.h"
+#include "verlauf.h"
+#include "orte.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -25,6 +28,11 @@ const uint32_t ABSTAND_OK     = 15 * 60 * 1000;  // alle 15 min neu
 const uint32_t ABSTAND_FEHLER = 60 * 1000;       // nach Fehler in 1 min nochmal
 const uint32_t ABSTAND_LUFT   = 60 * 60 * 1000;  // Luft & Pollen stuendlich
 const uint32_t ABSTAND_UPDATE = 6 * 60 * 60 * 1000;
+const uint32_t ABSTAND_RADAR  = 10 * 60 * 1000;
+const uint32_t ABSTAND_VERLAUF = 60 * 60 * 1000;
+
+static volatile bool orteNeu = false;
+void wetterOrteNeu() { orteNeu = true; }
 
 static Wetter aktuell;
 static SemaphoreHandle_t sperre;
@@ -174,7 +182,8 @@ static void warnungAbrufen(Wetter &w, const Ort &ort) {
 }
 
 static void aufgabe(void *) {
-  uint32_t naechster = 0, naechsteLuft = 0, naechstesUpdate = 0;
+  uint32_t naechster = 0, naechsteLuft = 0, naechstesUpdate = 0, naechstesRadar = 0, naechsterVerlauf = 0,
+           naechsteOrte = 0;
   bool ortGeprueft = false;
   for (;;) {
     if (WiFi.status() != WL_CONNECTED) {
@@ -193,7 +202,7 @@ static void aufgabe(void *) {
     }
     if (neuLaden) {
       neuLaden = false;
-      naechster = naechsteLuft = millis();
+      naechster = naechsteLuft = naechstesRadar = naechsterVerlauf = millis();
     }
 
     if ((int32_t)(millis() - naechster) >= 0) {
@@ -218,6 +227,25 @@ static void aufgabe(void *) {
       }
     }
 
+    // Verlauf der letzten 7 Tage stuendlich, weitere Orte zusammen mit dem Wetter
+    if (aktuell.gueltig && (int32_t)(millis() - naechsterVerlauf) >= 0) {
+      Ort ort = ortAktuell();
+      verlaufAktualisieren(ort.lat, ort.lon);
+      naechsterVerlauf = millis() + ABSTAND_VERLAUF;
+    }
+    if (orteNeu || (aktuell.gueltig && (int32_t)(millis() - naechsteOrte) >= 0)) {
+      orteNeu = false;
+      orteAktualisieren();
+      naechsteOrte = millis() + ABSTAND_OK;
+    }
+
+    // Regenradar alle 10 Minuten (RainViewer erneuert seine Bilder in diesem Takt)
+    if (aktuell.gueltig && (int32_t)(millis() - naechstesRadar) >= 0) {
+      Ort ort = ortAktuell();
+      radarAktualisieren(ort.lat, ort.lon);
+      naechstesRadar = millis() + ABSTAND_RADAR;
+    }
+
     // Neue Firmware auf GitHub? (erst wenn das Wetter laeuft, dann alle 6 Stunden oder auf Wunsch)
     if (aktuell.gueltig && ((int32_t)(millis() - naechstesUpdate) >= 0 || updateSucheGewuenscht())) {
       updatePruefen();
@@ -230,7 +258,7 @@ static void aufgabe(void *) {
 void wetterStart() {
   sperre = xSemaphoreCreateMutex();
   // Kern 0, damit Kern 1 ungestoert zeichnen kann
-  xTaskCreatePinnedToCore(aufgabe, "wetter", 16384, nullptr, 1, nullptr, 0);
+  xTaskCreatePinnedToCore(aufgabe, "wetter", 20480, nullptr, 1, nullptr, 0);
 }
 
 bool wetterHolen(Wetter &w) {

@@ -55,3 +55,4 @@ void wetterStart();
 bool wetterHolen(Wetter &w);  // Kopie der neuesten Daten, false solange noch keine da sind
 WetterStatus wetterStatus();
 void wetterNeuLaden();        // z. B. nach Ortswechsel auf der Einstellungsseite
+void wetterOrteNeu();         // weitere Orte geaendert -> gleich deren Wetter holen

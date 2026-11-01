@@ -16,7 +16,7 @@ Geschrieben mit **VS Code + PlatformIO** (Arduino-Kern 2.0.14 – TFT_eSPI läuf
 | 🌅 **Sonne & Mond** | Sonne auf ihrem Tagesbogen, Auf- und Untergang, Tageslänge, UV-Index, Mondphase |
 | 🌿 **Luft & Pollen** | Europäischer Luftqualitätsindex, Feinstaub, Erle, Birke, Gräser, Beifuß, Ambrosia |
 | ⚠️ **Warnungen** | Unwetterwarnungen des Deutschen Wetterdienstes ([brightsky.dev](https://brightsky.dev/)) blinken oben |
-| 🌙 **Himmel** | Farbverlauf passend zum Wetter, nachts mit funkelnden Sternen; Nachtmodus dimmt das Display |
+| 🌙 **Himmel** | Farbverlauf passend zum Wetter, Morgen- und Abendrot, ziehende Wolken, Regen/Schnee/Nebel über den ganzen Himmel, nachts funkelnde Sterne; Nachtmodus dimmt das Display |
 | 📶 **WLAN** | Einrichtung per Handy (WLAN „Wetterstation-Setup“), merkt sich bis zu 5 Netze |
 | ⚙️ **Einstellungen** | im Browser unter **http://wetterstation.local**: Sprache, Bild drehen, Ort, Helligkeit, Seiten, Blättern, Nachtmodus, Updates |
 | 🔃 **Einbaulage** | Bild um 180° drehen (Einstellungsseite), wenn das Board andersherum im Gehäuse sitzt. Das T-Display-S3 hat keinen Lagesensor, deshalb dreht es sich nicht von selbst |
@@ -82,6 +82,9 @@ Bei jedem Hochladen baut GitHub die Firmware automatisch (`.github/workflows/bui
 | `src/ort.cpp` | Standort: speichern, über die Internet-Adresse ermitteln, Orte suchen |
 | `src/web.cpp` | Einstellungsseite `wetterstation.local` |
 | `src/einstellungen.cpp` | gespeicherte Einstellungen |
+| `src/radar.cpp` | Regenradar: Karte + Radarbilder laden, entpacken (PNGdec), im PSRAM halten |
+| `src/verlauf.cpp`, `src/orte.cpp` | letzte 7 Tage, weitere Orte |
+| `src/schriften.h` | geglättete Schriften (erzeugt, nicht von Hand ändern) |
 | `src/netzupdate.cpp` | Update aus dem Internet (heißt nicht `update.cpp`, sonst verdeckt es unter Windows `Update.h` des ESP32-Kerns) |
 | `simulation/wetterstation.html` | Simulation (zeichnet wie die Firmware) |
 | `docs/` | Online-Flasher (GitHub Pages) |

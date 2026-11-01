@@ -67,6 +67,20 @@ select{font:inherit;font-size:15px;padding:8px 10px;border-radius:12px;border:1p
   </div>
 
   <div class="card">
+    <h2 data-t="orteTitel">Weitere Orte</h2>
+    <div id="orteListe"></div>
+    <form class="suche" id="orteForm"><input id="orteSuche" autocomplete="off"><button class="btn" data-t="hinzu">Hinzufügen</button></form>
+    <div class="treffer" id="orteTreffer"></div>
+    <p class="leise" data-t="orteHinweis">Bis zu 3 Orte, die die Station auf einer eigenen Seite mit deinem Ort vergleicht.</p>
+  </div>
+
+  <div class="card">
+    <h2 data-t="verlaufTitel">Letzte 7 Tage</h2>
+    <canvas id="kurve" style="width:100%;height:180px;display:block"></canvas>
+    <p class="leise"><span style="color:#ffb44a">■</span> <span data-t="legT">Temperatur</span> &nbsp; <span style="color:#8cc8ff">■</span> <span data-t="legD">Luftdruck</span> &nbsp; <span style="color:#6eaaff">▮</span> <span data-t="legR">Regen</span></p>
+  </div>
+
+  <div class="card">
     <h2 data-t="anzeige">Anzeige</h2>
     <div class="zeile"><span data-t="sprache">Sprache</span><div class="seg" id="sprache"><button data-s="0">Deutsch</button><button data-s="1">English</button></div></div>
     <div class="zeile"><span data-t="helligkeit">Helligkeit</span><div class="seg" id="licht"></div></div>
@@ -101,6 +115,8 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const EN = {
   titel: 'Weather station', standort: 'Location', suchen: 'Search', ortAuto: 'Detect location automatically again via your internet connection',
+  orteTitel: 'More places', hinzu: 'Add', orteHinweis: 'Up to 3 places the station compares with yours on a page of its own.',
+  verlaufTitel: 'Last 7 days', legT: 'Temperature', legD: 'Air pressure', legR: 'Rain',
   anzeige: 'Display', sprache: 'Language', helligkeit: 'Brightness', seiten: 'Pages', blaettern: 'Next page',
   drehen: 'Rotate picture by 180°', drehenKlein: 'if the board is mounted the other way round and the picture is upside down',
   nachtmodus: 'Night mode', nachtDunkel: 'Dark display at night', nachtKlein: 'strongly dimmed, buttons light it up briefly',
@@ -125,12 +141,14 @@ function zeigen() {
   document.querySelectorAll('[data-t]').forEach(x => x.textContent = (en() ? EN : DE)[x.dataset.t]);
   document.querySelectorAll('#sprache button').forEach(b => b.classList.toggle('an', b.dataset.s == e.sprache));
   $('#suche').placeholder = L('Ort oder Postleitzahl', 'Town or postcode');
+  $('#orteSuche').placeholder = L('Weiteren Ort suchen', 'Search another place');
   $('#kopf').textContent = `Build ${st.build || L('eigener', 'own')} · ${st.ip}`;
   $('#ortName').textContent = st.ort;
   $('#ortArt').textContent = st.gewaehlt ? L('selbst gewählt', 'chosen by you') : L('ungefähr ermittelt über den Internetanschluss', 'roughly detected via your internet connection');
   const LICHT = ['100 %', '55 %', '25 %', '6 %'];
   $('#licht').innerHTML = LICHT.map((t, i) => `<button data-i="${i}" class="${i === e.licht ? 'an' : ''}">${t}</button>`).join('');
-  const SEITEN = L(['Jetzt', '24 Stunden', 'Nächste Tage', 'Sonne & Mond', 'Luft & Pollen'], ['Now', '24 hours', 'Next days', 'Sun & Moon', 'Air & Pollen']);
+  const SEITEN = L(['Jetzt', '24 Stunden', 'Nächste Tage', 'Sonne & Mond', 'Luft & Pollen', 'Regenradar', 'Letzte 7 Tage', 'Orte'],
+                   ['Now', '24 hours', 'Next days', 'Sun & Moon', 'Air & Pollen', 'Rain radar', 'Last 7 days', 'Places']);
   $('#seiten').innerHTML = SEITEN.map((t, i) => `<button data-i="${i}" class="${e.seiten >> i & 1 ? 'an' : ''}">${esc(t)}</button>`).join('');
   const WECHSEL = [[0, L('nur per Taste', 'button only')], [8, '8 s'], [12, '12 s'], [20, '20 s'], [30, '30 s'], [60, L('1 Minute', '1 minute')]];
   $('#wechsel').innerHTML = WECHSEL.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
@@ -151,7 +169,64 @@ function zeigen() {
   });
 }
 
-async function laden() { st = await (await fetch('/api/status')).json(); zeigen(); }
+async function laden() { st = await (await fetch('/api/status')).json(); zeigen(); orteLaden(); kurveLaden(); }
+
+// --- Weitere Orte ---
+async function orteLaden() {
+  const liste = await (await fetch('/api/orte')).json();
+  $('#orteListe').innerHTML = liste.map((o, i) => `<div class="zeile"><span>${esc(o.name)}<small>${o.temp === null ? '…' : Math.round(o.temp) + '°'}</small></span><button class="btn" data-i="${i}">✕</button></div>`).join('')
+    || `<p class="leise">${L('Noch keine weiteren Orte.', 'No other places yet.')}</p>`;
+  document.querySelectorAll('#orteListe button').forEach(b => b.onclick = async () => { await senden('/api/orte/weg', {i: b.dataset.i}); orteLaden(); });
+  $('#orteForm').hidden = liste.length >= 3;
+}
+$('#orteForm').onsubmit = async e => {
+  e.preventDefault();
+  const q = $('#orteSuche').value.trim();
+  if (q.length < 2) return;
+  $('#orteTreffer').innerHTML = `<p class="leise">${L('suche …', 'searching …')}</p>`;
+  const liste = await (await fetch('/orte?q=' + encodeURIComponent(q))).json();
+  $('#orteTreffer').innerHTML = liste.length ? liste.map((o, i) => `<button data-i="${i}">${esc(o.name)} <small>${esc(o.info)}</small></button>`).join('') : `<p class="leise">${L('Nichts gefunden', 'Nothing found')}</p>`;
+  document.querySelectorAll('#orteTreffer button').forEach(b => b.onclick = async () => {
+    const o = liste[b.dataset.i];
+    await senden('/api/orte/neu', {name: o.name, lat: o.lat, lon: o.lon});
+    $('#orteTreffer').innerHTML = ''; $('#orteSuche').value = '';
+    melden(L('Ort hinzugefügt', 'Place added')); setTimeout(orteLaden, 3000); orteLaden();
+  });
+};
+
+// --- Verlauf als Diagramm ---
+async function kurveLaden() {
+  const v = await (await fetch('/api/verlauf')).json();
+  const cv = $('#kurve'), dpr = devicePixelRatio || 1, W = cv.clientWidth, H = 180;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const c = cv.getContext('2d'); c.scale(dpr, dpr);
+  const n = v.temp.length; if (n < 2) return;
+  const T = v.temp.filter(x => x !== null), D = v.druck.filter(x => x !== null);
+  let tmin = Math.min(...T), tmax = Math.max(...T), dmin = Math.min(...D), dmax = Math.max(...D);
+  if (tmax - tmin < 4) { tmin -= 2; tmax += 2; } if (dmax - dmin < 10) { dmin -= 5; dmax += 5; }
+  const X0 = 30, X1 = W - 40, Y0 = 10, Y1 = 130, RB = 150;
+  const px = i => X0 + (X1 - X0) * i / (n - 1), pt = x => Y1 - (x - tmin) / (tmax - tmin) * (Y1 - Y0), pd = x => Y1 - (x - dmin) / (dmax - dmin) * (Y1 - Y0);
+  const muted = getComputedStyle(document.body).getPropertyValue('--muted');
+  c.font = '11px system-ui'; c.fillStyle = muted; c.strokeStyle = muted; c.globalAlpha = .35;
+  const WT = L(['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'], ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+  for (let d = 0; d <= 8; d++) {
+    const a = Math.max(0, d * 24 - v.stunde), e = Math.min(n - 1, (d + 1) * 24 - v.stunde - 1);
+    if (a >= n) break;
+    if (a > 0) { c.beginPath(); c.moveTo(px(a), Y0); c.lineTo(px(a), RB); c.stroke(); }
+    if (e - a >= 8) { c.globalAlpha = 1; c.textAlign = 'center'; c.fillText(WT[(v.wochentag + d) % 7], (px(a) + px(e)) / 2, H - 6); c.globalAlpha = .35; }
+  }
+  c.globalAlpha = 1;
+  c.fillStyle = '#6eaaff';
+  v.regen.forEach((r, i) => { const h = Math.min(20, r * 8); if (h > 0) c.fillRect(px(i) - 1, RB - h, 2, h); });
+  const linie = (werte, f, farbe, breite) => { c.strokeStyle = farbe; c.lineWidth = breite; c.beginPath(); let an = false;
+    werte.forEach((x, i) => { if (x === null) { an = false; return; } an ? c.lineTo(px(i), f(x)) : c.moveTo(px(i), f(x)); an = true; }); c.stroke(); };
+  linie(v.druck, pd, '#8cc8ff', 1.5);
+  linie(v.temp, pt, '#ffb44a', 2.5);
+  c.fillStyle = '#ffb44a'; c.textAlign = 'left';
+  c.fillText(Math.round(tmax) + '°', 2, Y0 + 8); c.fillText(Math.round(tmin) + '°', 2, Y1);
+  c.fillStyle = '#8cc8ff'; c.textAlign = 'right';
+  c.fillText(Math.round(dmax) + ' hPa', W, Y0 + 8); c.fillText(Math.round(dmin), W, Y1);
+}
 async function speichern(teil) {
   Object.assign(st.einst, teil);
   zeigen();

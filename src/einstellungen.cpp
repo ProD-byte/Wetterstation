@@ -8,7 +8,7 @@ void einstellungenLaden() {
   p.begin("einst", true);
   Einstellungen e;
   e.licht = p.getUChar("licht", e.licht) % 4;
-  e.seiten = p.getUChar("seiten", e.seiten) & 0x1F;
+  e.seiten = p.getUChar("seiten8", e.seiten);  // neuer Schluessel: frueher gab es nur 5 Seiten
   if (!e.seiten) e.seiten = 1;  // mindestens "Jetzt"
   e.wechsel = p.getUChar("wechsel", e.wechsel);
   e.nacht = p.getBool("nacht", e.nacht);
@@ -25,7 +25,7 @@ void einstellungenSpeichern() {
   Preferences p;
   p.begin("einst", false);
   p.putUChar("licht", einst.licht);
-  p.putUChar("seiten", einst.seiten);
+  p.putUChar("seiten8", einst.seiten);
   p.putUChar("wechsel", einst.wechsel);
   p.putBool("nacht", einst.nacht);
   p.putUChar("von", einst.nachtVon);

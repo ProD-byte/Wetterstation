@@ -1,5 +1,6 @@
 #include "bilder.h"
 #include "einstellungen.h"
+#include "schriften.h"
 
 struct RGB { uint8_t r, g, b; };
 
@@ -85,9 +86,68 @@ bool blitzAktiv(uint32_t t) {
   return p < 90 || (p > 180 && p < 260);
 }
 
-void zeichneHimmel(TFT_eSprite &s, Bild b, bool tag, uint32_t t, bool blitz) {
+static RGB misch(RGB a, RGB b, float f) {
+  return {uint8_t(a.r + (b.r - a.r) * f), uint8_t(a.g + (b.g - a.g) * f), uint8_t(a.b + (b.b - a.b) * f)};
+}
+
+static void wolkeForm(TFT_eSprite &s, float cx, float cy, float w, uint16_t c);
+
+// Hinter dem Inhalt: grosse Wolken ziehen langsam vorbei, Regen/Schnee/Nebel ueber den ganzen Himmel
+static void himmelEffekte(TFT_eSprite &s, Bild b, bool tag, uint32_t t) {
+  int w = s.width(), h = s.height();
+  auto bei = [&](float x, float y) { return s.readPixel(constrain((int)x, 0, w - 1), constrain((int)y, 0, h - 1)); };
+
+  int wolken = b == HEITER ? 2 : b == KLAR ? 0 : b == NEBEL ? 0 : 4;
+  bool dunkel = b == REGEN || b == GEWITTER;
+  RGB wf = !tag ? RGB{140, 150, 180} : dunkel ? RGB{150, 160, 185} : RGB{255, 255, 255};
+  uint8_t deck = b == HEITER ? 30 : dunkel ? 46 : 40;
+  for (int i = 0; i < wolken; i++) {
+    float bw = 150 + 40 * (i % 3);
+    float tempo = 0.0035f + 0.0012f * i;  // Pixel pro Millisekunde
+    float x = fmodf(t * tempo + i * 157.0f, w + bw * 1.3f) - bw * 0.65f;
+    float y = 38 + (i * 47) % (h - 80);
+    wolkeForm(s, x, y, bw, s.alphaBlend(deck, farbe(wf.r, wf.g, wf.b), bei(x, y)));
+  }
+
+  if (b == REGEN || b == GEWITTER || b == NIESEL) {
+    int n = b == NIESEL ? 24 : 48;
+    uint32_t periode = b == NIESEL ? 1700 : 850;
+    float l = b == NIESEL ? 6 : 13;
+    for (int i = 0; i < n; i++) {
+      float p = ((t + i * 7919u) % periode) / float(periode);
+      float x = (i * 53) % (w + 40) - p * 22;
+      float y = p * (h + 30) - 20;
+      s.drawWideLine(x, y, x - l * 0.25f, y + l, 1, s.alphaBlend(80, farbe(180, 205, 240), bei(x, y)));
+    }
+  } else if (b == SCHNEE) {
+    for (int i = 0; i < 44; i++) {
+      float p = ((t + i * 6151u) % 5200u) / 5200.0f;
+      float x = (i * 67) % w + sinf(t * 0.0012f + i) * 12;
+      float y = p * (h + 12) - 6;
+      s.fillSmoothCircle(x, y, 1 + i % 2, s.alphaBlend(170, TFT_WHITE, bei(x, y)));
+    }
+  } else if (b == NEBEL) {
+    // Nebelbaender treiben quer ueber den Bildschirm (zeilenweise, der Himmel ist pro Zeile einfarbig)
+    for (int k = 0; k < 4; k++) {
+      int y0 = 26 + k * 38 + sinf(t * 0.0006f + k) * 6;
+      int x0 = sinf(t * 0.0003f + k * 2) * 60 - 60;
+      for (int y = y0; y < y0 + 24 && y < h; y++) {
+        uint8_t a = 50 * sinf(PI * (y - y0) / 24.0f);
+        s.drawFastHLine(x0, y, w + 120, s.alphaBlend(a, farbe(235, 238, 242), bei(10, y)));
+      }
+    }
+  }
+}
+
+void zeichneHimmel(TFT_eSprite &s, Bild b, bool tag, uint32_t t, bool blitz, float daemmerung) {
   RGB oben, unten;
   verlauf(b, tag, oben, unten);
+  // Morgen- und Abendrot: oben violett, unten orange-rosa
+  if (daemmerung > 0) {
+    float d = min(daemmerung, 1.0f) * (b == KLAR || b == HEITER ? 1.0f : 0.45f);
+    oben = misch(oben, {72, 52, 118}, d * 0.6f);
+    unten = misch(unten, {255, 146, 92}, d * 0.8f);
+  }
   int w = s.width(), h = s.height();
   for (int y = 0; y < h; y++) {
     uint16_t c = mische(oben, unten, y / float(h - 1));
@@ -96,7 +156,10 @@ void zeichneHimmel(TFT_eSprite &s, Bild b, bool tag, uint32_t t, bool blitz) {
   }
 
   // Sterne, die funkeln (nur nachts und wenn nicht zu bewoelkt)
-  if (tag || !(b == KLAR || b == HEITER)) return;
+  if (tag || !(b == KLAR || b == HEITER)) {
+    himmelEffekte(s, b, tag, t);
+    return;
+  }
   uint32_t z = 12345;
   int anzahl = b == KLAR ? 34 : 18;
   for (int i = 0; i < anzahl; i++) {
@@ -114,6 +177,7 @@ void zeichneHimmel(TFT_eSprite &s, Bild b, bool tag, uint32_t t, bool blitz) {
       s.drawPixel(x, y + 1, s.alphaBlend(a, TFT_WHITE, s.readPixel(x, y + 1)));
     }
   }
+  himmelEffekte(s, b, tag, t);
 }
 
 // ------------------------------------------------------------
@@ -126,8 +190,9 @@ static void sonne(TFT_eSprite &s, float cx, float cy, float g, uint32_t t) {
   uint16_t hg = s.readPixel(cx, cy);
   float puls = 0.5f + 0.5f * sinf(t * 0.0025f);
 
-  // Schein
-  s.fillSmoothCircle(cx, cy, r * (1.55f + 0.12f * puls), s.alphaBlend(45 + 25 * puls, gelb, hg));
+  // Schein in zwei Stufen (aussen ganz zart)
+  s.fillSmoothCircle(cx, cy, r * (2.1f + 0.15f * puls), s.alphaBlend(18 + 12 * puls, gelb, hg));
+  s.fillSmoothCircle(cx, cy, r * (1.55f + 0.12f * puls), s.alphaBlend(45 + 25 * puls, gelb, s.readPixel(cx, cy)));
 
   // Strahlen drehen sich langsam und werden mal laenger, mal kuerzer
   float dreh = t * 0.0004f;
@@ -138,8 +203,11 @@ static void sonne(TFT_eSprite &s, float cx, float cy, float g, uint32_t t) {
     s.drawWideLine(cx + cosf(a) * r1, cy + sinf(a) * r1, cx + cosf(a) * (r1 + l), cy + sinf(a) * (r1 + l),
                    max(2.0f, g * 0.045f), gelb);
   }
-  s.fillSmoothCircle(cx, cy, r, gelb);
-  s.fillSmoothCircle(cx - r * 0.25f, cy - r * 0.25f, r * 0.55f, farbe(255, 224, 110));
+  // Kern mit weichem Verlauf zur hellen Mitte
+  s.fillSmoothCircle(cx, cy, r, farbe(255, 176, 30));
+  s.fillSmoothCircle(cx - r * 0.08f, cy - r * 0.08f, r * 0.82f, gelb);
+  s.fillSmoothCircle(cx - r * 0.2f, cy - r * 0.2f, r * 0.55f, farbe(255, 220, 100));
+  s.fillSmoothCircle(cx - r * 0.3f, cy - r * 0.3f, r * 0.25f, farbe(255, 244, 190));
 }
 
 static void mond(TFT_eSprite &s, float cx, float cy, float g, uint32_t t) {
@@ -166,9 +234,19 @@ static void wolkeForm(TFT_eSprite &s, float cx, float cy, float w, uint16_t c) {
 static void wolke(TFT_eSprite &s, float cx, float cy, float w, RGB c) {
   wolkeForm(s, cx + w * 0.03f, cy + w * 0.05f, w, farbe(dunkler(c, 0.72f)));  // Schatten unten
   wolkeForm(s, cx, cy, w, farbe(c));
+  // Lichtkanten oben links auf den Wolkenbuckeln - so wirkt die Wolke rund
+  uint16_t licht = farbe(misch(c, {255, 255, 255}, 0.45f));
+  s.fillSmoothCircle(cx - w * 0.05f, cy - w * 0.15f, w * 0.15f, licht);
+  s.fillSmoothCircle(cx - w * 0.27f, cy - w * 0.04f, w * 0.09f, licht);
+  s.fillSmoothCircle(cx + w * 0.21f, cy - w * 0.03f, w * 0.08f, farbe(misch(c, {255, 255, 255}, 0.25f)));
 }
 
-static void blitzZeichen(TFT_eSprite &s, float cx, float cy, float g, uint16_t c) {
+static void blitzZeichen(TFT_eSprite &s, float cx, float cy, float g, uint16_t c, bool leuchtet) {
+  if (leuchtet) {  // Leuchten um den Blitz
+    uint16_t hg = s.readPixel(cx, cy + g * 0.2f);
+    s.fillSmoothCircle(cx, cy + g * 0.2f, g * 0.3f, s.alphaBlend(40, farbe(255, 240, 160), hg));
+    s.fillSmoothCircle(cx, cy + g * 0.2f, g * 0.18f, s.alphaBlend(70, farbe(255, 240, 160), s.readPixel(cx, cy + g * 0.2f)));
+  }
   s.fillTriangle(cx + g * 0.04f, cy, cx - g * 0.09f, cy + g * 0.2f, cx + g * 0.01f, cy + g * 0.2f, c);
   s.fillTriangle(cx - g * 0.03f, cy + g * 0.17f, cx + g * 0.08f, cy + g * 0.17f, cx - g * 0.07f, cy + g * 0.4f, c);
 }
@@ -183,11 +261,26 @@ static void teilchen(TFT_eSprite &s, float x0, float breite, float y0, float hoe
     float y = y0 + p * hoehe;
     uint8_t a = p > 0.75f ? (1 - p) / 0.25f * 255 : 255;
     if (schnee) {
+      // Schneeflocke als sechsstrahliger Stern, der sich langsam dreht
       x += sinf(t * 0.002f + i * 2.1f) * g * 0.05f;
-      s.fillSmoothCircle(x, y, max(1.0f, g * 0.03f), s.alphaBlend(a, c, s.readPixel(x, y)));
+      float r = max(2.0f, g * 0.045f), dreh = t * 0.0015f + i;
+      uint16_t f = s.alphaBlend(a, c, s.readPixel(x, y));
+      for (int k = 0; k < 3; k++) {
+        float wk = dreh + k * PI / 3;
+        s.drawWideLine(x - cosf(wk) * r, y - sinf(wk) * r, x + cosf(wk) * r, y + sinf(wk) * r, max(1.0f, g * 0.012f), f);
+      }
     } else {
-      float l = g * (n > 6 ? 0.11f : 0.07f);
-      s.drawWideLine(x, y, x - l * 0.3f, y + l, max(1.5f, g * 0.03f), s.alphaBlend(a, c, s.readPixel(x, y)));
+      // Tropfen: Spur mit rundem Kopf, unten kleine Spritzer
+      float l = g * (n > 6 ? 0.11f : 0.07f), dicke = max(1.5f, g * 0.03f);
+      uint16_t f = s.alphaBlend(a, c, s.readPixel(x, y));
+      s.drawWideLine(x, y, x - l * 0.3f, y + l, dicke * 0.7f, f);
+      s.fillSmoothCircle(x - l * 0.3f, y + l, dicke * 0.9f, f);
+      if (p > 0.8f) {
+        float sp = (p - 0.8f) / 0.2f * g * 0.05f, yb = y0 + hoehe + l;
+        uint16_t fs = s.alphaBlend(150 * (1 - p) / 0.2f, c, s.readPixel(x, yb));
+        s.drawWideLine(x - sp * 0.3f, yb - sp * 0.2f, x - sp, yb - sp * 0.8f, 1, fs);
+        s.drawWideLine(x + sp * 0.3f, yb - sp * 0.2f, x + sp, yb - sp * 0.8f, 1, fs);
+      }
     }
   }
 }
@@ -249,7 +342,7 @@ void zeichneBild(TFT_eSprite &s, Bild b, bool tag, int cx, int cy, int groesse, 
       teilchen(s, cx - g * 0.32f, g * 0.64f, cy + g * 0.02f, g * 0.38f, 5, 520, g, false, farbe(110, 160, 230), t);
       wolke(s, cx + g * 0.16f - d, cy - g * 0.2f, g * 0.6f, {92, 96, 116});
       wolke(s, cx - g * 0.04f + d, cy - g * 0.1f, g * 0.84f, {140, 146, 166});
-      blitzZeichen(s, cx + g * 0.02f, cy + g * 0.06f, g, hell ? farbe(255, 255, 210) : farbe(255, 206, 60));
+      blitzZeichen(s, cx + g * 0.02f, cy + g * 0.06f, g, hell ? farbe(255, 255, 210) : farbe(255, 206, 60), hell);
       break;
     }
   }
@@ -307,102 +400,41 @@ void zeichneWarnzeichen(TFT_eSprite &s, int cx, int cy, int g, uint16_t f) {
   s.fillRect(cx - t / 2, cy + h / 4, max(2, t), max(2, t), TFT_BLACK);
 }
 
+
 // ------------------------------------------------------------
-// Text
+// Text: geglaettete Schriften (Lato, src/schriften.h) mit echten Umlauten, ß und °
 // ------------------------------------------------------------
 
-// Wandelt UTF-8-Umlaute in Grundbuchstaben um und merkt sich, wo Punkte hin muessen.
-// gross[i] = 1 fuer Ä Ö Ü (Punkte hoeher)
-static int ohneUmlaute(const char *text, char *aus, int maxLen, int *stellen, uint8_t *gross, int maxStellen) {
-  int n = 0, k = 0;
-  for (const uint8_t *p = (const uint8_t *)text; *p && n < maxLen - 2; p++) {
-    if (*p == 0xC3 && p[1]) {
-      uint8_t c = *++p;
-      char basis = 0;
-      bool g = false;
-      switch (c) {
-        case 0xA4: basis = 'a'; break;
-        case 0xB6: basis = 'o'; break;
-        case 0xBC: basis = 'u'; break;
-        case 0x84: basis = 'A'; g = true; break;
-        case 0x96: basis = 'O'; g = true; break;
-        case 0x9C: basis = 'U'; g = true; break;
-        case 0x9F: aus[n++] = 's'; aus[n++] = 's'; continue;
-      }
-      if (!basis) continue;
-      if (k < maxStellen) { stellen[k] = n; gross[k] = g; k++; }
-      aus[n++] = basis;
-    } else {
-      aus[n++] = *p;
-    }
-  }
-  aus[n] = 0;
-  return k;
+static const uint8_t *const SCHRIFT_DATEN[] = {SCHRIFT_K, SCHRIFT_M, SCHRIFT_MF, SCHRIFT_G, SCHRIFT_GF, SCHRIFT_XG, SCHRIFT_RIESIG};
+static const uint8_t *geladen = nullptr;
+
+void schrift(TFT_eSprite &s, Schrift welche) {
+  const uint8_t *daten = SCHRIFT_DATEN[welche];
+  if (daten == geladen) return;  // Laden kostet etwas - nur wenn sich die Schrift aendert
+  if (geladen) s.unloadFont();
+  s.loadFont(daten);
+  geladen = daten;
 }
 
-int breite(TFT_eSprite &s, const char *text) {
-  char klar[64];
-  int st[8];
-  uint8_t gr[8];
-  ohneUmlaute(text, klar, sizeof(klar), st, gr, 8);
-  return s.textWidth(klar);
-}
+int breite(TFT_eSprite &s, const char *text) { return s.textWidth(text); }
 
 static void textMitSchatten(TFT_eSprite &s, const char *text, int x, int y, uint16_t f) {
   s.setTextDatum(L_BASELINE);
-  s.setTextColor(TFT_BLACK);
+  s.setTextColor(TFT_BLACK);  // nur Vordergrund: Kanten werden mit dem Hintergrund verrechnet
   s.drawString(text, x + 1, y + 1);
   s.setTextColor(f);
   s.drawString(text, x, y);
 }
 
 void schreibe(TFT_eSprite &s, const char *text, int x, int y, uint16_t f, Ausrichtung a) {
-  char klar[64];
-  int st[8];
-  uint8_t gr[8];
-  int k = ohneUmlaute(text, klar, sizeof(klar), st, gr, 8);
-  int w = s.textWidth(klar);
+  int w = s.textWidth(text);
   if (a == MITTE) x -= w / 2;
   else if (a == RECHTS) x -= w;
-  textMitSchatten(s, klar, x, y, f);
-
-  // Punkte ueber die Umlaute setzen
-  int fh = s.fontHeight();
-  int dp = max(1, fh / 11);
-  for (int i = 0; i < k; i++) {
-    char vorne[64];
-    memcpy(vorne, klar, st[i]);
-    vorne[st[i]] = 0;
-    char eins[2] = {klar[st[i]], 0};
-    int x0 = x + s.textWidth(vorne);
-    int bw = s.textWidth(eins);
-    int py = y - int(fh * (gr[i] ? 0.8f : 0.58f));
-    for (int j = 0; j < 2; j++) {
-      int px = x0 + int(bw * (j ? 0.68f : 0.3f)) - dp / 2;
-      s.fillRect(px + 1, py + 1, dp, dp, TFT_BLACK);
-      s.fillRect(px, py, dp, dp, f);
-    }
-  }
+  textMitSchatten(s, text, x, y, f);
 }
 
 void schreibeTemp(TFT_eSprite &s, float wert, int x, int y, uint16_t f, Ausrichtung a) {
-  char zahl[8];
-  snprintf(zahl, sizeof(zahl), "%d", (int)lroundf(wert));
-  int fh = s.fontHeight();
-  int r = max(2, fh / 14);
-  int wz = s.textWidth(zahl);
-  int w = wz + 2 * r + 3;
-  if (a == MITTE) x -= w / 2;
-  else if (a == RECHTS) x -= w;
-  textMitSchatten(s, zahl, x, y, f);
-
-  // Gradzeichen als kleiner Ring
-  int gx = x + wz + r + 2;
-  int gy = y - int(fh * 0.62f) + r;
-  for (int i = 0; i < max(1, r / 2); i++) {
-    s.drawCircle(gx + 1, gy + 1, r - i, TFT_BLACK);
-  }
-  for (int i = 0; i < max(1, r / 2); i++) {
-    s.drawCircle(gx, gy, r - i, f);
-  }
+  char z[12];
+  snprintf(z, sizeof(z), "%d°", (int)lroundf(wert));
+  schreibe(s, z, x, y, f, a);
 }

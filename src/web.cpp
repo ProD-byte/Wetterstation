@@ -5,6 +5,8 @@
 #include "netzupdate.h"
 #include "wetter.h"
 #include "wlan.h"
+#include "verlauf.h"
+#include "orte.h"
 #include <WiFi.h>
 #include <WebServer.h>
 
@@ -40,7 +42,7 @@ static void status() {
 static void einstellungenSetzen() {
   auto zahl = [](const char *n, int alt) { return server.hasArg(n) ? server.arg(n).toInt() : alt; };
   einst.licht = constrain(zahl("licht", einst.licht), 0, 3);
-  einst.seiten = zahl("seiten", einst.seiten) & 0x1F;
+  einst.seiten = zahl("seiten", einst.seiten) & 0xFF;
   if (!einst.seiten) einst.seiten = 1;
   einst.wechsel = constrain(zahl("wechsel", einst.wechsel), 0, 120);
   // Kontrollkaestchen kommen als "true"/"false" oder 1/0
@@ -91,6 +93,23 @@ void webStart() {
   server.on("/orte", HTTP_GET, orteSuchen);
   server.on("/api/ort", HTTP_POST, ortSetzen);
   server.on("/api/ort-auto", HTTP_POST, ortAutomatisch);
+  server.on("/api/verlauf", HTTP_GET, []() {
+    server.sendHeader("Cache-Control", "no-store");
+    server.send(200, "application/json", verlaufJson());
+  });
+  server.on("/api/orte", HTTP_GET, []() {
+    server.sendHeader("Cache-Control", "no-store");
+    server.send(200, "application/json", orteJson());
+  });
+  server.on("/api/orte/neu", HTTP_POST, []() {
+    bool ok = orteHinzu(server.arg("name").c_str(), server.arg("lat").toFloat(), server.arg("lon").toFloat());
+    if (ok) wetterOrteNeu();
+    server.send(ok ? 200 : 409, "text/plain", ok ? "ok" : "voll");
+  });
+  server.on("/api/orte/weg", HTTP_POST, []() {
+    orteEntfernen(server.arg("i").toInt());
+    server.send(200, "text/plain", "ok");
+  });
   server.on("/api/update/suchen", HTTP_POST, []() {
     updateSuchenLassen();
     server.send(200, "text/plain", "ok");
