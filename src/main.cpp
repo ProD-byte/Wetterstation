@@ -39,7 +39,11 @@ const int LICHT_PIN    = 38;  // Hintergrundlicht: Treiberchip mit 16 Stufen, ge
 const float AKKU_FAKTOR = 2.0f;        // Teiler 1:2 - mit Multimeter nachmessen und anpassen
 const uint32_t WECHSEL_DAUER = 380;    // Schiebe-Animation zwischen den Seiten
 
-const int B = 320, H = 170;  // Bildschirm quer
+// Bildschirm: quer 320 x 170, hochkant 170 x 320 (Einstellung "Ausrichtung", siehe lageSetzen)
+int B = 320, H = 170;
+inline bool hoch() { return B < H; }
+// hochkant: oben Uhr + Akku, darunter der Titel, Inhalt ab TOP
+const int HOCH_TITEL_Y = 44, HOCH_TOP = 54;
 
 const uint16_t WEISS = TFT_WHITE;
 const uint16_t HELL  = 0xDF7E;  // helles Blaugrau
@@ -133,23 +137,60 @@ float daemmerung() {
 }
 
 // Titel oben links. Gibt es eine DWD-Warnung, wechselt er alle 2,5 s mit der Warnung.
+// Hochkant steht der Titel in einer eigenen Zeile unter Uhr und Akku.
 void titel(int ox, const char *text, uint32_t t) {
   schrift(bild, S_MF);
+  int y = hoch() ? HOCH_TITEL_Y : 18;
+  int platz = hoch() ? B - 16 : 210;
   if (w.warnung[0] && w.warnStufe >= einst.warnAb && (t / 2500) % 2) {
     uint16_t f = w.warnStufe >= 3 ? farbe(255, 80, 70) : farbe(255, 160, 40);
     float blink = 0.6f + 0.4f * sinf(t * 0.012f);
-    zeichneWarnzeichen(bild, ox + 15, 11, 15, bild.alphaBlend(255 * blink, f, hintergrund(ox + 15, 11)));
-    schreibe(bild, kuerzen(TX(w.warnung, w.warnungEn), 200).c_str(), ox + 28, 18, f, LINKS);
+    zeichneWarnzeichen(bild, ox + 15, y - 7, 15, bild.alphaBlend(255 * blink, f, hintergrund(ox + 15, y - 7)));
+    schreibe(bild, kuerzen(TX(w.warnung, w.warnungEn), platz - 20).c_str(), ox + 28, y, f, LINKS);
   } else {
-    schreibe(bild, kuerzen(text, 210).c_str(), ox + 8, 18, WEISS, LINKS);
+    schreibe(bild, kuerzen(text, platz).c_str(), ox + 8, y, WEISS, LINKS);
   }
 }
 
 // ------------------------------------------------------------
 // Seite 1: Jetzt
 // ------------------------------------------------------------
+// hochkant: Bild oben, darunter gross die Temperatur, dann Text, gefuehlt und Wind/Regen
+void seiteJetztHoch(int ox, uint32_t t) {
+  int mx = ox + B / 2;
+  zeichneBild(bild, bildFuerCode(w.code), w.tag, mx, 112, 104, t);
+  schrift(bild, S_RIESIG);
+  schreibeTemp(bild, w.temp, mx + 6, 222, WEISS, MITTE);
+
+  const char *text = textFuerCode(w.code, w.tag);
+  schrift(bild, S_G);
+  if (breite(bild, text) > B - 12) schrift(bild, S_M);
+  if (breite(bild, text) > B - 12) schrift(bild, S_K);
+  schreibe(bild, text, mx, 250, WEISS, MITTE);
+
+  schrift(bild, S_K);
+  char z[24];
+  snprintf(z, sizeof(z), "%s %d°", TX("Gefühlt", "Feels like"), (int)lroundf(w.gefuehlt));
+  schreibe(bild, z, mx, 272, HELL, MITTE);
+
+  if (w.regenArt) {
+    snprintf(z, sizeof(z), w.regenArt == 1 ? TX("Regen ab %s", "Rain from %s") : TX("Regen bis %s", "Rain until %s"),
+             w.regenZeit);
+    int bz = breite(bild, z);
+    tropfenSymbol(mx - bz / 2 - 6, 292, farbe(130, 190, 255));
+    schreibe(bild, z, mx + 5, 296, farbe(150, 205, 255), MITTE);
+    return;
+  }
+  snprintf(z, sizeof(z), "%d km/h", (int)lroundf(w.wind));
+  schreibe(bild, z, ox + 10, 296, HELL, LINKS);
+  snprintf(z, sizeof(z), "%d%%", w.feuchte);
+  schreibe(bild, z, ox + B - 10, 296, HELL, RECHTS);
+  tropfenSymbol(ox + B - 17 - breite(bild, z), 292, farbe(130, 190, 255));
+}
+
 void seiteJetzt(int ox, uint32_t t) {
   titel(ox, w.ort, t);
+  if (hoch()) return seiteJetztHoch(ox, t);
 
   zeichneBild(bild, bildFuerCode(w.code), w.tag, ox + 80, 98, 128, t);
 
@@ -187,7 +228,7 @@ void seiteJetzt(int ox, uint32_t t) {
 // Seite 2: naechste 24 Stunden als Kurve
 // ------------------------------------------------------------
 void seiteStunden(int ox, uint32_t t) {
-  titel(ox, TX("Nächste 24 Stunden", "Next 24 hours"), t);
+  titel(ox, hoch() ? TX("24 Stunden", "Next 24 hours") : TX("Nächste 24 Stunden", "Next 24 hours"), t);
 
   int n = w.stunden;
   if (n < 2) return;
@@ -203,7 +244,11 @@ void seiteStunden(int ox, uint32_t t) {
     tmax = m + 2;
   }
 
-  const int X0 = 20, X1 = 300, YO = 56, YU = 116;
+  // Kurve, Regenbalken (Unterkante RB) und Uhrzeiten (UY) - hochkant schmaler und hoeher
+  const bool hk = hoch();
+  const int X0 = hk ? 16 : 20, X1 = hk ? B - 16 : 300, YO = hk ? 100 : 56, YU = hk ? 220 : 116;
+  const int RB = hk ? 262 : 141, RH = hk ? 28 : 18, UY = hk ? 284 : 157;
+  const int MARKE = hk ? 8 : 6;  // Beschriftung alle ... Stunden
   auto px = [&](float i) { return ox + X0 + (X1 - X0) * i / (n - 1); };
   auto py = [&](float v) { return YU - (v - tmin) / (tmax - tmin) * (YU - YO); };
   auto tempBei = [&](float f) {
@@ -247,19 +292,20 @@ void seiteStunden(int ox, uint32_t t) {
   uint16_t blau = farbe(110, 170, 255);
   if (regen) {
     for (int i = 0; i < n; i++) {
-      int h = w.stdRegen[i] * 18 / 100;
+      int h = w.stdRegen[i] * RH / 100;
       if (h <= 0 || px(i) > xEnde) continue;
-      bild.fillRect(px(i) - 4, 141 - h, 8, h, bild.alphaBlend(200, blau, hintergrund(px(i), 135)));
+      int bb = hk ? 4 : 8;  // hochkant liegen die Stunden enger
+      bild.fillRect(px(i) - bb / 2, RB - h, bb, h, bild.alphaBlend(200, blau, hintergrund(px(i), RB - 6)));
     }
   } else {
     schrift(bild, S_K);
-    schreibe(bild, TX("Kein Regen erwartet", "No rain expected"), ox + B / 2, 138, HELL, MITTE);
+    schreibe(bild, TX("Kein Regen erwartet", "No rain expected"), ox + B / 2, RB - 3, HELL, MITTE);
   }
 
   // Punkte alle 6 Stunden mit Temperatur und Uhrzeit
   float puls = 0.5f + 0.5f * sinf(t * 0.005f);
   for (int i = 0; i < n; i++) {
-    bool marke = i == 0 || (i >= 3 && w.stdStunde[i] % 6 == 0);
+    bool marke = i == 0 || (i >= (hk ? 5 : 3) && w.stdStunde[i] % MARKE == 0);
     if (!marke || px(i) > xEnde) continue;
     float x = px(i), y = py(w.stdTemp[i]);
     if (i == 0) bild.fillSmoothCircle(x, y, 5 + 3 * puls, bild.alphaBlend(90 - 60 * puls, WEISS, hintergrund(x, y)));
@@ -270,15 +316,41 @@ void seiteStunden(int ox, uint32_t t) {
     char uhr[8];
     if (i == 0) strcpy(uhr, TX("jetzt", "now"));
     else snprintf(uhr, sizeof(uhr), "%02d", w.stdStunde[i]);
-    schreibe(bild, uhr, x, 157, HELL, MITTE);
+    schreibe(bild, uhr, x, UY, HELL, MITTE);
   }
 }
 
 // ------------------------------------------------------------
 // Seite 3: heute, morgen, uebermorgen
 // ------------------------------------------------------------
+// hochkant: die drei Tage untereinander, je eine breite Karte
+void seiteTageHoch(int ox, uint32_t t) {
+  for (int i = 0; i < 3; i++) {
+    int x = ox + 8, y = HOCH_TOP + i * 84, kb = B - 16, kh = 78, my = y + kh / 2;
+    uint16_t karte = bild.alphaBlend(i == 0 ? 95 : 70, TFT_BLACK, hintergrund(ox + B / 2, my));
+    bild.fillSmoothRoundRect(x, y, kb, kh, 10, karte);
+
+    const char *name = i == 0 ? TX("Heute", "Today") : i == 1 ? TX("Morgen", "Tomorrow") : TX(WOCHENTAG, WOCHENTAG_EN)[w.tagWochentag[i]];
+    schrift(bild, S_MF);
+    if (breite(bild, name) > 96) name = TX(WOCHENTAG_KURZ, WOCHENTAG_KURZ_EN)[w.tagWochentag[i]];
+    schreibe(bild, name, x + 10, y + 22, WEISS, LINKS);
+
+    zeichneBild(bild, bildFuerCode(w.tagCode[i]), true, x + 30, my + 12, 44, t + i * 700);
+
+    schrift(bild, S_GF);
+    schreibeTemp(bild, w.tagMax[i], x + kb - 10, y + 32, WEISS, RECHTS);
+    schrift(bild, S_K);
+    schreibeTemp(bild, w.tagMin[i], x + kb - 10, y + 52, HELL, RECHTS);
+    char z[8];
+    snprintf(z, sizeof(z), "%d%%", w.tagRegen[i]);
+    schreibe(bild, z, x + kb - 10, y + 70, HELL, RECHTS);
+    tropfenSymbol(x + kb - 17 - breite(bild, z), y + 66, farbe(130, 190, 255));
+  }
+}
+
 void seiteTage(int ox, uint32_t t) {
   titel(ox, TX("Die nächsten Tage", "Next days"), t);
+  if (hoch()) return seiteTageHoch(ox, t);
 
   for (int i = 0; i < 3; i++) {
     int x = ox + 8 + i * 104, mx = x + 48;
@@ -311,13 +383,15 @@ void seiteSonne(int ox, uint32_t t) {
   titel(ox, TX("Sonne & Mond", "Sun & Moon"), t);
 
   // Sonnenbogen: links Aufgang, rechts Untergang, die Sonne steht dort, wo sie gerade ist
-  const int CX = ox + 86, CY = 124, R = 64;
+  // quer: Bogen links, Mond rechts - hochkant: Bogen oben, Mond darunter
+  const bool hk = hoch();
+  const int CX = hk ? ox + B / 2 : ox + 86, CY = hk ? 150 : 124, R = 64;
   int auf = minuten(w.sonneAuf), unter = minuten(w.sonneUnter);
   struct tm zeit;
   int jetzt = getLocalTime(&zeit, 0) ? zeit.tm_hour * 60 + zeit.tm_min : -1;
   float frac = unter > auf && jetzt >= 0 ? float(jetzt - auf) / (unter - auf) : -1;
 
-  bild.drawFastHLine(ox + 8, CY, 156, bild.alphaBlend(120, WEISS, hintergrund(CX, CY)));
+  bild.drawFastHLine(CX - 78, CY, 156, bild.alphaBlend(120, WEISS, hintergrund(CX, CY)));
   for (int i = 0; i <= 80; i++) {  // gestrichelter Bogen
     if (i % 2) continue;
     float a = PI * i / 80;
@@ -335,19 +409,31 @@ void seiteSonne(int ox, uint32_t t) {
   }
 
   schrift(bild, S_K);
-  schreibe(bild, w.sonneAuf, ox + 8, 142, WEISS, LINKS);
-  schreibe(bild, w.sonneUnter, ox + 164, 142, WEISS, RECHTS);
+  schreibe(bild, w.sonneAuf, CX - 78, CY + 18, WEISS, LINKS);
+  schreibe(bild, w.sonneUnter, CX + 78, CY + 18, WEISS, RECHTS);
   int dauer = unter - auf;
   if (dauer > 0) {
     char z[24];
     snprintf(z, sizeof(z), TX("Tag %d h %02d min", "Day %d h %02d min"), dauer / 60, dauer % 60);
-    schreibe(bild, z, ox + 8, 160, HELL, LINKS);
+    if (hk) schreibe(bild, z, CX, CY + 38, HELL, MITTE);
+    else schreibe(bild, z, ox + 8, 160, HELL, LINKS);
   }
 
-  // Mondphase rechts
+  // Mondphase rechts (hochkant unten)
   time_t sek;
   time(&sek);
   float p = mondphase(sek);
+  if (hk) {
+    zeichneMondphase(bild, CX, 230, 24, p);
+    schrift(bild, S_M);
+    schreibe(bild, mondName(p), CX, 276, WEISS, MITTE);
+    schrift(bild, S_K);
+    char z[40];
+    snprintf(z, sizeof(z), TX("%d %% hell · UV %d", "%d %% lit · UV %d"), (int)lroundf((1 - cosf(p * 2 * PI)) / 2 * 100),
+             (int)lroundf(w.uv));
+    schreibe(bild, z, CX, 298, w.uv >= 6 ? farbe(255, 160, 40) : HELL, MITTE);
+    return;
+  }
   zeichneMondphase(bild, ox + 246, 64, 30, p);
   schrift(bild, S_M);
   schreibe(bild, mondName(p), ox + 246, 118, WEISS, MITTE);
@@ -364,10 +450,11 @@ void seiteSonne(int ox, uint32_t t) {
 // ------------------------------------------------------------
 void seiteLuft(int ox, uint32_t t) {
   titel(ox, TX("Luft & Pollen", "Air & Pollen"), t);
-  schrift(bild, S_M);
+  const bool hk = hoch();
+  schrift(bild, hk ? S_K : S_M);
   if (!w.luftGueltig) {
-    schreibe(bild, TX("Für diesen Ort gibt es", "No air quality data"), ox + B / 2, 80, HELL, MITTE);
-    schreibe(bild, TX("keine Luftdaten", "for this place"), ox + B / 2, 104, HELL, MITTE);
+    schreibe(bild, TX("Für diesen Ort gibt es", "No air quality data"), ox + B / 2, H / 2 - 8, HELL, MITTE);
+    schreibe(bild, TX("keine Luftdaten", "for this place"), ox + B / 2, H / 2 + 14, HELL, MITTE);
     return;
   }
 
@@ -378,7 +465,8 @@ void seiteLuft(int ox, uint32_t t) {
   static const uint16_t FARBE[] = {0x4F6A, 0x8F68, 0xFE84, 0xFC64, 0xF9E8, 0xA01F};
   int stufe = constrain(w.aqi / 20, 0, 5);
   uint16_t f = FARBE[stufe];
-  const int CX = ox + 76, CY = 84, R = 50;
+  // quer: Ring links, Pollen rechts - hochkant: Ring oben, Pollen darunter
+  const int CX = hk ? ox + B / 2 : ox + 76, CY = hk ? 112 : 84, R = hk ? 46 : 50;
   float fort = min(1.0f, (t - seiteSeit) / 900.0f);  // Ring fuellt sich beim Umblaettern
   uint16_t hg = hintergrund(CX, CY - R);
   bild.drawSmoothArc(CX, CY, R, R - 9, 30, 330, bild.alphaBlend(60, WEISS, hg), hg, true);
@@ -389,21 +477,28 @@ void seiteLuft(int ox, uint32_t t) {
   snprintf(z, sizeof(z), "%d", w.aqi);
   schreibe(bild, z, CX, CY + 12, WEISS, MITTE);
   schrift(bild, S_K);
-  schreibe(bild, STUFE[stufe], CX, 148, f, MITTE);
-  snprintf(z, sizeof(z), TX("Feinstaub %d", "PM2.5: %d"), (int)lroundf(w.pm25));
-  schreibe(bild, z, CX, 165, HELL, MITTE);
+  if (hk) {
+    snprintf(z, sizeof(z), TX("Feinstaub %d", "PM2.5: %d"), (int)lroundf(w.pm25));
+    schreibe(bild, (String(STUFE[stufe]) + " · " + z).c_str(), CX, CY + R + 22, f, MITTE);
+  } else {
+    schreibe(bild, STUFE[stufe], CX, 148, f, MITTE);
+    snprintf(z, sizeof(z), TX("Feinstaub %d", "PM2.5: %d"), (int)lroundf(w.pm25));
+    schreibe(bild, z, CX, 165, HELL, MITTE);
+  }
 
   // Pollen: drei Stufen je Art
-  schrift(bild, S_M);
+  const int PX = hk ? ox + 10 : ox + 158, BX = hk ? ox + B - 84 : ox + 238;  // Name, erster Balken
+  const int PY = hk ? 210 : 50, PA = hk ? 20 : 24;                           // erste Zeile, Abstand
+  schrift(bild, hk ? S_K : S_M);
   for (int i = 0; i < 5; i++) {
-    int y = 50 + i * 24;
+    int y = PY + i * PA;
     float k = w.pollen[i];
     int lvl = k < 1 ? 0 : k <= 10 ? 1 : k <= 50 ? 2 : 3;
-    schreibe(bild, pollenName(i), ox + 158, y, lvl ? WEISS : HELL, LINKS);
+    schreibe(bild, pollenName(i), PX, y, lvl ? WEISS : HELL, LINKS);
     static const uint16_t PF[] = {0, 0x8F68, 0xFE84, 0xF9E8};
     for (int s = 0; s < 3; s++) {
-      uint16_t c = s < lvl ? PF[lvl] : bild.alphaBlend(50, WEISS, hintergrund(ox + 250, y - 6));
-      bild.fillSmoothRoundRect(ox + 238 + s * 26, y - 11, 22, 9, 4, c);
+      uint16_t c = s < lvl ? PF[lvl] : bild.alphaBlend(50, WEISS, hintergrund(BX + 12, y - 6));
+      bild.fillSmoothRoundRect(BX + s * 26, y - 11, 22, 9, 4, c);
     }
   }
 }
@@ -414,19 +509,20 @@ void seiteLuft(int ox, uint32_t t) {
 void seiteRadar(int ox, uint32_t t) {
   titel(ox, TX("Regenradar", "Rain radar"), t);
   RadarStand r;
-  if (!radarHolen(r) || (!r.karte && !r.bilder)) {
-    schrift(bild, S_M);
-    schreibe(bild, TX("Radar wird geladen …", "Loading radar …"), ox + B / 2, 100, HELL, MITTE);
+  // nach dem Wechsel quer/hochkant passt der alte Ausschnitt nicht - bis der neue geladen ist
+  if (!radarHolen(r) || (!r.karte && !r.bilder) || r.b != B) {
+    schrift(bild, hoch() ? S_K : S_M);
+    schreibe(bild, TX("Radar wird geladen …", "Loading radar …"), ox + B / 2, H / 2 + 10, HELL, MITTE);
     return;
   }
-  const int Y0 = H - RADAR_H;
+  const int Y0 = H - r.h;
   // Bilder nacheinander, das neueste bleibt etwas laenger stehen
   int nr = r.bilder ? min((int)((t / 500) % (r.bilder + 4)), r.bilder - 1) : -1;
   const uint8_t *radar = nr >= 0 ? r.bild[nr] : nullptr;
-  int xa = max(0, -ox), xe = min(RADAR_B, B - ox);  // nur der sichtbare Teil (beim Umblaettern)
-  for (int y = 0; y < RADAR_H; y++) {
-    const uint16_t *kz = r.kartePixel + y * RADAR_B;
-    const uint8_t *rz = radar ? radar + y * RADAR_B * 3 : nullptr;
+  int xa = max(0, -ox), xe = min(r.b, B - ox);  // nur der sichtbare Teil (beim Umblaettern)
+  for (int y = 0; y < r.h; y++) {
+    const uint16_t *kz = r.kartePixel + y * r.b;
+    const uint8_t *rz = radar ? radar + y * r.b * 3 : nullptr;
     for (int x = xa; x < xe; x++) {
       uint16_t c = r.karte ? kz[x] : farbe(20, 24, 32);
       if (rz && rz[x * 3 + 2] > 8) c = bild.alphaBlend(rz[x * 3 + 2], rz[x * 3] | (rz[x * 3 + 1] << 8), c);
@@ -435,7 +531,7 @@ void seiteRadar(int ox, uint32_t t) {
   }
 
   // eigener Ort in der Mitte, pulsierend
-  int mx = ox + RADAR_B / 2, my = Y0 + RADAR_H / 2;
+  int mx = ox + r.b / 2, my = Y0 + r.h / 2;
   float puls = fmodf(t / 1400.0f, 1.0f);
   bild.drawSmoothCircle(mx, my, 4 + puls * 14, bild.alphaBlend(255 * (1 - puls), farbe(255, 198, 44), hintergrund(mx, my - 10)),
                         hintergrund(mx, my - 10));
@@ -445,29 +541,31 @@ void seiteRadar(int ox, uint32_t t) {
   // trocken im ganzen Ausschnitt: deutlich sagen, statt nur eine leere Karte zu zeigen
   if (r.bilder && !r.regen) {
     const char *txt = TX("Kein Regen in der Nähe", "No rain nearby");
-    schrift(bild, S_M);
-    int w = breite(bild, txt) + 24;
+    schrift(bild, hoch() ? S_K : S_M);
+    int w = min(B - 6, breite(bild, txt) + 24);
     bild.fillSmoothRoundRect(mx - w / 2, my + 16, w, 26, 13, farbe(16, 22, 34), hintergrund(mx, my + 16));
-    schreibe(bild, txt, mx, my + 35, WEISS, MITTE);
+    schreibe(bild, txt, mx, my + (hoch() ? 34 : 35), WEISS, MITTE);
   }
 
-  // Uhrzeit des gezeigten Bilds und Quellen
+  // Uhrzeit des gezeigten Bilds und Quellen - hochkant die Uhrzeit oben auf der Karte,
+  // weil unten die Seitenpunkte sitzen
+  int uy = hoch() ? Y0 + 20 : H - 8;
   if (nr >= 0) {
     struct tm z;
     localtime_r(&r.zeit[nr], &z);
     char uhr[8];
     strftime(uhr, sizeof(uhr), "%H:%M", &z);
     schrift(bild, S_MF);
-    schreibe(bild, uhr, ox + 8, H - 8, nr == r.bilder - 1 ? farbe(255, 198, 44) : WEISS, LINKS);
+    schreibe(bild, uhr, ox + 8, uy, nr == r.bilder - 1 ? farbe(255, 198, 44) : WEISS, LINKS);
     // kleine Zeitleiste: ein Strich je Bild
     for (int i = 0; i < r.bilder; i++)
-      bild.fillRect(ox + 62 + i * 7, H - 14, 5, 4, i == nr ? WEISS : bild.alphaBlend(90, WEISS, hintergrund(ox + 62 + i * 7, H - 14)));
+      bild.fillRect(ox + 62 + i * 7, uy - 6, 5, 4, i == nr ? WEISS : bild.alphaBlend(90, WEISS, hintergrund(ox + 62 + i * 7, uy - 6)));
   } else {
     schrift(bild, S_K);
-    schreibe(bild, TX("Noch keine Radarbilder", "No radar images yet"), ox + 8, H - 8, HELL, LINKS);
+    schreibe(bild, TX("Noch keine Radarbilder", "No radar images yet"), ox + 8, uy, HELL, LINKS);
   }
   schrift(bild, S_K);
-  schreibe(bild, "© OSM · RainViewer", ox + B - 6, H - 8, HELL, RECHTS);
+  schreibe(bild, "© OSM · RainViewer", ox + B - 6, hoch() ? H - 14 : H - 8, HELL, RECHTS);
 }
 
 // ------------------------------------------------------------
@@ -477,11 +575,14 @@ void seiteVerlauf(int ox, uint32_t t) {
   titel(ox, TX("Letzte 7 Tage", "Last 7 days"), t);
   static Verlauf v;  // 2 KB - nicht auf den Stack
   if (!verlaufHolen(v)) {
-    schrift(bild, S_M);
-    schreibe(bild, TX("Verlauf wird geladen …", "Loading history …"), ox + B / 2, 100, HELL, MITTE);
+    schrift(bild, hoch() ? S_K : S_M);
+    schreibe(bild, TX("Verlauf wird geladen …", "Loading history …"), ox + B / 2, H / 2 + 10, HELL, MITTE);
     return;
   }
-  const int X0 = 36, X1 = 308, YO = 36, YU = 116, RU = 140, RH = 18;
+  // Diagramm (YO..YU), Regen (Unterkante RU, Hoehe RH), Wochentage (WY) - hochkant schmaler und hoeher
+  const bool hk = hoch();
+  const int X0 = hk ? 30 : 36, X1 = hk ? B - 8 : 308, YO = hk ? 76 : 36, YU = hk ? 226 : 116;
+  const int RU = hk ? 268 : 140, RH = hk ? 26 : 18, WY = hk ? 290 : 156;
   int n = v.n;
   float tmin = 999, tmax = -999, dmin = 9999, dmax = 0;
   for (int i = 0; i < n; i++) {
@@ -501,6 +602,10 @@ void seiteVerlauf(int ox, uint32_t t) {
   // Tagesgrenzen (Mitternacht) und Wochentage
   static const char *WT_DE[] = {"So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"};
   static const char *WT_EN[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+  // hochkant ist ein Tag nur ~19 Pixel breit - dort nur der Anfangsbuchstabe
+  static const char *WT1_DE[] = {"S", "M", "D", "M", "D", "F", "S"};
+  static const char *WT1_EN[] = {"S", "M", "T", "W", "T", "F", "S"};
+  const char **WT = hk ? TX(WT1_DE, WT1_EN) : TX(WT_DE, WT_EN);
   schrift(bild, S_K);
   for (int d = 0; d <= 8; d++) {
     int a = max(0, d * 24 - v.ersteStunde), e = min(n - 1, (d + 1) * 24 - v.ersteStunde - 1);
@@ -508,7 +613,7 @@ void seiteVerlauf(int ox, uint32_t t) {
     if (a > 0) {
       for (int y = YO; y < RU; y += 3) bild.drawPixel(px(a), y, bild.alphaBlend(90, WEISS, hintergrund(px(a), y)));
     }
-    if (e - a >= 8) schreibe(bild, TX(WT_DE, WT_EN)[(v.ersterWochentag + d) % 7], (px(a) + px(e)) / 2, 156, HELL, MITTE);
+    if (e - a >= 8) schreibe(bild, WT[(v.ersterWochentag + d) % 7], (px(a) + px(e)) / 2, WY, HELL, MITTE);
   }
 
   // Temperatur als Flaeche mit Linie
@@ -543,7 +648,7 @@ void seiteVerlauf(int ox, uint32_t t) {
   if (!isnan(v.druck[letzter])) {
     char z[16];
     snprintf(z, sizeof(z), "%d hPa", (int)lroundf(v.druck[letzter]));
-    schreibe(bild, z, ox + X1, YO - 4, farbe(140, 200, 255), RECHTS);
+    schreibe(bild, z, ox + X1, YO - (hk ? 10 : 4), farbe(140, 200, 255), RECHTS);
   }
 }
 
@@ -558,6 +663,30 @@ void seiteOrte(int ox, uint32_t t) {
   liste[0].temp = w.temp, liste[0].max = w.tagMax[0], liste[0].min = w.tagMin[0];
   liste[0].code = w.code, liste[0].tag = w.tag;
   int n = 1 + orteHolen(liste + 1);
+  if (hoch()) {
+    // hochkant: je Ort zwei Zeilen - oben Name, darunter Temperatur und Hoechst-/Tiefstwert
+    int zh = min(64, 252 / n);
+    for (int i = 0; i < n; i++) {
+      int y = HOCH_TOP + i * zh, mitte = y + (zh - 4) / 2;
+      bild.fillSmoothRoundRect(ox + 8, y, B - 16, zh - 4, 8, bild.alphaBlend(i ? 70 : 100, TFT_BLACK, hintergrund(ox + B / 2, mitte)));
+      const OrtWetter &o = liste[i];
+      if (o.gueltig) zeichneBild(bild, bildFuerCode(o.code), o.tag, ox + 32, mitte + 2, min(40, zh - 10), t + i * 500);
+      schrift(bild, S_MF);
+      schreibe(bild, kuerzen(o.name, B - 72).c_str(), ox + 58, mitte - 6, WEISS, LINKS);
+      schrift(bild, S_K);
+      if (!o.gueltig) {
+        schreibe(bild, "…", ox + 58, mitte + 16, HELL, LINKS);
+        continue;
+      }
+      schrift(bild, S_MF);
+      schreibeTemp(bild, o.temp, ox + 58, mitte + 18, WEISS, LINKS);
+      schrift(bild, S_K);
+      char z[24];
+      snprintf(z, sizeof(z), "%d° / %d°", (int)lroundf(o.max), (int)lroundf(o.min));
+      schreibe(bild, z, ox + B - 14, mitte + 17, HELL, RECHTS);
+    }
+    return;
+  }
   int zh = min(36, 136 / n), y0 = 26;
   for (int i = 0; i < n; i++) {
     int y = y0 + i * zh, mitte = y + (zh - 4) / 2;
@@ -602,10 +731,11 @@ void statusLeiste() {
   char uhr[8] = "--:--";
   if (getLocalTime(&zeit, 0)) strftime(uhr, sizeof(uhr), "%H:%M", &zeit);
   schrift(bild, S_MF);
-  schreibe(bild, uhr, 283, 18, WEISS, RECHTS);
+  if (hoch()) schreibe(bild, uhr, 8, 18, WEISS, LINKS);  // hochkant: Uhr links, Titel eine Zeile tiefer
+  else schreibe(bild, uhr, B - 37, 18, WEISS, RECHTS);
 
   // Akku-Symbol
-  int x = 289, y = 6;
+  int x = B - 31, y = 6;
   bild.drawRoundRect(x, y, 22, 12, 2, WEISS);
   bild.fillRect(x + 22, y + 4, 2, 4, WEISS);
   if (akkuVolt > 4.3f) {  // haengt am USB
@@ -629,38 +759,42 @@ void seitenPunkte() {
   int x = B / 2 - (n - 1) * 5;
   for (int i = 0; i < SEITEN_ANZAHL; i++) {
     if (!seiteAn(i)) continue;
-    bild.fillSmoothCircle(x, 165, 2, i == seite ? WEISS : bild.alphaBlend(90, WEISS, hintergrund(x, 165)));
+    bild.fillSmoothCircle(x, H - 5, 2, i == seite ? WEISS : bild.alphaBlend(90, WEISS, hintergrund(x, H - 5)));
     x += 10;
   }
 }
 
 void lichtAnzeige(uint32_t t) {
   if ((int32_t)(lichtAnzeigeBis - t) <= 0) return;
-  bild.fillSmoothRoundRect(98, 126, 124, 26, 13, bild.alphaBlend(200, TFT_BLACK, hintergrund(160, 139)));
+  int x = B / 2 - 62, y = H - 44;
+  bild.fillSmoothRoundRect(x, y, 124, 26, 13, bild.alphaBlend(200, TFT_BLACK, hintergrund(B / 2, y + 13)));
   for (int k = 0; k < 4; k++) {
     bool an = k < 4 - einst.licht;
-    bild.fillSmoothRoundRect(110 + k * 26, 134, 22, 10, 4, an ? farbe(255, 210, 70) : farbe(70, 74, 84));
+    bild.fillSmoothRoundRect(x + 12 + k * 26, y + 8, 22, 10, 4, an ? farbe(255, 210, 70) : farbe(70, 74, 84));
   }
 }
 
 // Taste IO0 lange halten: neue Sprache, dazu wo die Einstellungsseite ist
 void infoAnzeige(uint32_t t) {
   if ((int32_t)(infoBis - t) <= 0) return;
-  bild.fillSmoothRoundRect(30, 26, 260, 124, 14, bild.alphaBlend(225, TFT_BLACK, hintergrund(160, 88)));
+  int bb = min(260, B - 10), y0 = H / 2 - 62;  // Kasten in der Mitte, quer wie hochkant
+  bild.fillSmoothRoundRect(B / 2 - bb / 2, y0, bb, 124, 14, bild.alphaBlend(225, TFT_BLACK, hintergrund(B / 2, H / 2)));
   // oben die (gerade gewaehlte) Sprache, darunter wo die Einstellungsseite ist
   schrift(bild, S_GF);
-  schreibe(bild, TX("Deutsch", "English"), B / 2, 54, farbe(255, 198, 44), MITTE);
+  schreibe(bild, TX("Deutsch", "English"), B / 2, y0 + 28, farbe(255, 198, 44), MITTE);
   schrift(bild, S_K);
-  schreibe(bild, TX("Einstellungen im Browser:", "Settings in your browser:"), B / 2, 76, HELL, MITTE);
+  schreibe(bild, kuerzen(TX("Einstellungen im Browser:", "Settings in your browser:"), bb - 12).c_str(), B / 2, y0 + 50, HELL, MITTE);
+  String adresse = String(einst.name) + ".local";
   schrift(bild, S_M);
-  schreibe(bild, (String(einst.name) + ".local").c_str(), B / 2, 98, WEISS, MITTE);
+  if (breite(bild, adresse.c_str()) > bb - 12) schrift(bild, S_K);
+  schreibe(bild, kuerzen(adresse, bb - 12).c_str(), B / 2, y0 + 72, WEISS, MITTE);
   schrift(bild, S_K);
-  schreibe(bild, (String(TX("oder ", "or ")) + WiFi.localIP().toString()).c_str(), B / 2, 118, WEISS, MITTE);
+  schreibe(bild, (String(TX("oder ", "or ")) + WiFi.localIP().toString()).c_str(), B / 2, y0 + 92, WEISS, MITTE);
   char z[40];
   if (FIRMWARE_BUILD) snprintf(z, sizeof(z), "Build %d", FIRMWARE_BUILD);
   else strcpy(z, TX("eigener Build", "own build"));
   if (updateNeuerBuild()) snprintf(z, sizeof(z), TX("Build %d - neu: %d", "Build %d - new: %d"), FIRMWARE_BUILD, updateNeuerBuild());
-  schreibe(bild, z, B / 2, 138, HELL, MITTE);
+  schreibe(bild, z, B / 2, y0 + 112, HELL, MITTE);
 }
 
 // ------------------------------------------------------------
@@ -668,10 +802,11 @@ void infoAnzeige(uint32_t t) {
 // ------------------------------------------------------------
 void startBild(uint32_t t) {
   zeichneHimmel(bild, HEITER, false, t, false);
-  zeichneBild(bild, HEITER, true, B / 2, 62, 100, t);
+  const int dy = hoch() ? 54 : 0;  // hochkant alles etwas tiefer in die Mitte
+  zeichneBild(bild, HEITER, true, B / 2, 62 + dy, 100, t);
 
-  schrift(bild, S_GF);
-  schreibe(bild, kuerzen(String(TX("Wetter ", "Weather ")) + ortAktuell().name, 300).c_str(), B / 2, 128, WEISS, MITTE);
+  schrift(bild, hoch() ? S_MF : S_GF);
+  schreibe(bild, kuerzen(String(TX("Wetter ", "Weather ")) + ortAktuell().name, B - 20).c_str(), B / 2, 128 + dy, WEISS, MITTE);
 
   char zeile1[40], zeile2[40] = "";
   const char *punkte[] = {"", ".", "..", "..."};
@@ -693,8 +828,8 @@ void startBild(uint32_t t) {
       break;
   }
   schrift(bild, S_K);
-  schreibe(bild, zeile1, B / 2, 149, HELL, MITTE);
-  schreibe(bild, zeile2, B / 2, 165, farbe(150, 160, 190), MITTE);
+  schreibe(bild, kuerzen(zeile1, B - 8).c_str(), B / 2, 149 + dy, HELL, MITTE);
+  schreibe(bild, kuerzen(zeile2, B - 8).c_str(), B / 2, 165 + dy, farbe(150, 160, 190), MITTE);
 }
 
 // ------------------------------------------------------------
@@ -729,14 +864,40 @@ void wlanBild(WlanPhase phase, const char *netz) {
   zuletzt = t;
 
   zeichneHimmel(bild, KLAR, false, t, false);
-  schrift(bild, S_GF);
+  const bool hk = hoch();
+  const int dy = hk ? 54 : 0;  // hochkant: Bild + Text tiefer in die Mitte
+  schrift(bild, hk ? S_MF : S_GF);
 
-  if (phase == WLAN_SUCHE) {
-    zeichneBild(bild, HEITER, true, B / 2, 62, 100, t);
-    schreibe(bild, kuerzen(String(TX("Wetter ", "Weather ")) + ortAktuell().name, 300).c_str(), B / 2, 128, WEISS, MITTE);
+  if (hk && (phase == WLAN_EINRICHTUNG || phase == WLAN_ORT)) {
+    // hochkant: Symbol oben, Anleitung in kurzen Zeilen darunter
+    const uint16_t gelb = farbe(255, 198, 44);
+    bool ort = phase == WLAN_ORT;
+    schreibe(bild, ort ? TX("WLAN verbunden!", "Wi-Fi connected!") : TX("WLAN einrichten", "Wi-Fi setup"), B / 2, 30,
+             ort ? farbe(90, 220, 110) : WEISS, MITTE);
+    if (ort) ortSymbol(B / 2, 88, t);
+    else wlanSymbol(B / 2, 112, t);
+    struct Zeile { const char *de, *en; bool gelb; };
+    static const Zeile EINR[] = {{"1. Mit dem Handy", "1. Connect your phone", false}, {"ins WLAN", "to the Wi-Fi", false},
+                                 {WLAN_SETUP_NAME, WLAN_SETUP_NAME, true}, {"2. Die Seite öffnet sich", "2. A page opens", false},
+                                 {"selbst: dein WLAN", "by itself: choose", false}, {"wählen, Passwort", "your Wi-Fi, enter", false},
+                                 {"eingeben", "the password", false}};
+    static const Zeile ORT[] = {{"3. Jetzt am Handy:", "3. Now on your phone:", false}, {"Wo steht die", "Where is the", true},
+                                {"Station?", "station?", true}, {"Ort oder PLZ suchen", "Search town or", false},
+                                {"oder Vorschlag", "postcode or tap", false}, {"antippen", "the suggestion", false}};
+    const Zeile *z = ort ? ORT : EINR;
+    int n = ort ? 6 : 7;
+    for (int i = 0; i < n; i++) {
+      const char *txt = TX(z[i].de, z[i].en);
+      schrift(bild, z[i].gelb ? S_MF : S_K);
+      if (breite(bild, txt) > B - 8) schrift(bild, S_M);  // "Wetterstation-Setup" ist fett zu breit
+      schreibe(bild, txt, B / 2, 162 + i * 21, z[i].gelb ? gelb : HELL, MITTE);
+    }
+  } else if (phase == WLAN_SUCHE) {
+    zeichneBild(bild, HEITER, true, B / 2, 62 + dy, 100, t);
+    schreibe(bild, kuerzen(String(TX("Wetter ", "Weather ")) + ortAktuell().name, B - 20).c_str(), B / 2, 128 + dy, WEISS, MITTE);
     schrift(bild, S_K);
-    schreibe(bild, TX("Verbinde mit WLAN ...", "Connecting to Wi-Fi ..."), B / 2, 149, HELL, MITTE);
-    schreibe(bild, netz, B / 2, 165, farbe(150, 160, 190), MITTE);
+    schreibe(bild, TX("Verbinde mit WLAN ...", "Connecting to Wi-Fi ..."), B / 2, 149 + dy, HELL, MITTE);
+    schreibe(bild, kuerzen(netz, B - 8).c_str(), B / 2, 165 + dy, farbe(150, 160, 190), MITTE);
   } else if (phase == WLAN_EINRICHTUNG) {
     schreibe(bild, TX("WLAN einrichten", "Wi-Fi setup"), B / 2, 27, WEISS, MITTE);
     wlanSymbol(46, 110, t);
@@ -749,10 +910,10 @@ void wlanBild(WlanPhase phase, const char *netz) {
     schreibe(bild, TX("dein WLAN wählen und", "choose your Wi-Fi and"), 94, 134, HELL, LINKS);
     schreibe(bild, TX("Passwort eingeben", "enter the password"), 94, 156, HELL, LINKS);
   } else if (phase == WLAN_TESTE) {
-    zeichneBild(bild, HEITER, true, B / 2, 62, 100, t);
-    schreibe(bild, TX("Verbinde ...", "Connecting ..."), B / 2, 128, WEISS, MITTE);
+    zeichneBild(bild, HEITER, true, B / 2, 62 + dy, 100, t);
+    schreibe(bild, TX("Verbinde ...", "Connecting ..."), B / 2, 128 + dy, WEISS, MITTE);
     schrift(bild, S_K);
-    schreibe(bild, netz, B / 2, 152, farbe(255, 198, 44), MITTE);
+    schreibe(bild, kuerzen(netz, B - 8).c_str(), B / 2, 152 + dy, farbe(255, 198, 44), MITTE);
   } else if (phase == WLAN_ORT) {
     schreibe(bild, TX("WLAN verbunden!", "Wi-Fi connected!"), B / 2, 27, farbe(90, 220, 110), MITTE);
     ortSymbol(46, 100, t);
@@ -764,16 +925,21 @@ void wlanBild(WlanPhase phase, const char *netz) {
     schreibe(bild, TX("Ort oder PLZ suchen", "Search town or postcode"), 94, 118, HELL, LINKS);
     schreibe(bild, TX("oder Vorschlag antippen", "or tap the suggestion"), 94, 140, HELL, LINKS);
   } else if (phase == WLAN_OK) {
-    zeichneBild(bild, KLAR, true, B / 2, 62, 100, t);
-    schreibe(bild, TX("Fertig!", "Done!"), B / 2, 128, farbe(90, 220, 110), MITTE);
+    zeichneBild(bild, KLAR, true, B / 2, 62 + dy, 100, t);
+    schreibe(bild, TX("Fertig!", "Done!"), B / 2, 128 + dy, farbe(90, 220, 110), MITTE);
     schrift(bild, S_K);
-    schreibe(bild, *netz ? kuerzen(String(TX("Wetter für ", "Weather for ")) + netz, 300).c_str() : TX("Handy wieder ins eigene WLAN", "Phone back to your Wi-Fi"), B / 2, 152,
-             HELL, MITTE);
+    String z = *netz ? String(TX("Wetter für ", "Weather for ")) + netz : String(TX("Handy wieder ins eigene WLAN", "Phone back to your Wi-Fi"));
+    schreibe(bild, kuerzen(z, B - 8).c_str(), B / 2, 152 + dy, HELL, MITTE);
   } else {
-    zeichneBild(bild, GEWITTER, true, B / 2, 58, 92, t);
-    schreibe(bild, TX("Hat nicht geklappt", "That did not work"), B / 2, 128, farbe(255, 110, 100), MITTE);
+    zeichneBild(bild, GEWITTER, true, B / 2, 58 + dy, 92, t);
+    schreibe(bild, TX("Hat nicht geklappt", "That did not work"), B / 2, 128 + dy, farbe(255, 110, 100), MITTE);
     schrift(bild, S_K);
-    schreibe(bild, TX("Passwort falsch? Nochmal versuchen", "Wrong password? Try again"), B / 2, 152, HELL, MITTE);
+    if (hk) {
+      schreibe(bild, TX("Passwort falsch?", "Wrong password?"), B / 2, 152 + dy, HELL, MITTE);
+      schreibe(bild, TX("Nochmal versuchen", "Try again"), B / 2, 172 + dy, HELL, MITTE);
+    } else {
+      schreibe(bild, TX("Passwort falsch? Nochmal versuchen", "Wrong password? Try again"), B / 2, 152, HELL, MITTE);
+    }
   }
   bild.pushSprite(0, 0);
 }
@@ -785,18 +951,19 @@ void wlanBild(WlanPhase phase, const char *netz) {
 void updateBild(int prozent, const char *text) {
   uint32_t t = millis();
   zeichneHimmel(bild, KLAR, false, t, false);
+  const int dy = hoch() ? 75 : 0, bx = hoch() ? 16 : 40, bb = B - 2 * bx;  // hochkant: tiefer und schmaler
   schrift(bild, S_GF);
-  schreibe(bild, TX("Neue Version", "New version"), B / 2, 56, WEISS, MITTE);
+  schreibe(bild, TX("Neue Version", "New version"), B / 2, 56 + dy, WEISS, MITTE);
 
-  bild.fillSmoothRoundRect(40, 74, 240, 16, 8, farbe(40, 48, 80));
-  if (prozent > 0) bild.fillSmoothRoundRect(40, 74, max(16, 240 * prozent / 100), 16, 8, farbe(255, 198, 44));
+  bild.fillSmoothRoundRect(bx, 74 + dy, bb, 16, 8, farbe(40, 48, 80));
+  if (prozent > 0) bild.fillSmoothRoundRect(bx, 74 + dy, max(16, bb * prozent / 100), 16, 8, farbe(255, 198, 44));
 
   char z[16];
   snprintf(z, sizeof(z), "%d %%", prozent);
   schrift(bild, S_M);
-  schreibe(bild, z, B / 2, 120, WEISS, MITTE);
+  schreibe(bild, z, B / 2, 120 + dy, WEISS, MITTE);
   schrift(bild, S_K);
-  schreibe(bild, text, B / 2, 146, HELL, MITTE);
+  schreibe(bild, kuerzen(text, B - 8).c_str(), B / 2, 146 + dy, HELL, MITTE);
   bild.pushSprite(0, 0);
 }
 
@@ -913,6 +1080,28 @@ void tasten(uint32_t t, bool hatDaten) {
   }
 }
 
+// Ausrichtung uebernehmen: Display drehen, bei quer <-> hochkant den Bildspeicher neu anlegen.
+// Lage 0 = quer (USB rechts), 1 = quer gedreht, 2 = hochkant (USB unten), 3 = hochkant (USB oben)
+void lageSetzen() {
+  static int gesetzt = -1;
+  if (einst.lage == gesetzt) return;
+  gesetzt = einst.lage;
+  static const uint8_t DREHUNG[4] = {1, 3, 0, 2};  // TFT_eSPI setRotation
+  tft.setRotation(DREHUNG[einst.lage]);
+  tft.fillScreen(TFT_BLACK);
+  int nb = einst.lage >= 2 ? 170 : 320, nh = einst.lage >= 2 ? 320 : 170;
+  if (bild.created() && nb == B) return;  // nur gedreht - gleiche Groesse
+  B = nb, H = nh;
+  bild.deleteSprite();
+  // Bildspeicher fuer den ganzen Bildschirm (liegt im PSRAM)
+  if (!bild.createSprite(B, H)) {
+    Serial.println("Zu wenig Speicher - nehme 8 Bit Farbe");
+    bild.setColorDepth(8);
+    bild.createSprite(B, H);
+  }
+  wechsel = false;  // laufende Schiebe-Animation passt nicht mehr
+}
+
 void setup() {
   // Zuerst Strom fuers Display einschalten (im Akkubetrieb sonst dunkel)
   pinMode(STROM_EIN, OUTPUT);
@@ -929,18 +1118,10 @@ void setup() {
   einstellungenLaden();
 
   tft.init();
-  tft.setRotation(einst.gedreht ? 3 : 1);  // quer, 3 = um 180 Grad gedreht (Einstellungsseite)
-  tft.fillScreen(TFT_BLACK);
+  lageSetzen();  // Ausrichtung (quer/hochkant) und Bildspeicher
 
   pinMode(LICHT_PIN, OUTPUT);
   lichtStufe(HELLIGKEIT[einst.licht]);
-
-  // Bildspeicher fuer den ganzen Bildschirm (liegt im PSRAM)
-  if (!bild.createSprite(B, H)) {
-    Serial.println("Zu wenig Speicher - nehme 8 Bit Farbe");
-    bild.setColorDepth(8);
-    bild.createSprite(B, H);
-  }
 
   // GPIO 14 beim Einschalten gedrueckt halten = WLAN neu einrichten
   bool einrichten = digitalRead(TASTER_LICHT) == LOW;
@@ -967,12 +1148,8 @@ void loop() {
   tasten(t, hatDaten);
   lichtSetzen(t);
 
-  // Bild drehen wurde auf der Einstellungsseite umgeschaltet -> sofort uebernehmen
-  static bool gedreht = einst.gedreht;
-  if (gedreht != einst.gedreht) {
-    gedreht = einst.gedreht;
-    tft.setRotation(gedreht ? 3 : 1);
-  }
+  // Ausrichtung wurde auf der Einstellungsseite umgeschaltet -> sofort uebernehmen
+  lageSetzen();
 
   // Neue Version aus dem Internet: auf Wunsch sofort, sonst wenn gerade niemand die Tasten benutzt
   bool gewuenscht = updateInstallierenGewuenscht();

@@ -16,7 +16,8 @@ void einstellungenLaden() {
   e.nachtBis = p.getUChar("bis", e.nachtBis) % 24;
   e.autoUpdate = p.getBool("auto", e.autoUpdate);
   e.sprache = p.getUChar("sprache", e.sprache) % 2;
-  e.gedreht = p.getBool("gedreht", e.gedreht);
+  // frueher gab es nur "gedreht" (quer, 180 Grad) - wird beim ersten Start uebernommen
+  e.lage = p.isKey("lage") ? p.getUChar("lage", 0) % 4 : (p.getBool("gedreht", false) ? 1 : 0);
   e.radarZoom = p.getUChar("radarzoom", e.radarZoom) % 3;
   e.warnAb = constrain(p.getUChar("warnab", e.warnAb), 1, 5);
   String n = p.getString("name", e.name);
@@ -36,7 +37,7 @@ void einstellungenSpeichern() {
   p.putUChar("bis", einst.nachtBis);
   p.putBool("auto", einst.autoUpdate);
   p.putUChar("sprache", einst.sprache);
-  p.putBool("gedreht", einst.gedreht);
+  p.putUChar("lage", einst.lage);
   p.putUChar("radarzoom", einst.radarZoom);
   p.putUChar("warnab", einst.warnAb);
   p.putString("name", einst.name);

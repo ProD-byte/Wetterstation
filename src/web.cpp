@@ -34,7 +34,7 @@ static void status() {
              ",\"einst\":{\"licht\":" + einst.licht + ",\"seiten\":" + einst.seiten + ",\"wechsel\":" + einst.wechsel +
              ",\"nacht\":" + (einst.nacht ? "true" : "false") + ",\"von\":" + einst.nachtVon + ",\"bis\":" +
              einst.nachtBis + ",\"auto\":" + (einst.autoUpdate ? "true" : "false") + ",\"sprache\":" + einst.sprache +
-             ",\"gedreht\":" + (einst.gedreht ? "true" : "false") + ",\"radarzoom\":" + einst.radarZoom +
+             ",\"lage\":" + einst.lage + ",\"radarzoom\":" + einst.radarZoom +
              ",\"warnab\":" + einst.warnAb + ",\"name\":\"" + einst.name + "\"}}";
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", j);
@@ -57,7 +57,7 @@ static void einstellungenSetzen() {
   einst.nachtBis = constrain(zahl("bis", einst.nachtBis), 0, 23);
   einst.autoUpdate = janein("auto", einst.autoUpdate);
   einst.sprache = constrain(zahl("sprache", einst.sprache), 0, 1);
-  einst.gedreht = janein("gedreht", einst.gedreht);
+  einst.lage = constrain(zahl("lage", einst.lage), 0, 3);
   einst.radarZoom = constrain(zahl("radarzoom", einst.radarZoom), 0, 2);
   einst.warnAb = constrain(zahl("warnab", einst.warnAb), 1, 5);
   einstellungenSpeichern();

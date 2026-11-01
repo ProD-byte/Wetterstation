@@ -25,8 +25,8 @@ Geschrieben mit **VS Code + PlatformIO** (Arduino-Kern 2.0.14 – TFT_eSPI läuf
 | 📶 **WLAN** | Einrichtung per Handy (WLAN „Wetterstation-Setup“), merkt sich bis zu 5 Netze |
 | 🌐 **Weltweit** | Uhrzeit, Nachtmodus, Sonnenauf- und -untergang richten sich nach der Zeitzone des gewählten Orts (inkl. Sommerzeit) |
 | 🏷️ **Mehrere Stationen** | Name im Netz änderbar (z. B. `wetterstation-kueche.local`), damit mehrere Stationen im selben WLAN erreichbar sind |
-| ⚙️ **Einstellungen** | im Browser unter **http://wetterstation.local**: Sprache, Bild drehen, Ort, weitere Orte, Ausschnitt des Regenradars (nah/mittel/weit), Warnungen, Name im Netz, Helligkeit, Seiten, Blättern, Nachtmodus, Updates |
-| 🔃 **Einbaulage** | Bild um 180° drehen (Einstellungsseite), wenn das Board andersherum im Gehäuse sitzt. Das T-Display-S3 hat keinen Lagesensor, deshalb dreht es sich nicht von selbst |
+| ⚙️ **Einstellungen** | im Browser unter **http://wetterstation.local**: Sprache, Ausrichtung, Ort, weitere Orte, Ausschnitt des Regenradars (nah/mittel/weit), Warnungen, Name im Netz, Helligkeit, Seiten, Blättern, Nachtmodus, Updates |
+| 🔃 **Ausrichtung** | quer oder hochkant, jeweils in beide Richtungen (USB rechts/links bzw. unten/oben) – alle Seiten haben eine eigene Hochkant-Anordnung. Umschalten auf der Einstellungsseite; das T-Display-S3 hat keinen Lagesensor, deshalb dreht es sich nicht von selbst |
 | 🌍 **Sprache** | Deutsch oder Englisch – Display, Einstellungsseite und Einrichtung. Bei der Einrichtung übernimmt die Station die Sprache des Handys |
 | 🔄 **Updates** | von selbst aus dem Internet (neue Builds von GitHub), über WLAN (OTA) oder mit dem Online-Flasher |
 
@@ -146,7 +146,7 @@ Now (animated weather, feels like, wind, humidity, “rain from 14:15”) · nex
 | **IO14** | brightness (4 levels) | hold 3 s = set up Wi-Fi and location again |
 
 ### Settings
-Open **http://wetterstation.local** (or the station’s IP address) on the same Wi-Fi: language, location, more places, radar area, warnings, brightness, pages, night mode, rotate picture 180°, automatic updates.
+Open **http://wetterstation.local** (or the station’s IP address) on the same Wi-Fi: language, location, more places, radar area, warnings, brightness, pages, night mode, orientation (landscape or portrait, either way round), automatic updates.
 **Several stations on one Wi-Fi?** Give each one its own name there (e.g. `wetterstation-kitchen`) – it is then reachable as `wetterstation-kitchen.local`.
 
 ### Updates

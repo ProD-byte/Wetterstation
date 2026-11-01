@@ -87,7 +87,8 @@ select{font:inherit;font-size:15px;padding:8px 10px;border-radius:12px;border:1p
     <div class="zeile"><span data-t="seiten">Seiten</span></div>
     <div class="seg" id="seiten" style="margin-bottom:6px"></div>
     <div class="zeile"><span data-t="blaettern">Weiterblättern</span><select id="wechsel"></select></div>
-    <div class="zeile"><span><span data-t="drehen">Bild um 180° drehen</span><small data-t="drehenKlein">wenn das Board andersherum eingebaut ist und das Bild auf dem Kopf steht</small></span><label class="schalter"><input type="checkbox" id="gedreht"><i></i></label></div>
+    <div class="zeile"><span><span data-t="lage">Ausrichtung</span><small data-t="lageKlein">wie das Board steht – das Bild dreht sich mit</small></span></div>
+    <div class="seg" id="lage" style="margin-bottom:6px"></div>
     <div class="zeile"><span><span data-t="radar">Regenradar</span><small id="radarKlein"></small></span><div class="seg" id="radarzoom"></div></div>
     <div class="zeile"><span><span data-t="warnTitel">Unwetterwarnungen</span><small data-t="warnKlein">vom Deutschen Wetterdienst, nur in Deutschland</small></span><div class="seg" id="warnab"></div></div>
   </div>
@@ -129,7 +130,7 @@ const EN = {
   radar: 'Rain radar', warnTitel: 'Weather warnings', warnKlein: 'from the German Weather Service, Germany only',
   nameTitel: 'Name on the network', speichern: 'Save',
   nameHinweis: 'Several weather stations on the same Wi-Fi need different names, e.g. “wetterstation-kitchen”. The station can then be reached under this name with “.local”.',
-  drehen: 'Rotate picture by 180°', drehenKlein: 'if the board is mounted the other way round and the picture is upside down',
+  lage: 'Orientation', lageKlein: 'how the board stands – the picture turns with it',
   nachtmodus: 'Night mode', nachtDunkel: 'Dark display at night', nachtKlein: 'strongly dimmed, buttons light it up briefly',
   von: 'from', bis: 'until', autoUpd: 'Install new versions by itself', autoKlein: 'gets them from GitHub, no computer needed',
   wlan: 'Wi-Fi', neuEinrichten: 'Set up again', wlanHinweis: 'Restarts and opens the Wi-Fi “Wetterstation-Setup” – then set it up with your phone like the first time.'
@@ -174,7 +175,10 @@ function zeigen() {
   $('#wechsel').value = e.wechsel;
   $('#nacht').checked = e.nacht; $('#von').value = e.von; $('#bis').value = e.bis;
   $('#auto').checked = e.auto;
-  $('#gedreht').checked = e.gedreht;
+  const LAGE = L(['Quer, USB rechts', 'Quer, USB links', 'Hochkant, USB unten', 'Hochkant, USB oben'],
+                 ['Landscape, USB right', 'Landscape, USB left', 'Portrait, USB down', 'Portrait, USB up']);
+  $('#lage').innerHTML = LAGE.map((t, i) => `<button data-i="${i}" class="${i === e.lage ? 'an' : ''}">${t}</button>`).join('');
+  document.querySelectorAll('#lage button').forEach(b => b.onclick = () => speichern({lage: +b.dataset.i}));
   const ZOOM = [[L('Nah', 'Near'), '120 × 55 km'], [L('Mittel', 'Medium'), '240 × 110 km'], [L('Weit', 'Far'), '480 × 220 km']];
   $('#radarzoom').innerHTML = ZOOM.map(([t], i) => `<button data-i="${i}" class="${i === e.radarzoom ? 'an' : ''}">${t}</button>`).join('');
   $('#radarKlein').textContent = L('Ausschnitt etwa ', 'area about ') + ZOOM[e.radarzoom || 0][1];
@@ -268,7 +272,6 @@ $('#nacht').onchange = e => speichern({nacht: e.target.checked ? 1 : 0});
 $('#von').onchange = e => speichern({von: +e.target.value});
 $('#bis').onchange = e => speichern({bis: +e.target.value});
 $('#auto').onchange = e => speichern({auto: e.target.checked ? 1 : 0});
-$('#gedreht').onchange = e => speichern({gedreht: e.target.checked ? 1 : 0});
 
 $('#sucheForm').onsubmit = async e => {
   e.preventDefault();

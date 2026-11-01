@@ -252,11 +252,16 @@ static void aufgabe(void *) {
     }
 
     // Regenradar alle 10 Minuten (RainViewer erneuert seine Bilder in diesem Takt) - und sofort, wenn der Zoom geaendert wurde
+    // (oder hochkant/quer gewechselt wurde - der Ausschnitt hat dann ein anderes Format)
     static int radarZoom = einst.radarZoom;
-    if (radarZoom != einst.radarZoom) radarZoom = einst.radarZoom, naechstesRadar = millis();
+    static bool radarHoch = einst.lage >= 2;
+    if (radarZoom != einst.radarZoom || radarHoch != (einst.lage >= 2)) {
+      radarZoom = einst.radarZoom, radarHoch = einst.lage >= 2;
+      naechstesRadar = millis();
+    }
     if (aktuell.gueltig && (int32_t)(millis() - naechstesRadar) >= 0) {
       Ort ort = ortAktuell();
-      radarAktualisieren(ort.lat, ort.lon, radarZoom);
+      radarAktualisieren(ort.lat, ort.lon, radarZoom, radarHoch);
       naechstesRadar = millis() + ABSTAND_RADAR;
     }
 

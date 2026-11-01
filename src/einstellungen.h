@@ -14,7 +14,8 @@ struct Einstellungen {
   uint8_t nachtBis = 6;
   bool autoUpdate = true;     // neue Builds von GitHub selbst installieren
   uint8_t sprache = 0;        // 0 = Deutsch, 1 = Englisch
-  bool gedreht = false;       // Bild um 180 Grad drehen (Board andersherum eingebaut)
+  uint8_t lage = 0;           // Ausrichtung: 0 = quer (USB rechts), 1 = quer gedreht (USB links),
+                              //              2 = hochkant (USB unten), 3 = hochkant (USB oben)
   uint8_t radarZoom = 0;      // Ausschnitt des Regenradars: 0 = nah, 1 = mittel, 2 = weit
   uint8_t warnAb = 1;         // DWD-Warnungen zeigen ab Stufe: 1 = alle (gelb), 2 = orange, 3 = rot, 5 = keine
   char name[25] = "wetterstation";  // Name im Netz (name.local) - verschieden, wenn mehrere Stationen im WLAN sind
