@@ -29,9 +29,9 @@ function wetterEinbauen(raw) {
   ersetze('abschnitt', '<footer class="dl-foot">', WETTER_ABSCHNITT + '\n\n  <footer class="dl-foot">');
 
   // --- Uebersetzungen (hinter den App-Texten) ---
-  ersetze('en wetter', "app_qr:'Scan with your phone',", "app_qr:'Scan with your phone',\n" + WETTER_EN + ',');
-  ersetze('es wetter', "app_qr:'Escanea con el móvil',", "app_qr:'Escanea con el móvil',\n" + WETTER_ES + ',');
-  ersetze('fr wetter', "app_qr:'Scanne avec ton téléphone',", "app_qr:'Scanne avec ton téléphone',\n" + WETTER_FR + ',');
+  ersetze('en wetter', "app_qr:'Scan with your phone',", "app_qr:'Scan with your phone',\n" + WETTER_EN + ',\n' + WETTER_WEB_EN + ',');
+  ersetze('es wetter', "app_qr:'Escanea con el móvil',", "app_qr:'Escanea con el móvil',\n" + WETTER_ES + ',\n' + WETTER_WEB_ES + ',');
+  ersetze('fr wetter', "app_qr:'Scanne avec ton téléphone',", "app_qr:'Scanne avec ton téléphone',\n" + WETTER_FR + ',\n' + WETTER_WEB_FR + ',');
 
   // --- Build-Nummer anzeigen + Hoehe der Simulation anpassen ---
   ersetze('var build', "var sprache='de',build=null,buildCam=null,buildXiao=null;",
@@ -47,6 +47,30 @@ function wetterEinbauen(raw) {
 
 var WETTER_SEITE = 'https://prod-byte.github.io/Wetterstation';
 var WETTER_GH = '<a href="https://github.com/ProD-byte/Wetterstation" target="_blank" rel="noopener">GitHub</a>';
+
+// Kasten "Zur Einstellungsseite" (wie "Zur Auto-Steuerung" beim Roboauto)
+var WETTER_WEB = `      <div class="dl-auto rv" style="margin-top:14px">
+        <div>
+          <h3 data-t="wet_web_h">⚙️ Zur Einstellungsseite</h3>
+          <p data-t="wet_web_p">Ist die Wetterstation im WLAN, stellst du Ort, weitere Orte, Regenradar-Ausschnitt, Helligkeit, Nachtmodus und Updates im Browser unter <code>http://wetterstation.local</code> ein – Handy oder PC müssen im selben WLAN sein. Klappt es nicht, die IP-Adresse der Station aus dem Router nehmen.</p>
+        </div>
+        <a class="dl-btn" href="http://wetterstation.local" target="_blank" rel="noopener" data-t="wet_web_btn">Einstellungen öffnen →</a>
+      </div>`;
+var WETTER_WEB_EN = [
+  `wet_web_h:'⚙️ To the settings page'`,
+  `wet_web_p:'Once the weather station is on your Wi-Fi, set location, more places, rain radar area, brightness, night mode and updates in the browser at <code>http://wetterstation.local</code> – phone or PC must be on the same Wi-Fi. If that does not work, take the station’s IP address from your router.'`,
+  `wet_web_btn:'Open settings →'`,
+].join(',\n');
+var WETTER_WEB_ES = [
+  `wet_web_h:'⚙️ A la página de ajustes'`,
+  `wet_web_p:'Cuando la estación está en tu Wi-Fi, ajustas la ubicación, otros lugares, la zona del radar de lluvia, el brillo, el modo nocturno y las actualizaciones en el navegador en <code>http://wetterstation.local</code> – el móvil o el PC deben estar en la misma Wi-Fi. Si no funciona, toma la dirección IP de la estación del router.'`,
+  `wet_web_btn:'Abrir ajustes →'`,
+].join(',\n');
+var WETTER_WEB_FR = [
+  `wet_web_h:'⚙️ Vers la page de réglages'`,
+  `wet_web_p:'Une fois la station sur ton Wi-Fi, règle le lieu, d’autres lieux, la zone du radar de pluie, la luminosité, le mode nuit et les mises à jour dans le navigateur sur <code>http://wetterstation.local</code> – le téléphone ou le PC doivent être sur le même Wi-Fi. Si ça ne marche pas, prends l’adresse IP de la station dans le routeur.'`,
+  `wet_web_btn:'Ouvrir les réglages →'`,
+].join(',\n');
 
 var WETTER_ABSCHNITT = `  <section class="dl-sec" id="wetter">
     <div class="dl-wrap">
@@ -89,6 +113,7 @@ var WETTER_ABSCHNITT = `  <section class="dl-sec" id="wetter">
         </div>
         <a class="dl-btn" href="${WETTER_SEITE}/simulation.html" target="_blank" rel="noopener" data-t="wet_auto_btn">Simulation öffnen →</a>
       </div>
+${WETTER_WEB}
     </div>
   </section>`;
 
