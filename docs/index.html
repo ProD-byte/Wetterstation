@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wetterstation &ndash; Online-Flasher</title>
+<meta name="theme-color" content="#0d0f13">
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<style>
+  :root{--bg:#0d0f13;--karte:#161a20;--karte2:#1c2129;--rand:#262c35;--rand2:#323a45;--text:#eef1f5;--leise:#8b95a3;--akzent:#f0a030;--akzent2:#e5642e;--gut:#3ccf6e;--warn:#f0a030}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+       background:radial-gradient(900px 500px at 0% -10%,#1a2440 0%,transparent 60%),radial-gradient(800px 500px at 110% 0%,#3a2414 0%,transparent 55%),var(--bg);padding:28px 16px}
+  .rahmen{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+  .kopf{display:flex;align-items:center;gap:16px}
+  .kopf h1{margin:0;font-size:28px}
+  .kopf p{margin:2px 0 0;color:var(--leise)}
+  .logo{width:58px;height:58px;border-radius:17px;flex:none;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--akzent),var(--akzent2));box-shadow:0 12px 30px -12px var(--akzent)}
+  .logo svg{width:32px;height:32px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .karte{background:linear-gradient(180deg,var(--karte2),var(--karte));border:1px solid var(--rand);border-radius:20px;padding:22px;box-shadow:0 14px 40px -20px #000}
+  h2{margin:0 0 12px;font-size:17px}
+  ol{margin:0;padding-left:22px;color:var(--leise)} ol li{margin:6px 0} ol b{color:var(--text)}
+  .knopf{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}
+  esp-web-install-button button[slot=activate]{height:56px;padding:0 34px;border:0;border-radius:16px;color:#fff;font:650 18px system-ui,sans-serif;cursor:pointer;
+       background:linear-gradient(90deg,var(--akzent),var(--akzent2));box-shadow:0 10px 26px -10px var(--akzent)}
+  .wahl{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;text-align:left}
+  @media(max-width:560px){.wahl{grid-template-columns:1fr}}
+  .option{display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:16px;background:#12161c;border:1px solid var(--rand2)}
+  .option .titel{font-weight:700;font-size:17px}
+  .option p{margin:0;color:var(--leise);font-size:14px;flex:1}
+  .option p b{color:var(--text)}
+  .option esp-web-install-button button[slot=activate]{width:100%;height:50px;padding:0 14px;font-size:16px}
+  .option.loeschen{border-color:#5a2a2a;background:#1c1214}
+  .option.loeschen esp-web-install-button button[slot=activate]{background:linear-gradient(90deg,#c2413b,#a8326e);box-shadow:0 10px 26px -12px #ef5350}
+  .chip{display:inline-block;font:600 12px ui-monospace,monospace;padding:4px 10px;border-radius:999px;background:#3a2a14;color:#ffcf8a;border:1px solid #6a4a1e}
+  .leise{color:var(--leise);font-size:14px}
+  a{color:var(--akzent)}
+  .merkmale{display:grid;grid-template-columns:1fr 1fr;gap:8px;color:var(--leise);font-size:14px}
+  @media(max-width:520px){.merkmale{grid-template-columns:1fr}}
+  .sim{padding:14px 0 6px}
+  .sim h2{padding:0 22px}
+  .sim iframe{display:block;width:100%;height:560px;border:0;background:transparent}
+</style></head><body>
+<div class="rahmen">
+  <div class="kopf">
+    <div class="logo"><svg viewBox="0 0 24 24"><circle cx="15" cy="8" r="3"/><path d="M15 2v1M20.2 4.8l-.7.7M22 9h-1M7 20h10a4 4 0 0 0 0-8 5 5 0 0 0-9.6 1.2A3.5 3.5 0 0 0 7 20z"/></svg></div>
+    <div><h1>Wetterstation</h1><p>Online-Flasher &middot; animiertes Wetter f&uuml;r das LILYGO T-Display</p></div>
+  </div>
+
+  <div class="karte sim">
+    <h2>So sieht es aus</h2>
+    <iframe id="sim" src="simulation.html?einbetten" title="Simulation der Wetterstation" loading="lazy"></iframe>
+  </div>
+
+  <div class="karte knopf">
+    <span class="chip">Version __VERSION__</span>
+    <div class="wahl">
+      <div class="option">
+        <div class="titel">&#128260; Update</div>
+        <p>Neue Firmware aufspielen &ndash; <b>gespeicherte WLANs bleiben erhalten.</b><br><span style="color:#f0a030">&#9888;&#65039; Bei der Frage &bdquo;Erase device?&ldquo; den Haken <b>nicht</b> setzen.</span></p>
+        <esp-web-install-button manifest="manifest-update.json">
+          <button slot="activate">&#9889; Update installieren</button>
+          <span slot="unsupported"><b>Dieser Browser kann das leider nicht.</b><br><span class="leise">Bitte Chrome oder Edge am PC/Mac verwenden.</span></span>
+          <span slot="not-allowed"><b>Nur &uuml;ber https m&ouml;glich.</b></span>
+        </esp-web-install-button>
+      </div>
+      <div class="option loeschen">
+        <div class="titel">&#129529; Neuinstallation</div>
+        <p>Speicher komplett l&ouml;schen und neu aufspielen &ndash; f&uuml;r <b>neue Boards</b> oder wenn gar nichts mehr geht. <b>Gespeicherte WLANs sind danach weg.</b></p>
+        <esp-web-install-button manifest="manifest-neu.json">
+          <button slot="activate">&#128465;&#65039; L&ouml;schen &amp; neu installieren</button>
+          <span slot="unsupported"><b>Dieser Browser kann das leider nicht.</b></span>
+          <span slot="not-allowed"><b>Nur &uuml;ber https m&ouml;glich.</b></span>
+        </esp-web-install-button>
+      </div>
+    </div>
+    <span class="leise">Funktioniert mit Chrome und Edge am Computer &middot; T-Display per USB-C anschlie&szlig;en.</span>
+  </div>
+
+  <div class="karte">
+    <h2>So geht&rsquo;s</h2>
+    <ol>
+      <li>T-Display per <b>USB-C</b> mit dem Computer verbinden (Kabel mit Datenleitungen, kein reines Ladekabel).</li>
+      <li><b>&bdquo;Update installieren&ldquo;</b> oder <b>&bdquo;L&ouml;schen &amp; neu installieren&ldquo;</b> klicken und den Anschluss ausw&auml;hlen (z.&nbsp;B. &bdquo;USB Single Serial&ldquo; oder &bdquo;CH9102&ldquo;).</li>
+      <li>Kein Anschluss zu sehen? Unter Windows fehlt dann der Treiber f&uuml;r den <b>CH9102</b> (&bdquo;CH343SER&ldquo; von wch.cn).</li>
+      <li>Verbindung klappt nicht? Die <b>Taste IO0</b> gedr&uuml;ckt halten, kurz die <b>Reset-Taste</b> an der Seite dr&uuml;cken, IO0 loslassen &ndash; dann nochmal versuchen.</li>
+      <li>Nach dem Aufspielen startet das Display. Beim ersten Mal mit dem Handy ins WLAN <b>&bdquo;Wetterstation-Setup&ldquo;</b> gehen, dein WLAN antippen und das Passwort eingeben.</li>
+    </ol>
+  </div>
+
+  <div class="karte">
+    <h2>Was die Wetterstation kann</h2>
+    <div class="merkmale">
+      <span>&#9728;&#65039; Animierte Wetterbilder</span><span>&#127777;&#65039; Temperatur, gef&uuml;hlt, Wind, Luftfeuchte</span>
+      <span>&#128200; Temperaturkurve f&uuml;r 24 Stunden</span><span>&#127783;&#65039; Regenwahrscheinlichkeit</span>
+      <span>&#128197; Vorschau f&uuml;r die n&auml;chsten Tage</span><span>&#127769; Nachthimmel mit Sternen</span>
+      <span>&#128246; WLAN-Einrichtung per Handy</span><span>&#128260; Updates &uuml;ber WLAN</span>
+    </div>
+    <p class="leise" style="margin:12px 0 0">Wetterdaten f&uuml;r 03046 Cottbus von <a href="https://open-meteo.com/">Open-Meteo</a>, alle 15 Minuten neu. Tasten: <b>IO0</b> = n&auml;chste Seite, <b>IO35</b> kurz = Helligkeit, 3&nbsp;s halten = WLAN neu einrichten.</p>
+  </div>
+  <p class="leise" style="text-align:center">LILYGO TTGO T-Display (ESP32) &middot; gebaut mit PlatformIO &middot; <a href="https://github.com/ProD-byte/Wetterstation">Quellcode auf GitHub</a> &middot; Online-Flasher: <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a></p>
+</div>
+<script>
+/* Flasher-Einstellungen immer frisch laden (nie aus dem Browser-Zwischenspeicher) */
+document.querySelectorAll('esp-web-install-button').forEach(function(b){ var m=b.getAttribute('manifest').split('?')[0]; b.setAttribute('manifest', m+'?t='+Date.now()); });
+/* Hoehe der Simulation anpassen */
+addEventListener('message', function(e){ if(e.data&&e.data.wetterstationHoehe){ document.getElementById('sim').style.height=e.data.wetterstationHoehe+'px'; } });
+</script>
+</body></html>

@@ -1,0 +1,11 @@
+{
+  "name": "Wetterstation (Neuinstallation)",
+  "version": "__VERSION__",
+  "new_install_prompt_erase": false,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [{ "path": "wetterstation-komplett.bin", "offset": 0 }]
+    }
+  ]
+}

@@ -1,0 +1,662 @@
+<title>Wetterstation Cottbus</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;700&family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: ein Werkbank-Blatt - Geraet gross oben, Bedienung darunter, kurze Erklaerung daneben */
+:root {
+  --bg: #e9ecef;
+  --panel: #f7f8f9;
+  --fg: #1d2329;
+  --muted: #5b6672;
+  --line: #cfd5db;
+  --accent: #d9822b;
+  --accent-ink: #ffffff;
+  --chip: #ffffff;
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15191d; --panel: #1d2227; --fg: #e6e9ec; --muted: #9aa5b0; --line: #313840;
+    --accent: #f0a04b; --accent-ink: #1a1206; --chip: #242a30; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15191d; --panel: #1d2227; --fg: #e6e9ec; --muted: #9aa5b0; --line: #313840;
+  --accent: #f0a04b; --accent-ink: #1a1206; --chip: #242a30; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--body); line-height: 1.5; }
+.wrap {
+  max-width: 980px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+  display: grid; gap: 22px;
+}
+header h1 {
+  font-family: var(--display); font-weight: 600; font-size: clamp(30px, 6vw, 46px);
+  line-height: 1; margin: 0; letter-spacing: 0.01em; text-wrap: balance;
+}
+header p { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
+
+/* Das Geraet */
+.stage { display: grid; place-items: center; padding-block: 8px; }
+.board {
+  position: relative; width: min(100%, 860px);
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 3%;
+  padding: 3.2% 2.6% 3.2% 3.2%;
+  background: radial-gradient(120% 140% at 20% 0%, #2a2d31 0%, #121416 60%, #0b0c0d 100%);
+  border-radius: 18px;
+  box-shadow: 0 1px 0 #3a3e43 inset, 0 18px 40px rgba(0,0,0,.28), 0 4px 10px rgba(0,0,0,.2);
+}
+.board::after { /* USB-C */
+  content: ""; position: absolute; right: -10px; top: 50%; translate: 0 -50%;
+  width: 14px; height: 15%; border-radius: 4px;
+  background: linear-gradient(90deg, #8d939a, #c9cdd2 40%, #7b8188);
+}
+.glass {
+  background: #050607; border-radius: 6px; padding: 2.2% 2.6%;
+  box-shadow: 0 0 0 1px #000, 0 0 0 3px #1c1f22;
+  position: relative; overflow: hidden;
+}
+.glass::after { /* Spiegelung */
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, rgba(255,255,255,.07) 0%, rgba(255,255,255,0) 38%);
+}
+#lcd { display: block; width: 100%; aspect-ratio: 240 / 135; height: auto; max-width: 100%; transition: filter .25s; }
+#lcd.pixel { image-rendering: pixelated; }
+.keys { display: grid; gap: 22px; justify-items: center; }
+.key {
+  width: clamp(34px, 6vw, 52px); aspect-ratio: 1; border-radius: 50%;
+  border: 0; cursor: pointer; padding: 0;
+  background: radial-gradient(circle at 40% 35%, #f3f3f1 0%, #c9c9c4 55%, #9d9d97 100%);
+  box-shadow: 0 0 0 4px #2b2e32, 0 0 0 5px #44484d, 0 3px 6px rgba(0,0,0,.5);
+  transition: transform .06s, box-shadow .06s;
+}
+.key:active { transform: scale(.94); box-shadow: 0 0 0 4px #2b2e32, 0 0 0 5px #44484d, 0 1px 2px rgba(0,0,0,.5); }
+.key:focus-visible { outline: 3px solid var(--accent); outline-offset: 6px; }
+.silk { font-family: var(--mono); font-size: clamp(9px, 1.4vw, 11px); color: #d9dcd5; letter-spacing: .06em; text-align: center; line-height: 1.25; }
+.silk b { display: block; font-weight: 500; color: #8e948c; }
+
+/* Bedienung */
+.controls {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 16px; display: grid; gap: 14px;
+}
+.row { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: start; }
+.row > span { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding-top: 7px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.chips button {
+  font: 500 14px/1 var(--body); color: var(--fg); background: var(--chip);
+  border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; cursor: pointer;
+}
+.chips button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.chips button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+
+.explain { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.explain div { min-width: 0; }
+.explain h2 { font-family: var(--display); font-weight: 600; font-size: 22px; margin: 0 0 4px; letter-spacing: .01em; }
+.explain p { margin: 0; color: var(--muted); font-size: 14px; }
+.explain .tag { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; }
+footer code { font-family: var(--mono); font-size: 12px; }
+
+/* Eingebettet auf daveslab.de (simulation.html?einbetten): nur Geraet und Bedienung, dunkel, durchsichtig */
+html.einbetten {
+  --bg: transparent; --panel: rgba(255,255,255,.04); --fg: #e6e9ec; --muted: #9aa5b0; --line: rgba(255,255,255,.12);
+  --accent: #f0a04b; --accent-ink: #1a1206; --chip: rgba(255,255,255,.06); color-scheme: dark;
+}
+html.einbetten header, html.einbetten .explain, html.einbetten footer { display: none; }
+html.einbetten .wrap { padding-block: 4px 8px; gap: 16px; }
+
+@media (max-width: 640px) {
+  .row { grid-template-columns: 1fr; gap: 6px; }
+  .row > span { padding-top: 0; }
+  .explain { grid-template-columns: 1fr; }
+  .keys { gap: 14px; }
+  .board { border-radius: 12px; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Wetterstation Cottbus</h1>
+    <p>So sieht die Firmware auf dem LILYGO T-Display aus: 240 × 135 Pixel, quer. Die runden Tasten rechts funktionieren wie die echten.</p>
+  </header>
+
+  <div class="stage">
+    <div class="board">
+      <div class="glass"><canvas id="lcd" width="240" height="135" aria-label="Simuliertes Display der Wetterstation"></canvas></div>
+      <div class="keys">
+        <div class="silk"><b>IO0</b>Seite</div>
+        <button class="key" id="keySeite" aria-label="Taster GPIO 0: nächste Seite"></button>
+        <button class="key" id="keyLicht" aria-label="Taster GPIO 35: Helligkeit"></button>
+        <div class="silk">Licht<b>IO35</b></div>
+        <div class="silk" style="opacity:.75">3 s = WLAN</div>
+      </div>
+    </div>
+  </div>
+
+  <section class="controls" aria-label="Simulation steuern">
+    <div class="row"><span>Wetter</span><div class="chips" id="wetterWahl"></div></div>
+    <div class="row"><span>Tageszeit</span><div class="chips" id="tagWahl"></div></div>
+    <div class="row"><span>Akku</span><div class="chips" id="akkuWahl"></div></div>
+    <div class="row"><span>Darstellung</span><div class="chips" id="pixelWahl"></div></div>
+    <p class="note" id="quelle"></p>
+  </section>
+
+  <section class="explain">
+    <div><span class="tag">Seite 1</span><h2>Jetzt</h2><p>Animiertes Wetterbild, Temperatur, gefühlte Temperatur, Wind und Luftfeuchte. Der Himmel färbt sich passend zum Wetter, nachts mit funkelnden Sternen.</p></div>
+    <div><span class="tag">Seite 2</span><h2>Nächste 24 Stunden</h2><p>Temperaturkurve, die sich beim Umblättern aufbaut. Darunter blaue Balken für die Regenwahrscheinlichkeit.</p></div>
+    <div><span class="tag">Seite 3</span><h2>Die nächsten Tage</h2><p>Heute, morgen und übermorgen mit kleinem animiertem Bild, Höchst- und Tiefstwert und Regenrisiko.</p></div>
+  </section>
+
+  <footer>Die Seiten blättern alle 12 s von allein weiter, nach einem Tastendruck erst wieder nach 30 s. Auf dem echten Display sehen Schrift und Kantenglättung etwas anders aus, Aufbau, Farben und Bewegungen sind gleich. Firmware: <code>src/bilder.cpp</code> und <code>src/main.cpp</code>.</footer>
+</div>
+
+<script>
+// Eingebettet (iframe auf daveslab.de): schlanke Ansicht, Hoehe an die Seite melden
+if (/[?&]einbetten\b/.test(location.search)) {
+  document.documentElement.classList.add("einbetten");
+  const melden = () => parent.postMessage({ wetterstationHoehe: document.documentElement.scrollHeight }, "*");
+  new ResizeObserver(melden).observe(document.body);
+  addEventListener("load", melden);
+  setInterval(melden, 1000);  // falls die Seite erst spaeter zuhoert (iframe mit loading="lazy")
+}
+
+// ---------- Echte Daten von open-meteo.com, 1.11.2026 07:30 ----------
+const ECHT = {
+  current: { temperature_2m: 6.1, relative_humidity_2m: 94, apparent_temperature: 4.1, is_day: 1, weather_code: 2, wind_speed_10m: 5.6 },
+  hourly: {
+    time: ["07","08","09","10","11","12","13","14","15","16","17","18","19","20","21","22","23","00","01","02","03","04","05","06"],
+    temperature_2m: [6.2,6.0,6.6,7.3,7.9,8.6,9.1,9.3,9.3,9.0,8.9,8.4,8.2,8.0,7.8,7.6,7.4,7.3,7.2,6.9,6.7,6.9,6.6,6.6],
+    precipitation_probability: Array(24).fill(0)
+  },
+  daily: { time: ["2026-11-01","2026-11-02","2026-11-03","2026-11-04"], weather_code: [61,61,61,45],
+    temperature_2m_max: [9.3,8.7,8.4,7.8], temperature_2m_min: [6.0,6.5,4.3,3.7], precipitation_probability_max: [3,3,3,0] }
+};
+
+function wetterAus(j) {
+  return {
+    temp: j.current.temperature_2m, gefuehlt: j.current.apparent_temperature, wind: j.current.wind_speed_10m,
+    feuchte: j.current.relative_humidity_2m, code: j.current.weather_code, tag: j.current.is_day === 1,
+    stdTemp: j.hourly.temperature_2m.slice(), stdRegen: j.hourly.precipitation_probability.slice(),
+    stdStunde: j.hourly.time.map(Number),
+    tagCode: j.daily.weather_code.slice(), tagMax: j.daily.temperature_2m_max.slice(),
+    tagMin: j.daily.temperature_2m_min.slice(), tagRegen: j.daily.precipitation_probability_max.slice(),
+    tagWochentag: j.daily.time.map(d => new Date(d + "T12:00:00").getDay())
+  };
+}
+
+const DEMOS = [
+  { id: "echt", name: "Echte Daten" },
+  { id: "wlan", name: "WLAN einrichten" },
+  { id: "start", name: "Startbild" },
+  { id: 0, name: "Sonnig" }, { id: 2, name: "Teils bewölkt" }, { id: 3, name: "Bedeckt" },
+  { id: 45, name: "Nebel" }, { id: 53, name: "Niesel" }, { id: 63, name: "Regen" },
+  { id: 73, name: "Schnee" }, { id: 95, name: "Gewitter" }
+];
+
+let modus = "echt", tagModus = "echt", akkuModus = "usb";
+let w = wetterAus(ECHT);
+
+function baueWetter() {
+  w = wetterAus(ECHT);
+  if (typeof modus === "number") {
+    w.code = modus;
+    w.tagCode[0] = modus;
+    const nass = [53, 63, 73, 95].includes(modus);
+    if (nass) {
+      w.stdRegen = w.stdRegen.map((_, i) => Math.round(Math.max(0, 85 * Math.exp(-((i - 6) ** 2) / 30) + (i % 5) * 3)));
+      w.tagRegen[0] = 85;
+    }
+    if (modus === 73) {
+      const minus = x => Math.round((x - 8) * 10) / 10;
+      w.temp = minus(w.temp); w.gefuehlt = minus(w.gefuehlt);
+      w.stdTemp = w.stdTemp.map(minus); w.tagMax = w.tagMax.map(minus); w.tagMin = w.tagMin.map(minus);
+    }
+    if (modus === 0) { w.temp = 11.4; w.gefuehlt = 10.2; w.feuchte = 61; }
+    if (modus === 95) { w.wind = 38; }
+  }
+  if (tagModus !== "echt") w.tag = tagModus === "tag";
+}
+
+// ---------- Zeichnen (gleiche Werte wie in bilder.cpp) ----------
+const W = 240, H = 135;
+const cv = document.getElementById("lcd");
+const c = cv.getContext("2d");
+let k = 1;
+function setPixel(echt) {
+  k = echt ? 1 : 4;
+  cv.width = W * k; cv.height = H * k;
+  c.setTransform(k, 0, 0, k, 0, 0);
+  cv.classList.toggle("pixel", echt);
+}
+
+const rgb = (r, g, b) => `rgb(${r},${g},${b})`;
+const WEISS = "#ffffff", HELL = rgb(216, 234, 242);
+const mix = (a, b, f) => rgb(...a.map((v, i) => Math.round(v + (b[i] - v) * f)));
+const dunkler = (col, f) => col.map(v => Math.round(v * f));
+
+function bildFuerCode(code) {
+  if (code === 0) return "KLAR";
+  if (code <= 2) return "HEITER";
+  if (code === 3) return "BEDECKT";
+  if (code === 45 || code === 48) return "NEBEL";
+  if (code >= 51 && code <= 57) return "NIESEL";
+  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return "REGEN";
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "SCHNEE";
+  if (code >= 95) return "GEWITTER";
+  return "BEDECKT";
+}
+function textFuerCode(code, tag) {
+  const t = { 0: tag ? "Sonnig" : "Klar", 1: "Heiter", 2: "Teils bewölkt", 3: "Bedeckt", 45: "Nebel", 48: "Reifnebel",
+    51: "Nieselregen", 53: "Nieselregen", 55: "Nieselregen", 56: "Eisniesel", 57: "Eisniesel", 61: "Leichter Regen",
+    63: "Regen", 65: "Starkregen", 66: "Eisregen", 67: "Eisregen", 71: "Leichter Schnee", 73: "Schnee", 75: "Starker Schnee",
+    77: "Schneegriesel", 80: "Regenschauer", 81: "Regenschauer", 82: "Starke Schauer", 85: "Schneeschauer",
+    86: "Schneeschauer", 95: "Gewitter", 96: "Gewitter, Hagel", 99: "Gewitter, Hagel" };
+  return t[code] || "Unbekannt";
+}
+
+function verlauf(b, tag) {
+  if (!tag) {
+    if (b === "KLAR" || b === "HEITER") return [[6, 10, 38], [28, 40, 92]];
+    if (b === "GEWITTER") return [[18, 14, 34], [52, 44, 74]];
+    return [[16, 20, 34], [48, 54, 72]];
+  }
+  return {
+    KLAR: [[24, 92, 206], [110, 178, 240]], HEITER: [[40, 104, 190], [126, 174, 222]],
+    BEDECKT: [[72, 88, 110], [132, 144, 160]], NEBEL: [[108, 114, 122], [170, 174, 180]],
+    NIESEL: [[62, 80, 104], [112, 128, 148]], REGEN: [[40, 56, 80], [84, 100, 124]],
+    SCHNEE: [[96, 118, 150], [182, 196, 214]], GEWITTER: [[30, 26, 52], [74, 64, 96]]
+  }[b];
+}
+const blitzAktiv = t => { const p = t % 4200; return p < 90 || (p > 180 && p < 260); };
+
+function zeichneHimmel(b, tag, t, blitz) {
+  const [o, u] = verlauf(b, tag);
+  const g = c.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, rgb(...o)); g.addColorStop(1, rgb(...u));
+  c.fillStyle = g; c.fillRect(0, 0, W, H);
+  if (blitz) { c.fillStyle = "rgba(255,255,255,0.43)"; c.fillRect(0, 0, W, H); }
+  if (tag || !(b === "KLAR" || b === "HEITER")) return;
+  let z = 12345;
+  const n = b === "KLAR" ? 34 : 18;
+  for (let i = 0; i < n; i++) {
+    z = (Math.imul(z, 1103515245) + 12345) >>> 0; const x = (z >>> 8) % W;
+    z = (Math.imul(z, 1103515245) + 12345) >>> 0; const y = (z >>> 8) % (H - 20);
+    const hell = 0.5 + 0.5 * Math.sin(t * 0.0015 + i * 1.7);
+    c.fillStyle = `rgba(255,255,255,${(60 + hell * 195) / 255})`; c.fillRect(x, y, 1, 1);
+    if (i % 6 === 0) {
+      c.fillStyle = `rgba(255,255,255,${(30 + hell * 110) / 255})`;
+      c.fillRect(x - 1, y, 1, 1); c.fillRect(x + 1, y, 1, 1); c.fillRect(x, y - 1, 1, 1); c.fillRect(x, y + 1, 1, 1);
+    }
+  }
+}
+
+function kreis(x, y, r, f, a = 1) { c.globalAlpha = a; c.fillStyle = f; c.beginPath(); c.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); c.fill(); c.globalAlpha = 1; }
+function linie(ax, ay, bx, by, wd, f, a = 1) { c.globalAlpha = a; c.strokeStyle = f; c.lineWidth = wd; c.lineCap = "round"; c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.stroke(); c.globalAlpha = 1; }
+function rundRechteck(x, y, w_, h, r, f, a = 1) { c.globalAlpha = a; c.fillStyle = f; c.beginPath(); c.roundRect(x, y, w_, h, Math.min(r, h / 2, w_ / 2)); c.fill(); c.globalAlpha = 1; }
+function dreieck(ax, ay, bx, by, cx_, cy_, f) { c.fillStyle = f; c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.lineTo(cx_, cy_); c.closePath(); c.fill(); }
+
+function sonne(cx, cy, g, t) {
+  const r = g * 0.2, gelb = rgb(255, 198, 44);
+  const puls = 0.5 + 0.5 * Math.sin(t * 0.0025);
+  kreis(cx, cy, r * (1.55 + 0.12 * puls), gelb, (45 + 25 * puls) / 255);
+  const dreh = t * 0.0004, r1 = r * 1.4;
+  for (let i = 0; i < 8; i++) {
+    const a = dreh + i * Math.PI / 4;
+    const l = g * (0.09 + 0.03 * Math.sin(t * 0.004 + i * 1.3));
+    linie(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1, cx + Math.cos(a) * (r1 + l), cy + Math.sin(a) * (r1 + l), Math.max(2, g * 0.045), gelb);
+  }
+  kreis(cx, cy, r, gelb);
+  kreis(cx - r * 0.25, cy - r * 0.25, r * 0.55, rgb(255, 224, 110));
+}
+function mond(cx, cy, g, t) {
+  const r = g * 0.21, hell = rgb(238, 234, 210);
+  const puls = 0.5 + 0.5 * Math.sin(t * 0.0018);
+  kreis(cx, cy, r * (1.5 + 0.1 * puls), hell, (35 + 20 * puls) / 255);
+  kreis(cx, cy, r, hell);
+  const kr = rgb(212, 207, 182);
+  kreis(cx - r * 0.35, cy - r * 0.2, r * 0.22, kr);
+  kreis(cx + r * 0.32, cy + r * 0.3, r * 0.16, kr);
+  kreis(cx + r * 0.12, cy - r * 0.48, r * 0.1, kr);
+}
+function wolkeForm(cx, cy, w_, f) {
+  rundRechteck(cx - w_ * 0.45, cy, w_ * 0.9, w_ * 0.2, w_ * 0.1, f);
+  kreis(cx - w_ * 0.24, cy + w_ * 0.02, w_ * 0.18, f);
+  kreis(cx - w_ * 0.01, cy - w_ * 0.08, w_ * 0.26, f);
+  kreis(cx + w_ * 0.25, cy + w_ * 0.03, w_ * 0.17, f);
+}
+function wolke(cx, cy, w_, col) {
+  wolkeForm(cx + w_ * 0.03, cy + w_ * 0.05, w_, rgb(...dunkler(col, 0.72)));
+  wolkeForm(cx, cy, w_, rgb(...col));
+}
+function blitzZeichen(cx, cy, g, f) {
+  dreieck(cx + g * 0.04, cy, cx - g * 0.09, cy + g * 0.2, cx + g * 0.01, cy + g * 0.2, f);
+  dreieck(cx - g * 0.03, cy + g * 0.17, cx + g * 0.08, cy + g * 0.17, cx - g * 0.07, cy + g * 0.4, f);
+}
+function teilchen(x0, br, y0, hoehe, n, periode, g, schnee, f, t) {
+  for (let i = 0; i < n; i++) {
+    const ph = (t + Math.floor(i * periode * 0.37)) % periode, p = ph / periode;
+    let x = x0 + br * (i + 0.5) / n + Math.sin(i * 12.9) * br * 0.04;
+    const y = y0 + p * hoehe;
+    const a = p > 0.75 ? (1 - p) / 0.25 : 1;
+    if (schnee) {
+      x += Math.sin(t * 0.002 + i * 2.1) * g * 0.05;
+      kreis(x, y, Math.max(1, g * 0.03), f, a);
+    } else {
+      const l = g * (n > 6 ? 0.11 : 0.07);
+      linie(x, y, x - l * 0.3, y + l, Math.max(1.5, g * 0.03), f, a);
+    }
+  }
+}
+
+function zeichneBild(b, tag, cx, cy, g, t) {
+  const d = Math.sin(t * 0.0007) * g * 0.04, WS = [238, 242, 247];
+  switch (b) {
+    case "KLAR": tag ? sonne(cx, cy, g, t) : mond(cx, cy, g, t); break;
+    case "HEITER":
+      tag ? sonne(cx + g * 0.16, cy - g * 0.14, g * 0.78, t) : mond(cx + g * 0.16, cy - g * 0.14, g * 0.8, t);
+      wolke(cx - g * 0.08 + d, cy + g * 0.12, g * 0.74, WS); break;
+    case "BEDECKT":
+      wolke(cx + g * 0.18 - d, cy - g * 0.04, g * 0.62, [176, 186, 198]);
+      wolke(cx - g * 0.06 + d, cy + g * 0.08, g * 0.8, WS); break;
+    case "NEBEL":
+      wolke(cx + d, cy - g * 0.1, g * 0.66, [205, 210, 216]);
+      for (let k2 = 0; k2 < 3; k2++) {
+        const bw = g * (0.74 - k2 * 0.08), x = cx + Math.sin(t * 0.0009 + k2 * 1.3) * g * 0.07;
+        const y = cy + g * (0.14 + k2 * 0.1), h = Math.max(3, g * 0.05);
+        rundRechteck(x - bw / 2, y, bw, h, h / 2, rgb(220, 224, 228));
+      }
+      break;
+    case "NIESEL":
+      teilchen(cx - g * 0.3, g * 0.6, cy + g * 0.04, g * 0.34, 5, 1100, g, false, rgb(150, 200, 255), t);
+      wolke(cx + d, cy - g * 0.1, g * 0.8, [214, 220, 228]); break;
+    case "REGEN":
+      teilchen(cx - g * 0.32, g * 0.64, cy + g * 0.02, g * 0.38, 8, 600, g, false, rgb(120, 180, 255), t);
+      wolke(cx + d, cy - g * 0.12, g * 0.84, [188, 196, 210]); break;
+    case "SCHNEE":
+      teilchen(cx - g * 0.32, g * 0.64, cy + g * 0.02, g * 0.4, 7, 2400, g, true, WEISS, t);
+      wolke(cx + d, cy - g * 0.12, g * 0.8, [228, 234, 242]); break;
+    case "GEWITTER":
+      teilchen(cx - g * 0.32, g * 0.64, cy + g * 0.02, g * 0.38, 5, 520, g, false, rgb(110, 160, 230), t);
+      wolke(cx + g * 0.16 - d, cy - g * 0.2, g * 0.6, [92, 96, 116]);
+      wolke(cx - g * 0.04 + d, cy - g * 0.1, g * 0.84, [140, 146, 166]);
+      blitzZeichen(cx + g * 0.02, cy + g * 0.06, g, blitzAktiv(t) ? rgb(255, 255, 210) : rgb(255, 206, 60)); break;
+  }
+}
+
+// Schriften wie in der Firmware: Font2, FreeSans9pt, FreeSansBold 9/12/24pt
+const SCHRIFT = {
+  f2: { css: "13px Arimo, Arial, sans-serif", fh: 16 },
+  s9: { css: "18px Arimo, Arial, sans-serif", fh: 22 },
+  b9: { css: "bold 18px Arimo, Arial, sans-serif", fh: 22 },
+  b12: { css: "bold 24px Arimo, Arial, sans-serif", fh: 29 },
+  b24: { css: "bold 47px Arimo, Arial, sans-serif", fh: 56 }
+};
+let fh = 16;
+function schrift(n) { c.font = SCHRIFT[n].css; fh = SCHRIFT[n].fh; }
+const breite = t => c.measureText(t).width;
+function schreibe(text, x, y, f, a) {
+  const wd = breite(text);
+  if (a === "m") x -= wd / 2; else if (a === "r") x -= wd;
+  c.textBaseline = "alphabetic"; c.textAlign = "left";
+  c.fillStyle = "#000"; c.fillText(text, x + 1, y + 1);
+  c.fillStyle = f; c.fillText(text, x, y);
+}
+function schreibeTemp(wert, x, y, f, a) {
+  const zahl = String(Math.round(wert) === 0 ? 0 : Math.round(wert));
+  const r = Math.max(2, Math.floor(fh / 14)), wz = breite(zahl), wd = wz + 2 * r + 3;
+  if (a === "m") x -= wd / 2; else if (a === "r") x -= wd;
+  schreibe(zahl, x, y, f, "l");
+  const gx = x + wz + r + 2, gy = y - fh * 0.62 + r, lw = Math.max(1, Math.floor(r / 2));
+  c.lineWidth = lw;
+  c.strokeStyle = "#000"; c.beginPath(); c.arc(gx + 1, gy + 1, r - lw / 2, 0, 7); c.stroke();
+  c.strokeStyle = f; c.beginPath(); c.arc(gx, gy, r - lw / 2, 0, 7); c.stroke();
+}
+function tropfenSymbol(x, y, f) { dreieck(x - 3, y - 1, x + 3, y - 1, x, y - 7, f); kreis(x, y, 3, f); }
+
+// ---------- Seiten (wie main.cpp) ----------
+const WOCHENTAG = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+const WOCHENTAG_KURZ = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+
+function seiteJetzt(ox, t) {
+  schrift("f2"); schreibe("Cottbus", ox + 6, 13, WEISS, "l");
+  zeichneBild(bildFuerCode(w.code), w.tag, ox + 58, 74, 96, t);
+  schrift("b24"); schreibeTemp(w.temp, ox + 118, 66, WEISS, "l");
+  const text = textFuerCode(w.code, w.tag);
+  schrift("s9"); if (breite(text) > 118) schrift("f2");
+  schreibe(text, ox + 118, 88, WEISS, "l");
+  schrift("f2");
+  schreibe("Gefühlt", ox + 118, 106, HELL, "l");
+  schreibeTemp(w.gefuehlt, ox + 122 + breite("Gefühlt"), 106, HELL, "l");
+  schreibe(`Wind ${Math.round(w.wind)} km/h`, ox + 118, 122, HELL, "l");
+  const z = `${w.feuchte}%`;
+  schreibe(z, ox + 236, 122, HELL, "r");
+  tropfenSymbol(ox + 230 - breite(z), 118, rgb(130, 190, 255));
+}
+
+function seiteStunden(ox, t) {
+  schrift("f2"); schreibe("Nächste 24 Stunden", ox + 6, 13, WEISS, "l");
+  const n = w.stdTemp.length;
+  let tmin = Math.min(...w.stdTemp), tmax = Math.max(...w.stdTemp);
+  if (tmax - tmin < 4) { const m = (tmax + tmin) / 2; tmin = m - 2; tmax = m + 2; }
+  const X0 = 14, X1 = 226, YO = 42, YU = 90;
+  const px = i => ox + X0 + (X1 - X0) * i / (n - 1);
+  const py = v => YU - (v - tmin) / (tmax - tmin) * (YU - YO);
+  const tempBei = f => { const i = Math.min(Math.floor(f), n - 2), r = f - i; return w.stdTemp[i] * (1 - r) + w.stdTemp[i + 1] * r; };
+  let fort = Math.min(1, (t - seiteSeit) / 900); fort = 1 - Math.pow(1 - fort, 3);
+  const xEnde = px(0) + (X1 - X0) * fort;
+
+  // Flaeche unter der Kurve
+  c.save();
+  c.beginPath(); c.rect(px(0), 0, xEnde - px(0) + 1, H); c.clip();
+  c.beginPath(); c.moveTo(px(0), YU);
+  for (let i = 0; i < n; i++) c.lineTo(px(i), py(w.stdTemp[i]));
+  c.lineTo(px(n - 1), YU); c.closePath();
+  const gr = c.createLinearGradient(0, YO, 0, YU);
+  gr.addColorStop(0, "rgba(255,168,64,0.55)"); gr.addColorStop(1, "rgba(255,168,64,0.08)");
+  c.fillStyle = gr; c.fill();
+  c.restore();
+
+  for (let i = 0; i < n - 1; i++) {
+    const xa = px(i); let xb = px(i + 1), yb = py(w.stdTemp[i + 1]);
+    if (xa > xEnde) break;
+    if (xb > xEnde) { xb = xEnde; yb = py(tempBei((xEnde - px(0)) / (X1 - X0) * (n - 1))); }
+    linie(xa, py(w.stdTemp[i]), xb, yb, 2.5, rgb(255, 214, 130));
+  }
+
+  const regen = w.stdRegen.some(v => v > 0);
+  if (regen) {
+    for (let i = 0; i < n; i++) {
+      const h = Math.floor(w.stdRegen[i] * 14 / 100);
+      if (h <= 0 || px(i) > xEnde) continue;
+      c.globalAlpha = 200 / 255; c.fillStyle = rgb(110, 170, 255);
+      c.fillRect(Math.round(px(i)) - 3, 109 - h, 6, h); c.globalAlpha = 1;
+    }
+  } else {
+    schrift("f2"); schreibe("Kein Regen erwartet", ox + 120, 108, HELL, "m");
+  }
+
+  const puls = 0.5 + 0.5 * Math.sin(t * 0.005);
+  for (let i = 0; i < n; i++) {
+    const marke = i === 0 || (i >= 3 && w.stdStunde[i] % 6 === 0);
+    if (!marke || px(i) > xEnde) continue;
+    const x = px(i), y = py(w.stdTemp[i]);
+    if (i === 0) kreis(x, y, 4 + 3 * puls, WEISS, (90 - 60 * puls) / 255);
+    kreis(x, y, 3, WEISS);
+    schrift("f2");
+    schreibeTemp(w.stdTemp[i], x, y - 6, WEISS, "m");
+    schreibe(i === 0 ? "jetzt" : String(w.stdStunde[i]).padStart(2, "0"), x, 125, HELL, "m");
+  }
+}
+
+function seiteTage(ox, t) {
+  schrift("f2"); schreibe("Die nächsten Tage", ox + 6, 13, WEISS, "l");
+  for (let i = 0; i < 3; i++) {
+    const x = ox + 6 + i * 78, mx = x + 36;
+    rundRechteck(x, 20, 72, 106, 8, "#000", (i === 0 ? 95 : 70) / 255);
+    let name = i === 0 ? "Heute" : i === 1 ? "Morgen" : WOCHENTAG[w.tagWochentag[i]];
+    schrift("f2"); if (breite(name) > 66) name = WOCHENTAG_KURZ[w.tagWochentag[i]];
+    schreibe(name, mx, 36, WEISS, "m");
+    zeichneBild(bildFuerCode(w.tagCode[i]), true, mx, 62, 44, t + i * 700);
+    schrift("b12"); schreibeTemp(w.tagMax[i], mx, 101, WEISS, "m");
+    schrift("f2"); schreibeTemp(w.tagMin[i], x + 18, 118, HELL, "m");
+    const z = `${w.tagRegen[i]}%`;
+    schreibe(z, x + 67, 118, HELL, "r");
+    tropfenSymbol(x + 61 - breite(z), 114, rgb(130, 190, 255));
+  }
+}
+
+function zeichneSeite(s, ox, t) {
+  if (ox <= -240 || ox >= 240) return;
+  [seiteJetzt, seiteStunden, seiteTage][s](ox, t);
+}
+
+function statusLeiste() {
+  const uhr = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Berlin" }).format(new Date());
+  schrift("f2"); schreibe(uhr, 212, 13, WEISS, "r");
+  const x = 217, y = 4;
+  c.strokeStyle = WEISS; c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, 16, 8);
+  c.fillStyle = WEISS; c.fillRect(x + 17, y + 3, 2, 3);
+  if (akkuModus === "usb") {
+    const gb = rgb(255, 214, 60);
+    dreieck(x + 9, y + 1, x + 5, y + 5, x + 9, y + 5, gb);
+    dreieck(x + 8, y + 4, x + 12, y + 4, x + 8, y + 8, gb);
+  } else {
+    const p = akkuModus === "voll" ? 85 : 15;
+    c.fillStyle = p > 50 ? rgb(90, 220, 110) : p > 20 ? rgb(255, 210, 60) : rgb(255, 80, 70);
+    c.fillRect(x + 2, y + 2, Math.floor(13 * p / 100), 5);
+  }
+}
+function seitenPunkte() {
+  for (let i = 0; i < 3; i++) kreis(112 + i * 8, 131, 2, WEISS, i === seite ? 1 : 90 / 255);
+}
+function lichtAnzeige(t) {
+  if (lichtAnzeigeBis - t <= 0) return;
+  rundRechteck(70, 104, 100, 20, 10, "#000", 200 / 255);
+  for (let k2 = 0; k2 < 4; k2++) rundRechteck(80 + k2 * 21, 110, 17, 8, 3, k2 < 4 - lichtStufe ? rgb(255, 210, 70) : rgb(70, 74, 84));
+}
+function startBild(t) {
+  zeichneHimmel("HEITER", false, t, false);
+  zeichneBild("HEITER", true, 120, 50, 76, t);
+  schrift("b9"); schreibe("Wetter Cottbus", 120, 100, WEISS, "m");
+  const p = ["", ".", "..", "..."][Math.floor(t / 400) % 4];
+  const phase = Math.floor((t - startSeit) / 4000) % 2;
+  schrift("f2");
+  if (phase === 0) { schreibe("Verbinde mit WLAN" + p, 120, 117, HELL, "m"); schreibe("Zuhause", 120, 132, rgb(150, 160, 190), "m"); }
+  else schreibe("Hole Wetterdaten" + p, 120, 117, HELL, "m");
+}
+
+// WLAN-Einrichtung (wie wlanBild in main.cpp)
+function wlanBild(t) {
+  zeichneHimmel("KLAR", false, t, false);
+  schrift("b9"); schreibe("WLAN einrichten", 120, 20, WEISS, "m");
+  const cx = 34, cy = 82;
+  for (let i = 0; i < 3; i++) {
+    const an = 0.5 + 0.5 * Math.sin(t * 0.006 - i * 1.1), r = 10 + i * 9;
+    c.globalAlpha = (80 + 175 * an) / 255; c.strokeStyle = rgb(255, 198, 44); c.lineWidth = 3; c.lineCap = "round";
+    c.beginPath(); c.arc(cx, cy, r + 0.5, -Math.PI * 3 / 4, -Math.PI / 4); c.stroke(); c.globalAlpha = 1;
+  }
+  kreis(cx, cy, 4, rgb(255, 198, 44));
+  schrift("f2");
+  schreibe("1. Mit dem Handy ins WLAN", 64, 46, HELL, "l");
+  schreibe("Wetterstation-Setup", 64, 64, rgb(255, 198, 44), "l");
+  schreibe("2. Seite öffnet sich selbst:", 64, 88, HELL, "l");
+  schreibe("dein WLAN wählen und", 64, 104, HELL, "l");
+  schreibe("Passwort eingeben", 64, 120, HELL, "l");
+}
+
+// ---------- Ablauf ----------
+const SEITEN = 3, AUTO_WEITER = 12000, WECHSEL_DAUER = 380;
+const HELLIGKEIT = [255, 140, 60, 15];
+let seite = 0, alteSeite = 0, wechsel = false, wechselStart = 0, seiteSeit = 0, letzterTastendruck = -1e9;
+let lichtStufe = 0, lichtAnzeigeBis = 0, startSeit = 0;
+const t0 = performance.now();
+const jetzt = () => performance.now() - t0;
+
+function naechsteSeite(t) { alteSeite = seite; seite = (seite + 1) % SEITEN; wechsel = true; wechselStart = t; seiteSeit = t; }
+
+function frame() {
+  const t = jetzt();
+  c.setTransform(k, 0, 0, k, 0, 0);
+  if (modus === "start") {
+    startBild(t);
+  } else if (modus === "wlan") {
+    wlanBild(t);
+  } else {
+    const b = bildFuerCode(w.code);
+    zeichneHimmel(b, w.tag, t, b === "GEWITTER" && blitzAktiv(t));
+    if (wechsel) {
+      const p = (t - wechselStart) / WECHSEL_DAUER;
+      if (p >= 1) wechsel = false;
+      else { const weg = Math.floor((1 - Math.pow(1 - p, 3)) * 240); zeichneSeite(alteSeite, -weg, t); zeichneSeite(seite, 240 - weg, t); }
+    }
+    if (!wechsel) zeichneSeite(seite, 0, t);
+    statusLeiste();
+    seitenPunkte();
+    if (!wechsel && t - seiteSeit > AUTO_WEITER && t - letzterTastendruck > 30000) naechsteSeite(t);
+  }
+  lichtAnzeige(t);
+}
+
+const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function schleife() { frame(); if (!still) requestAnimationFrame(schleife); }
+
+document.getElementById("keySeite").addEventListener("click", () => {
+  const t = jetzt();
+  if (modus === "start" || modus === "wlan" || wechsel) return;
+  naechsteSeite(t); letzterTastendruck = t;
+  if (still) frame();
+});
+document.getElementById("keyLicht").addEventListener("click", () => {
+  const t = jetzt();
+  lichtStufe = (lichtStufe + 1) % 4;
+  cv.style.filter = `brightness(${Math.max(0.12, HELLIGKEIT[lichtStufe] / 255)})`;
+  lichtAnzeigeBis = t + 1500; letzterTastendruck = t;
+  if (still) frame();
+});
+
+function chips(id, liste, aktiv, beiWahl) {
+  const box = document.getElementById(id);
+  liste.forEach(([wert, name]) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = name; b.id = `${id}-${wert}`;
+    b.setAttribute("aria-pressed", String(wert === aktiv));
+    b.addEventListener("click", () => {
+      box.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", "false"));
+      b.setAttribute("aria-pressed", "true");
+      beiWahl(wert);
+      if (still) frame();
+    });
+    box.appendChild(b);
+  });
+}
+const quelle = document.getElementById("quelle");
+function zeigeQuelle() {
+  quelle.textContent = modus === "echt"
+    ? "Echte Werte für 03046 Cottbus von open-meteo.com, abgerufen am 1. November 2026 um 07:30 Uhr. Das Gerät holt sie alle 15 Minuten neu."
+    : modus === "start"
+      ? "So sieht das Display aus, bis die ersten Daten da sind. Unten steht der Name deines WLANs."
+      : modus === "wlan"
+        ? "Beim ersten Start (oder Taste IO35 drei Sekunden halten) öffnet die Wetterstation das WLAN „Wetterstation-Setup“. Darin wählst du am Handy dein WLAN aus."
+        : "Vorführ-Wetter, damit du alle Animationen sehen kannst. Temperaturen und Regen sind teilweise angepasst.";
+}
+chips("wetterWahl", DEMOS.map(d => [d.id, d.name]), "echt", v => {
+  modus = v; baueWetter(); zeigeQuelle(); seiteSeit = jetzt(); startSeit = jetzt();
+});
+chips("tagWahl", [["echt", "Wie in den Daten"], ["tag", "Tag"], ["nacht", "Nacht"]], "echt", v => { tagModus = v; baueWetter(); });
+chips("akkuWahl", [["usb", "Am USB"], ["voll", "Akku 85 %"], ["leer", "Akku 15 %"]], "usb", v => { akkuModus = v; });
+chips("pixelWahl", [["pixel", "Echte Pixel"], ["glatt", "Geglättet"]], "pixel", v => setPixel(v === "pixel"));
+
+setPixel(true);
+baueWetter();
+zeigeQuelle();
+schleife();
+document.fonts && document.fonts.ready.then(() => { if (still) frame(); });
+</script>
