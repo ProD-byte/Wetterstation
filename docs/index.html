@@ -41,7 +41,7 @@
 <div class="rahmen">
   <div class="kopf">
     <div class="logo"><svg viewBox="0 0 24 24"><circle cx="15" cy="8" r="3"/><path d="M15 2v1M20.2 4.8l-.7.7M22 9h-1M7 20h10a4 4 0 0 0 0-8 5 5 0 0 0-9.6 1.2A3.5 3.5 0 0 0 7 20z"/></svg></div>
-    <div><h1>Wetterstation</h1><p>Online-Flasher &middot; animiertes Wetter f&uuml;r das LILYGO T-Display</p></div>
+    <div><h1>Wetterstation</h1><p>Online-Flasher &middot; animiertes Wetter f&uuml;r das LILYGO T-Display-S3</p></div>
   </div>
 
   <div class="karte sim">
@@ -71,16 +71,16 @@
         </esp-web-install-button>
       </div>
     </div>
-    <span class="leise">Funktioniert mit Chrome und Edge am Computer &middot; T-Display per USB-C anschlie&szlig;en.</span>
+    <span class="leise">Funktioniert mit Chrome und Edge am Computer &middot; T-Display-S3 per USB-C anschlie&szlig;en.</span>
   </div>
 
   <div class="karte">
     <h2>So geht&rsquo;s</h2>
     <ol>
-      <li>T-Display per <b>USB-C</b> mit dem Computer verbinden (Kabel mit Datenleitungen, kein reines Ladekabel).</li>
-      <li><b>&bdquo;Update installieren&ldquo;</b> oder <b>&bdquo;L&ouml;schen &amp; neu installieren&ldquo;</b> klicken und den Anschluss ausw&auml;hlen (z.&nbsp;B. &bdquo;USB Single Serial&ldquo; oder &bdquo;CH9102&ldquo;).</li>
-      <li>Kein Anschluss zu sehen? Unter Windows fehlt dann der Treiber f&uuml;r den <b>CH9102</b> (&bdquo;CH343SER&ldquo; von wch.cn).</li>
-      <li>Verbindung klappt nicht? Die <b>Taste IO0</b> gedr&uuml;ckt halten, kurz die <b>Reset-Taste</b> an der Seite dr&uuml;cken, IO0 loslassen &ndash; dann nochmal versuchen.</li>
+      <li>T-Display-S3 per <b>USB-C</b> mit dem Computer verbinden (Kabel mit Datenleitungen, kein reines Ladekabel).</li>
+      <li><b>&bdquo;Update installieren&ldquo;</b> oder <b>&bdquo;L&ouml;schen &amp; neu installieren&ldquo;</b> klicken und den Anschluss ausw&auml;hlen (meist &bdquo;USB JTAG/serial debug unit&ldquo;).</li>
+      <li>Der ESP32-S3 hat USB direkt eingebaut &ndash; ein Treiber ist nicht n&ouml;tig.</li>
+      <li>Verbindung klappt nicht? Die <b>BOOT-Taste</b> (IO0) gedr&uuml;ckt halten, kurz die <b>RST-Taste</b> an der Seite dr&uuml;cken, BOOT loslassen &ndash; dann nochmal versuchen.</li>
       <li>Nach dem Aufspielen startet das Display. Beim ersten Mal mit dem Handy ins WLAN <b>&bdquo;Wetterstation-Setup&ldquo;</b> gehen, dein WLAN antippen und das Passwort eingeben.</li>
       <li>Danach fragt die Seite, <b>wo die Wetterstation steht</b>: Ort oder Postleitzahl suchen oder den Vorschlag antippen. Ohne Auswahl findet sie den Ort ungef&auml;hr &uuml;ber deinen Internetanschluss.</li>
     </ol>
@@ -97,9 +97,9 @@
       <span>&#128246; WLAN und Ort per Handy einrichten</span><span>&#9881;&#65039; Einstellungen unter wetterstation.local</span>
       <span>&#128260; Updates von selbst aus dem Internet</span><span>&#128225; Updates &uuml;ber WLAN</span>
     </div>
-    <p class="leise" style="margin:12px 0 0">Wetterdaten f&uuml;r deinen Ort von <a href="https://open-meteo.com/">Open-Meteo</a>, alle 15 Minuten neu. Tasten: <b>IO0</b> = n&auml;chste Seite (2&nbsp;s halten = Sprache Deutsch/Englisch), <b>IO35</b> kurz = Helligkeit, 3&nbsp;s halten = WLAN und Ort neu einrichten.</p>
+    <p class="leise" style="margin:12px 0 0">Wetterdaten f&uuml;r deinen Ort von <a href="https://open-meteo.com/">Open-Meteo</a>, alle 15 Minuten neu. Tasten: <b>IO0</b> = n&auml;chste Seite (2&nbsp;s halten = Sprache Deutsch/Englisch), <b>IO14</b> kurz = Helligkeit, 3&nbsp;s halten = WLAN und Ort neu einrichten.</p>
   </div>
-  <p class="leise" style="text-align:center">LILYGO TTGO T-Display (ESP32) &middot; gebaut mit PlatformIO &middot; <a href="https://github.com/ProD-byte/Wetterstation">Quellcode auf GitHub</a> &middot; Online-Flasher: <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a></p>
+  <p class="leise" style="text-align:center">LILYGO T-Display-S3 (ESP32-S3, 1,9&Prime;, 320&times;170) &middot; gebaut mit PlatformIO &middot; <a href="https://github.com/ProD-byte/Wetterstation">Quellcode auf GitHub</a> &middot; Online-Flasher: <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a></p>
 </div>
 <script>
 /* Flasher-Einstellungen immer frisch laden (nie aus dem Browser-Zwischenspeicher) */

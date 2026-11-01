@@ -46,17 +46,17 @@ jobs:
       - name: Firmware bauen (mit Build-Nummer)
         env:
           PLATFORMIO_BUILD_FLAGS: -DFIRMWARE_BUILD=${{ github.run_number }}
-        run: pio run -e tdisplay
+        run: pio run -e tdisplay_s3
 
       - name: Alles in eine Datei packen (fuer den Online-Flasher)
         run: |
-          B=.pio/build/tdisplay
+          B=.pio/build/tdisplay_s3
           BOOT_APP0=$(find ~/.platformio/packages/framework-arduinoespressif32 -name boot_app0.bin | head -n 1)
           mkdir -p ausgabe
-          # ESP32 (klassisch): Bootloader liegt bei 0x1000, nicht bei 0x0
-          python -m esptool --chip esp32 merge_bin -o ausgabe/wetterstation-komplett.bin \
-            --flash_mode dio --flash_size 4MB \
-            0x1000 $B/bootloader.bin 0x8000 $B/partitions.bin 0xe000 "$BOOT_APP0" 0x10000 $B/firmware.bin
+          # ESP32-S3: Bootloader bei 0x0, flash_mode keep (Bootloader ist schon fuer QIO/OPI gebaut)
+          python -m esptool --chip esp32s3 merge_bin -o ausgabe/wetterstation-komplett.bin \
+            --flash_mode keep --flash_size 16MB \
+            0x0 $B/bootloader.bin 0x8000 $B/partitions.bin 0xe000 "$BOOT_APP0" 0x10000 $B/firmware.bin
           # Einzelteile fuer das Flasher-Update (ueberschreibt die gespeicherten WLANs NICHT)
           mkdir -p ausgabe/teile
           cp $B/bootloader.bin $B/partitions.bin "$BOOT_APP0" $B/firmware.bin ausgabe/teile/
