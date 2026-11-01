@@ -44,6 +44,8 @@ struct Wetter {
   char warnungEn[48] = "";
   int warnStufe = 0;      // 1 gering ... 4 extrem
 
+  int32_t utcAbweichung = 3600;  // Zeitzone des Orts in Sekunden (inkl. Sommerzeit)
+
   uint32_t abruf = 0;  // millis() beim letzten Abruf
 };
 
@@ -56,3 +58,4 @@ bool wetterHolen(Wetter &w);  // Kopie der neuesten Daten, false solange noch ke
 WetterStatus wetterStatus();
 void wetterNeuLaden();        // z. B. nach Ortswechsel auf der Einstellungsseite
 void wetterOrteNeu();         // weitere Orte geaendert -> gleich deren Wetter holen
+void wetterOrtAutomatisch();  // Ort wieder ueber die Internet-Adresse bestimmen (im Hintergrund)

@@ -5,7 +5,7 @@
 // macht die Wetterstation das WLAN "Wetterstation-Setup" auf. Das Handy oeffnet darin die
 // Einrichtungsseite von selbst.
 
-#define WLAN_HOSTNAME "wetterstation"
+// Name im Netz: einst.name (Standard "wetterstation", auf der Einstellungsseite aenderbar)
 #define WLAN_SETUP_NAME "Wetterstation-Setup"
 
 enum WlanPhase {

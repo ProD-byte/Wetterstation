@@ -16,7 +16,12 @@ struct Einstellungen {
   uint8_t sprache = 0;        // 0 = Deutsch, 1 = Englisch
   bool gedreht = false;       // Bild um 180 Grad drehen (Board andersherum eingebaut)
   uint8_t radarZoom = 0;      // Ausschnitt des Regenradars: 0 = nah, 1 = mittel, 2 = weit
+  uint8_t warnAb = 1;         // DWD-Warnungen zeigen ab Stufe: 1 = alle (gelb), 2 = orange, 3 = rot, 5 = keine
+  char name[25] = "wetterstation";  // Name im Netz (name.local) - verschieden, wenn mehrere Stationen im WLAN sind
 };
+
+// Name im Netz pruefen: 1-24 Zeichen a-z, 0-9 und "-" (nicht am Anfang/Ende)
+bool nameGueltig(const String &n);
 
 extern Einstellungen einst;
 

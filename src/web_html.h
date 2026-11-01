@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
-// Einstellungsseite unter http://wetterstation.local (im eigenen WLAN), Deutsch/Englisch.
+// Einstellungsseite unter http://wetterstation.local (bzw. dem eigenen Namen, im eigenen WLAN), Deutsch/Englisch.
 // Holt den Stand von /api/status und schickt Aenderungen sofort an die Wetterstation.
 static const char WEB_HTML[] PROGMEM = R"rawliteral(<!doctype html>
 <html lang="de">
@@ -89,6 +89,13 @@ select{font:inherit;font-size:15px;padding:8px 10px;border-radius:12px;border:1p
     <div class="zeile"><span data-t="blaettern">Weiterblättern</span><select id="wechsel"></select></div>
     <div class="zeile"><span><span data-t="drehen">Bild um 180° drehen</span><small data-t="drehenKlein">wenn das Board andersherum eingebaut ist und das Bild auf dem Kopf steht</small></span><label class="schalter"><input type="checkbox" id="gedreht"><i></i></label></div>
     <div class="zeile"><span><span data-t="radar">Regenradar</span><small id="radarKlein"></small></span><div class="seg" id="radarzoom"></div></div>
+    <div class="zeile"><span><span data-t="warnTitel">Unwetterwarnungen</span><small data-t="warnKlein">vom Deutschen Wetterdienst, nur in Deutschland</small></span><div class="seg" id="warnab"></div></div>
+  </div>
+
+  <div class="card">
+    <h2 data-t="nameTitel">Name im Netz</h2>
+    <form class="suche" id="nameForm"><input id="name" autocomplete="off" maxlength="24" spellcheck="false"><button class="btn" data-t="speichern">Speichern</button></form>
+    <p class="leise" data-t="nameHinweis">Mehrere Wetterstationen im selben WLAN brauchen verschiedene Namen, z. B. „wetterstation-kueche“. Die Station ist dann unter diesem Namen mit „.local“ erreichbar.</p>
   </div>
 
   <div class="card">
@@ -119,7 +126,10 @@ const EN = {
   orteTitel: 'More places', hinzu: 'Add', orteHinweis: 'Up to 3 places the station compares with yours on a page of its own.',
   verlaufTitel: 'Last 7 days', legT: 'Temperature', legD: 'Air pressure', legR: 'Rain',
   anzeige: 'Display', sprache: 'Language', helligkeit: 'Brightness', seiten: 'Pages', blaettern: 'Next page',
-  radar: 'Rain radar', drehen: 'Rotate picture by 180°', drehenKlein: 'if the board is mounted the other way round and the picture is upside down',
+  radar: 'Rain radar', warnTitel: 'Weather warnings', warnKlein: 'from the German Weather Service, Germany only',
+  nameTitel: 'Name on the network', speichern: 'Save',
+  nameHinweis: 'Several weather stations on the same Wi-Fi need different names, e.g. “wetterstation-kitchen”. The station can then be reached under this name with “.local”.',
+  drehen: 'Rotate picture by 180°', drehenKlein: 'if the board is mounted the other way round and the picture is upside down',
   nachtmodus: 'Night mode', nachtDunkel: 'Dark display at night', nachtKlein: 'strongly dimmed, buttons light it up briefly',
   von: 'from', bis: 'until', autoUpd: 'Install new versions by itself', autoKlein: 'gets them from GitHub, no computer needed',
   wlan: 'Wi-Fi', neuEinrichten: 'Set up again', wlanHinweis: 'Restarts and opens the Wi-Fi “Wetterstation-Setup” – then set it up with your phone like the first time.'
@@ -135,6 +145,15 @@ async function senden(pfad, daten) {
   const r = await fetch(pfad, {method: 'POST', body: new URLSearchParams(daten || {})});
   return r.ok;
 }
+// Ortssuche laeuft auf der Station im Hintergrund: nachfragen, bis das Ergebnis da ist
+async function ortSuche(q) {
+  for (let i = 0; i < 60; i++) {
+    const r = await fetch('/orte?q=' + encodeURIComponent(q));
+    if (r.status === 200) return r.json();
+    await new Promise(f => setTimeout(f, 400));
+  }
+  return [];
+}
 
 function zeigen() {
   const e = st.einst;
@@ -143,7 +162,6 @@ function zeigen() {
   document.querySelectorAll('#sprache button').forEach(b => b.classList.toggle('an', b.dataset.s == e.sprache));
   $('#suche').placeholder = L('Ort oder Postleitzahl', 'Town or postcode');
   $('#orteSuche').placeholder = L('Weiteren Ort suchen', 'Search another place');
-  $('#kopf').textContent = `Build ${st.build || L('eigener', 'own')} · ${st.ip}`;
   $('#ortName').textContent = st.ort;
   $('#ortArt').textContent = st.gewaehlt ? L('selbst gewählt', 'chosen by you') : L('ungefähr ermittelt über den Internetanschluss', 'roughly detected via your internet connection');
   const LICHT = ['100 %', '55 %', '25 %', '6 %'];
@@ -160,6 +178,11 @@ function zeigen() {
   const ZOOM = [[L('Nah', 'Near'), '120 × 55 km'], [L('Mittel', 'Medium'), '240 × 110 km'], [L('Weit', 'Far'), '480 × 220 km']];
   $('#radarzoom').innerHTML = ZOOM.map(([t], i) => `<button data-i="${i}" class="${i === e.radarzoom ? 'an' : ''}">${t}</button>`).join('');
   $('#radarKlein').textContent = L('Ausschnitt etwa ', 'area about ') + ZOOM[e.radarzoom || 0][1];
+  const WARN = [[1, L('Alle', 'All')], [2, L('Ab Orange', 'Orange+')], [3, L('Ab Rot', 'Red+')], [5, L('Aus', 'Off')]];
+  $('#warnab').innerHTML = WARN.map(([v, t]) => `<button data-i="${v}" class="${v === e.warnab ? 'an' : ''}">${t}</button>`).join('');
+  document.querySelectorAll('#warnab button').forEach(b => b.onclick = () => speichern({warnab: +b.dataset.i}));
+  if (document.activeElement !== $('#name')) $('#name').value = e.name;
+  $('#kopf').textContent = `${e.name}.local · Build ${st.build || L('eigener', 'own')} · ${st.ip}`;
   document.querySelectorAll('#radarzoom button').forEach(b => b.onclick = () => { speichern({radarzoom: +b.dataset.i}); melden(L('Radar wird neu geladen', 'Reloading radar')); });
   $('#updText').innerHTML = !st.build ? L('Selbst gebaute Firmware – keine Updates von GitHub', 'Self-built firmware – no updates from GitHub')
     : st.neu ? `<b>Build ${st.neu}</b> ${L('ist verfügbar', 'is available')}` : `${L('Aktuell', 'Up to date')} (Build ${st.build})`;
@@ -189,7 +212,7 @@ $('#orteForm').onsubmit = async e => {
   const q = $('#orteSuche').value.trim();
   if (q.length < 2) return;
   $('#orteTreffer').innerHTML = `<p class="leise">${L('suche …', 'searching …')}</p>`;
-  const liste = await (await fetch('/orte?q=' + encodeURIComponent(q))).json();
+  const liste = await ortSuche(q);
   $('#orteTreffer').innerHTML = liste.length ? liste.map((o, i) => `<button data-i="${i}">${esc(o.name)} <small>${esc(o.info)}</small></button>`).join('') : `<p class="leise">${L('Nichts gefunden', 'Nothing found')}</p>`;
   document.querySelectorAll('#orteTreffer button').forEach(b => b.onclick = async () => {
     const o = liste[b.dataset.i];
@@ -252,7 +275,7 @@ $('#sucheForm').onsubmit = async e => {
   const q = $('#suche').value.trim();
   if (q.length < 2) return;
   $('#treffer').innerHTML = `<p class="leise">${L('suche …', 'searching …')}</p>`;
-  const liste = await (await fetch('/orte?q=' + encodeURIComponent(q))).json();
+  const liste = await ortSuche(q);
   $('#treffer').innerHTML = liste.length ? liste.map((o, i) => `<button data-i="${i}">${esc(o.name)} <small>${esc(o.info)}</small></button>`).join('') : `<p class="leise">${L('Nichts gefunden', 'Nothing found')}</p>`;
   document.querySelectorAll('#treffer button').forEach(b => b.onclick = async () => {
     const o = liste[b.dataset.i];
@@ -261,7 +284,19 @@ $('#sucheForm').onsubmit = async e => {
     melden(L('Ort gespeichert', 'Location saved')); laden();
   });
 };
-$('#ortAuto').onclick = async e => { e.preventDefault(); await senden('/api/ort-auto'); melden(L('Ort wird neu bestimmt', 'Detecting location')); setTimeout(laden, 2500); };
+$('#ortAuto').onclick = async e => { e.preventDefault(); await senden('/api/ort-auto'); melden(L('Ort wird neu bestimmt', 'Detecting location')); setTimeout(laden, 4000); };
+$('#nameForm').onsubmit = async e => {
+  e.preventDefault();
+  // Vorschlag aufraeumen: klein, Umlaute umschreiben, Leerzeichen -> "-"
+  const n = $('#name').value.trim().toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+    .replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24);
+  if (!n) return melden(L('Name ungültig', 'Invalid name'));
+  if (n === st.einst.name) return melden(L('Unverändert', 'Unchanged'));
+  if (!confirm(L(`Neuer Name: ${n}.local\nDie Station startet dazu neu.`, `New name: ${n}.local\nThe station restarts.`))) return;
+  if (!await senden('/api/name', {name: n})) return melden(L('Name ungültig', 'Invalid name'));
+  melden(L('Startet neu …', 'Restarting …'));
+  setTimeout(() => location.href = `http://${n}.local/`, 8000);
+};
 $('#updBtn').onclick = async () => {
   if (st.neu) { if (await senden('/api/update/installieren')) melden(L('Update startet – siehe Display', 'Update starting – see display')); }
   else { await senden('/api/update/suchen'); melden(L('Suche …', 'Checking …')); setTimeout(laden, 4000); }

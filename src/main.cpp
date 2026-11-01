@@ -62,6 +62,7 @@ float akkuVolt = 0;
 uint32_t akkuZeit = 0;
 
 static Wetter w;
+void zeitzoneSetzen(int32_t abweichung);
 
 static const char *WOCHENTAG[] = {"Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"};
 static const char *WOCHENTAG_KURZ[] = {"So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"};
@@ -134,7 +135,7 @@ float daemmerung() {
 // Titel oben links. Gibt es eine DWD-Warnung, wechselt er alle 2,5 s mit der Warnung.
 void titel(int ox, const char *text, uint32_t t) {
   schrift(bild, S_MF);
-  if (w.warnung[0] && (t / 2500) % 2) {
+  if (w.warnung[0] && w.warnStufe >= einst.warnAb && (t / 2500) % 2) {
     uint16_t f = w.warnStufe >= 3 ? farbe(255, 80, 70) : farbe(255, 160, 40);
     float blink = 0.6f + 0.4f * sinf(t * 0.012f);
     zeichneWarnzeichen(bild, ox + 15, 11, 15, bild.alphaBlend(255 * blink, f, hintergrund(ox + 15, 11)));
@@ -536,9 +537,14 @@ void seiteVerlauf(int ox, uint32_t t) {
   schrift(bild, S_K);
   schreibeTemp(bild, tmax, ox + 4, YO + 8, farbe(255, 214, 130), LINKS);
   schreibeTemp(bild, tmin, ox + 4, YU, farbe(255, 214, 130), LINKS);
-  char z[16];
-  snprintf(z, sizeof(z), "%d hPa", (int)lroundf(v.druck[n - 1]));
-  schreibe(bild, z, ox + X1, YO - 4, farbe(140, 200, 255), RECHTS);
+  // aktueller Luftdruck = letzter vorhandene Wert (die juengste Stunde fehlt manchmal noch)
+  int letzter = n - 1;
+  while (letzter > 0 && isnan(v.druck[letzter])) letzter--;
+  if (!isnan(v.druck[letzter])) {
+    char z[16];
+    snprintf(z, sizeof(z), "%d hPa", (int)lroundf(v.druck[letzter]));
+    schreibe(bild, z, ox + X1, YO - 4, farbe(140, 200, 255), RECHTS);
+  }
 }
 
 // ------------------------------------------------------------
@@ -647,7 +653,7 @@ void infoAnzeige(uint32_t t) {
   schrift(bild, S_K);
   schreibe(bild, TX("Einstellungen im Browser:", "Settings in your browser:"), B / 2, 76, HELL, MITTE);
   schrift(bild, S_M);
-  schreibe(bild, WLAN_HOSTNAME ".local", B / 2, 98, WEISS, MITTE);
+  schreibe(bild, (String(einst.name) + ".local").c_str(), B / 2, 98, WEISS, MITTE);
   schrift(bild, S_K);
   schreibe(bild, (String(TX("oder ", "or ")) + WiFi.localIP().toString()).c_str(), B / 2, 118, WEISS, MITTE);
   char z[40];
@@ -795,7 +801,7 @@ void updateBild(int prozent, const char *text) {
 }
 
 void updateStart() {
-  ArduinoOTA.setHostname(WLAN_HOSTNAME);
+  ArduinoOTA.setHostname(einst.name);  // meldet auch name.local im Netz an (mDNS)
   if (strlen(OTA_PASSWORT) > 0) ArduinoOTA.setPassword(OTA_PASSWORT);
   ArduinoOTA.onStart([]() {
     Serial.println("Update startet");
@@ -817,7 +823,7 @@ void updateStart() {
     delay(2000);
   });
   ArduinoOTA.begin();
-  Serial.printf("Update ueber WLAN bereit: wetterstation.local (%s)\n", WiFi.localIP().toString().c_str());
+  Serial.printf("Update ueber WLAN bereit: %s.local (%s)\n", einst.name, WiFi.localIP().toString().c_str());
 }
 
 // ------------------------------------------------------------
@@ -846,8 +852,10 @@ bool istNacht() {
                                          : h >= einst.nachtVon || h < einst.nachtBis;
 }
 
+static int lichtZuletzt = -1;  // -1 = beim naechsten Mal sicher neu setzen
+
 void lichtSetzen(uint32_t t) {
-  static int zuletzt = -1;
+  int &zuletzt = lichtZuletzt;
   static uint32_t geprueft = 0;
   static bool nacht = false;
   if (t - geprueft > 1000) {
@@ -876,7 +884,8 @@ void tasten(uint32_t t, bool hatDaten) {
   }
   if (!s && seiteSeitDruck) {
     sprachGewechselt = false;
-    if (t - seiteSeitDruck < 1000) {
+    bool warDunkel = istNacht() && t - letzterTastendruck > 20000;
+    if (t - seiteSeitDruck < 1000 && !warDunkel) {  // nachts weckt der erste Druck nur auf (wie IO14)
       if ((int32_t)(infoBis - t) > 0) infoBis = t;  // Info wieder zu
       else if (hatDaten && !wechsel) naechsteSeite(t);
     }
@@ -939,7 +948,8 @@ void setup() {
   orteLaden();
   wlanVerbinden(einrichten, wlanBild);
 
-  configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "de.pool.ntp.org", "pool.ntp.org");
+  // bis die ersten Wetterdaten da sind: mitteleuropaeische Zeit, danach die Zeitzone des Orts
+  configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.cloudflare.com");
   updateStart();
   webStart();
   wetterStart();
@@ -953,6 +963,7 @@ void loop() {
   webLoop();
 
   bool hatDaten = wetterHolen(w);
+  if (hatDaten) zeitzoneSetzen(w.utcAbweichung);
   tasten(t, hatDaten);
   lichtSetzen(t);
 
@@ -966,8 +977,9 @@ void loop() {
   // Neue Version aus dem Internet: auf Wunsch sofort, sonst wenn gerade niemand die Tasten benutzt
   bool gewuenscht = updateInstallierenGewuenscht();
   if (updateNeuerBuild() && (gewuenscht || (einst.autoUpdate && t - letzterTastendruck > 60000))) {
-    lichtStufe(16);
+    if (gewuenscht || !istNacht()) lichtStufe(16);  // nachts bleibt das Display beim Selbst-Update dunkel
     updateInstallieren(updateBild);
+    lichtZuletzt = -1;  // nur bei Fehler: Helligkeit wieder richtig setzen
   }
 
   if (t - akkuZeit > 2000) {
@@ -1004,4 +1016,25 @@ void loop() {
   infoAnzeige(t);
 
   bild.pushSprite(0, 0);
+
+  // hoechstens ca. 30 Bilder pro Sekunde: sieht gleich aus, spart Strom und haelt das Board kuehl
+  static uint32_t bildStart = 0;
+  int32_t rest = 33 - (int32_t)(millis() - bildStart);
+  if (rest > 0) delay(rest);
+  bildStart = millis();
+}
+
+// Zeitzone des Orts (von Open-Meteo, mit Sommerzeit) als feste Abweichung von UTC uebernehmen.
+// Wird mit jedem Wetterabruf (alle 15 min) aktualisiert - so stimmt die Uhr auf der ganzen Welt.
+void zeitzoneSetzen(int32_t abweichung) {
+  static int32_t gesetzt = INT32_MIN;
+  if (abweichung == gesetzt) return;
+  gesetzt = abweichung;
+  int32_t a = abs(abweichung);
+  char tz[24];
+  // POSIX zaehlt andersherum: "STD-1" heisst UTC+1
+  snprintf(tz, sizeof(tz), "STD%c%d:%02d", abweichung >= 0 ? '-' : '+', a / 3600, a % 3600 / 60);
+  setenv("TZ", tz, 1);
+  tzset();
+  Serial.printf("Zeitzone: UTC%+.2g h (%s)\n", abweichung / 3600.0f, tz);
 }

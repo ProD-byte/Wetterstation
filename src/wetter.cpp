@@ -33,6 +33,8 @@ const uint32_t ABSTAND_VERLAUF = 60 * 60 * 1000;
 
 static volatile bool orteNeu = false;
 void wetterOrteNeu() { orteNeu = true; }
+static volatile bool ortAuto = false;
+void wetterOrtAutomatisch() { ortAuto = true; }
 
 static Wetter aktuell;
 static SemaphoreHandle_t sperre;
@@ -126,6 +128,7 @@ static bool wetterAbrufen(Wetter &w, const Ort &ort) {
   if (auf) strlcpy(w.sonneAuf, auf + 11, sizeof(w.sonneAuf));
   if (unter) strlcpy(w.sonneUnter, unter + 11, sizeof(w.sonneUnter));
   w.uv = d["uv_index_max"][0] | 0.0f;
+  w.utcAbweichung = doc["utc_offset_seconds"] | w.utcAbweichung;  // timezone=auto: Zeitzone des Orts
 
   w.gueltig = true;
   w.abruf = millis();
@@ -198,6 +201,15 @@ static void aufgabe(void *) {
       if (!o.vomNutzer) {
         if (!aktuell.gueltig) status = ORTUNG;
         if (ortPerIp(o)) ortSpeichern(o);
+      }
+    }
+    // Einstellungsseite: "Ort wieder automatisch bestimmen"
+    if (ortAuto) {
+      ortAuto = false;
+      Ort o = ortAktuell();
+      if (ortPerIp(o)) {
+        ortSpeichern(o);
+        neuLaden = true;
       }
     }
     if (neuLaden) {

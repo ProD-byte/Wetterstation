@@ -18,6 +18,9 @@ void einstellungenLaden() {
   e.sprache = p.getUChar("sprache", e.sprache) % 2;
   e.gedreht = p.getBool("gedreht", e.gedreht);
   e.radarZoom = p.getUChar("radarzoom", e.radarZoom) % 3;
+  e.warnAb = constrain(p.getUChar("warnab", e.warnAb), 1, 5);
+  String n = p.getString("name", e.name);
+  if (nameGueltig(n)) strlcpy(e.name, n.c_str(), sizeof(e.name));
   p.end();
   einst = e;
 }
@@ -35,5 +38,14 @@ void einstellungenSpeichern() {
   p.putUChar("sprache", einst.sprache);
   p.putBool("gedreht", einst.gedreht);
   p.putUChar("radarzoom", einst.radarZoom);
+  p.putUChar("warnab", einst.warnAb);
+  p.putString("name", einst.name);
   p.end();
+}
+
+bool nameGueltig(const String &n) {
+  if (n.length() < 1 || n.length() > 24 || n[0] == '-' || n[n.length() - 1] == '-') return false;
+  for (char c : n)
+    if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) return false;
+  return true;
 }

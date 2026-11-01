@@ -34,7 +34,8 @@ static void status() {
              ",\"einst\":{\"licht\":" + einst.licht + ",\"seiten\":" + einst.seiten + ",\"wechsel\":" + einst.wechsel +
              ",\"nacht\":" + (einst.nacht ? "true" : "false") + ",\"von\":" + einst.nachtVon + ",\"bis\":" +
              einst.nachtBis + ",\"auto\":" + (einst.autoUpdate ? "true" : "false") + ",\"sprache\":" + einst.sprache +
-             ",\"gedreht\":" + (einst.gedreht ? "true" : "false") + ",\"radarzoom\":" + einst.radarZoom + "}}";
+             ",\"gedreht\":" + (einst.gedreht ? "true" : "false") + ",\"radarzoom\":" + einst.radarZoom +
+             ",\"warnab\":" + einst.warnAb + ",\"name\":\"" + einst.name + "\"}}";
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", j);
 }
@@ -58,13 +59,43 @@ static void einstellungenSetzen() {
   einst.sprache = constrain(zahl("sprache", einst.sprache), 0, 1);
   einst.gedreht = janein("gedreht", einst.gedreht);
   einst.radarZoom = constrain(zahl("radarzoom", einst.radarZoom), 0, 2);
+  einst.warnAb = constrain(zahl("warnab", einst.warnAb), 1, 5);
   einstellungenSpeichern();
   server.send(200, "text/plain", "ok");
 }
 
+// Ortssuche im Hintergrund (eigene kleine Aufgabe), damit die Animation nicht stehen bleibt:
+// die Seite fragt so lange nach, bis das Ergebnis da ist (202 = suche noch).
+static SemaphoreHandle_t sucheSperre = xSemaphoreCreateMutex();
+static String sucheFrage, sucheFertig, sucheErgebnis;
+static volatile bool sucheLaeuft = false;
+
+static void sucheAufgabe(void *) {
+  xSemaphoreTake(sucheSperre, portMAX_DELAY);
+  String q = sucheFrage;
+  xSemaphoreGive(sucheSperre);
+  String e = ortSuchen(q);
+  xSemaphoreTake(sucheSperre, portMAX_DELAY);
+  sucheFertig = q, sucheErgebnis = e;
+  xSemaphoreGive(sucheSperre);
+  sucheLaeuft = false;
+  vTaskDelete(nullptr);
+}
+
 static void orteSuchen() {
+  String q = server.arg("q");
   server.sendHeader("Cache-Control", "no-store");
-  server.send(200, "application/json", ortSuchen(server.arg("q")));
+  xSemaphoreTake(sucheSperre, portMAX_DELAY);
+  bool da = !sucheLaeuft && sucheFertig == q;
+  String e = da ? sucheErgebnis : "";
+  if (!da && !sucheLaeuft) {
+    sucheFrage = q;
+    sucheLaeuft = true;
+    if (xTaskCreatePinnedToCore(sucheAufgabe, "suche", 12288, nullptr, 1, nullptr, 0) != pdPASS) sucheLaeuft = false;
+  }
+  xSemaphoreGive(sucheSperre);
+  if (da) server.send(200, "application/json", e);
+  else server.send(202, "application/json", "[]");
 }
 
 static void ortSetzen() {
@@ -79,12 +110,24 @@ static void ortSetzen() {
 }
 
 static void ortAutomatisch() {
+  wetterOrtAutomatisch();  // erledigt die Wetter-Aufgabe im Hintergrund
   server.send(200, "text/plain", "ok");
-  Ort o = ortAktuell();
-  if (ortPerIp(o)) {
-    ortSpeichern(o);
-    wetterNeuLaden();
+}
+
+static void nameSetzen() {
+  String n = server.arg("name");
+  n.trim();
+  n.toLowerCase();
+  if (!nameGueltig(n)) {
+    server.send(400, "text/plain", "ungueltig");
+    return;
   }
+  server.send(200, "text/plain", "ok");
+  if (n == einst.name) return;
+  strlcpy(einst.name, n.c_str(), sizeof(einst.name));
+  einstellungenSpeichern();
+  delay(500);
+  ESP.restart();  // der neue Name gilt im Netz erst nach dem Neustart
 }
 
 void webStart() {
@@ -94,6 +137,7 @@ void webStart() {
   server.on("/orte", HTTP_GET, orteSuchen);
   server.on("/api/ort", HTTP_POST, ortSetzen);
   server.on("/api/ort-auto", HTTP_POST, ortAutomatisch);
+  server.on("/api/name", HTTP_POST, nameSetzen);
   server.on("/api/verlauf", HTTP_GET, []() {
     server.sendHeader("Cache-Control", "no-store");
     server.send(200, "application/json", verlaufJson());
@@ -126,7 +170,7 @@ void webStart() {
   });
   server.onNotFound([]() { server.send(404, "text/plain", "nicht gefunden"); });
   server.begin();
-  Serial.printf("Einstellungen: http://%s.local oder http://%s\n", WLAN_HOSTNAME, WiFi.localIP().toString().c_str());
+  Serial.printf("Einstellungen: http://%s.local oder http://%s\n", einst.name, WiFi.localIP().toString().c_str());
 }
 
 void webLoop() { server.handleClient(); }

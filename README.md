@@ -15,10 +15,15 @@ Geschrieben mit **VS Code + PlatformIO** (Arduino-Kern 2.0.14 – TFT_eSPI läuf
 | 📅 **Nächste Tage** | heute, morgen, übermorgen mit Höchst- und Tiefstwert und Regenrisiko |
 | 🌅 **Sonne & Mond** | Sonne auf ihrem Tagesbogen, Auf- und Untergang, Tageslänge, UV-Index, Mondphase |
 | 🌿 **Luft & Pollen** | Europäischer Luftqualitätsindex, Feinstaub, Erle, Birke, Gräser, Beifuß, Ambrosia |
-| ⚠️ **Warnungen** | Unwetterwarnungen des Deutschen Wetterdienstes ([brightsky.dev](https://brightsky.dev/)) blinken oben |
+| 📡 **Regenradar** | Radarbilder der letzten Stunde ([RainViewer](https://www.rainviewer.com/)) als Animation auf einer dunklen Karte ([OpenStreetMap](https://www.openstreetmap.org/copyright)); Ausschnitt nah, mittel oder weit. Ist nirgends Regen, steht „Kein Regen in der Nähe“ da |
+| 📉 **Letzte 7 Tage** | Temperatur, Luftdruck und Regen der vergangenen Woche (auch als Diagramm auf der Einstellungsseite) |
+| 🗺️ **Orte** | bis zu 3 weitere Orte im Vergleich mit deinem (Seite erscheint nur, wenn welche eingetragen sind) |
+| ⚠️ **Warnungen** | Unwetterwarnungen des Deutschen Wetterdienstes ([brightsky.dev](https://brightsky.dev/)) blinken oben – alle, erst ab Orange, ab Rot oder gar nicht |
 | 🌙 **Himmel** | Farbverlauf passend zum Wetter, Morgen- und Abendrot, ziehende Wolken, Regen/Schnee/Nebel über den ganzen Himmel, nachts funkelnde Sterne; Nachtmodus dimmt das Display |
 | 📶 **WLAN** | Einrichtung per Handy (WLAN „Wetterstation-Setup“), merkt sich bis zu 5 Netze |
-| ⚙️ **Einstellungen** | im Browser unter **http://wetterstation.local**: Sprache, Bild drehen, Ort, Ausschnitt des Regenradars (nah/mittel/weit), Helligkeit, Seiten, Blättern, Nachtmodus, Updates |
+| 🌐 **Weltweit** | Uhrzeit, Nachtmodus, Sonnenauf- und -untergang richten sich nach der Zeitzone des gewählten Orts (inkl. Sommerzeit) |
+| 🏷️ **Mehrere Stationen** | Name im Netz änderbar (z. B. `wetterstation-kueche.local`), damit mehrere Stationen im selben WLAN erreichbar sind |
+| ⚙️ **Einstellungen** | im Browser unter **http://wetterstation.local**: Sprache, Bild drehen, Ort, weitere Orte, Ausschnitt des Regenradars (nah/mittel/weit), Warnungen, Name im Netz, Helligkeit, Seiten, Blättern, Nachtmodus, Updates |
 | 🔃 **Einbaulage** | Bild um 180° drehen (Einstellungsseite), wenn das Board andersherum im Gehäuse sitzt. Das T-Display-S3 hat keinen Lagesensor, deshalb dreht es sich nicht von selbst |
 | 🌍 **Sprache** | Deutsch oder Englisch – Display, Einstellungsseite und Einrichtung. Bei der Einrichtung übernimmt die Station die Sprache des Handys |
 | 🔄 **Updates** | von selbst aus dem Internet (neue Builds von GitHub), über WLAN (OTA) oder mit dem Online-Flasher |
@@ -27,12 +32,13 @@ Die Seiten blättern alle 12 s von allein weiter (einstellbar).
 
 | Taste | kurz | lang |
 |---|---|---|
-| **IO0** | nächste Seite | 2 s halten = Sprache Deutsch/Englisch wechseln (zeigt auch Adresse der Einstellungsseite und Build) |
+| **IO0** | nächste Seite, nachts erst mal aufwecken | 2 s halten = Sprache Deutsch/Englisch wechseln (zeigt auch Adresse der Einstellungsseite und Build) |
 | **IO14** | Helligkeit (4 Stufen), nachts erst mal aufwecken | 3 s halten = WLAN und Ort neu einrichten |
 
 ### Update aus dem Internet
 Die Station schaut alle 6 Stunden auf GitHub Pages nach (`version.json`). Gibt es einen neueren Build, installiert
 sie ihn selbst, sobald eine Minute lang keine Taste gedrückt wurde – abschaltbar auf der Einstellungsseite.
+Im Nachtmodus bleibt das Display dabei dunkel.
 Firmware, die du selbst in VS Code baust (Build 0), sucht nicht nach Updates.
 
 ## 👀 Simulation
@@ -50,7 +56,7 @@ T-Display-S3 per USB-C anschließen, Chrome oder Edge am Computer (kein Treiber 
 1. Repository klonen und den Ordner in VS Code öffnen (PlatformIO-Erweiterung installiert).
 2. `geheim.beispiel.ini` → **`geheim.ini`** kopieren und ein Passwort für WLAN-Updates eintragen (oder leer lassen).
 3. Umgebung **`env:tdisplay_s3`** wählen → Upload (→).
-4. Spätere Updates ohne Kabel: Umgebung **`env:tdisplay_s3_wlan`** → Upload.
+4. Spätere Updates ohne Kabel: Umgebung **`env:tdisplay_s3_wlan`** → Upload. Hat die Station einen eigenen Namen, `upload_port` in `platformio.ini` anpassen.
 
 > 🔒 `geheim.ini` wird **nicht** hochgeladen (siehe `.gitignore`).
 
@@ -95,5 +101,11 @@ Bei jedem Hochladen baut GitHub die Firmware automatisch (`.github/workflows/bui
 
 - [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI) – Display
 - [ArduinoJson](https://arduinojson.org/) – Wetterdaten lesen
-- [Open-Meteo](https://open-meteo.com/) – Wetterdaten (CC BY 4.0)
+- [PNGdec](https://github.com/bitbank2/PNGdec) – Radarbilder und Karte entpacken
+- [Lato](https://www.latofonts.com/) von Łukasz Dziedzic – Schrift (SIL Open Font License 1.1)
+- [Open-Meteo](https://open-meteo.com/) – Wetter, Luft & Pollen, Ortssuche (CC BY 4.0)
+- [RainViewer](https://www.rainviewer.com/api.html) – Radarbilder
+- [OpenStreetMap](https://www.openstreetmap.org/copyright) – Karte (© OpenStreetMap-Mitwirkende, ODbL)
+- [Bright Sky](https://brightsky.dev/) – Warnungen des Deutschen Wetterdienstes
+- [ipapi.co](https://ipapi.co/), [ipwho.is](https://ipwho.is/), [Zippopotam.us](https://www.zippopotam.us/) – ungefährer Standort, Postleitzahlen
 - [ESP Web Tools](https://esphome.github.io/esp-web-tools/) – Online-Flasher

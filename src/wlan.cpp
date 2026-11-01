@@ -330,7 +330,7 @@ static void portalLaufen(bool bekannte) {
 void wlanVerbinden(bool einrichtungErzwingen, WlanAnzeige a) {
   anzeige = a;
   WiFi.persistent(false);  // Zugangsdaten verwalten wir selbst
-  WiFi.setHostname(WLAN_HOSTNAME);
+  WiFi.setHostname(einst.name);
   WiFi.mode(WIFI_STA);
 
   Netz liste[MAX_NETZE];
