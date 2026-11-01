@@ -151,7 +151,29 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(240,160,48,.2)}
 </div>
 <script>
 const $ = s => document.querySelector(s);
-const VIEWS = ['list', 'form', 'busy', 'ort', 'done', 'fail'];
+// Sprache des Handys: Deutsch oder Englisch (die Wetterstation uebernimmt sie bei der Ortswahl)
+const SPR = (navigator.language || 'de').toLowerCase().startsWith('de') ? 'de' : 'en';
+const L = (de, en) => SPR === 'en' ? en : de;
+if (SPR === 'en') {
+  const EN = {
+    'Wetterstation einrichten': 'Set up weather station', 'Wähle das WLAN für deine Wetterstation': 'Choose the Wi-Fi for your weather station',
+    'Netzwerke in der Nähe': 'Networks nearby', 'Anderes Netzwerk': 'Other network', 'Name des Netzwerks': 'Network name',
+    'Passwort': 'Password', 'Verbinden': 'Connect', 'Zurück': 'Back', 'Verbinde …': 'Connecting …', 'mit': 'to',
+    'WLAN verbunden': 'Wi-Fi connected', 'Wo steht deine Wetterstation?': 'Where is your weather station?',
+    'Ungefähr ermittelt über deinen Internetanschluss:': 'Roughly detected via your internet connection:',
+    'Anderen Ort suchen': 'Search another place', 'Überspringen': 'Skip', 'Fertig!': 'Done!',
+    'Die Wetterstation zeigt gleich das Wetter für': 'The weather station will show the weather for',
+    'Verbinde dein Handy wieder mit deinem normalen WLAN.': 'Reconnect your phone to your usual Wi-Fi.',
+    'Verbindung fehlgeschlagen': 'Connection failed', 'Passwort falsch oder Netz nicht erreichbar.': 'Wrong password or network out of reach.',
+    'Nochmal versuchen': 'Try again', 'Gespeicherte Netze merkt sich die Wetterstation automatisch.': 'The weather station remembers saved networks.',
+    'WLAN-Name': 'Wi-Fi name', 'WLAN-Passwort': 'Wi-Fi password', 'Ort oder Postleitzahl': 'Town or postcode'
+  };
+  document.documentElement.lang = 'en';
+  document.title = EN[document.title] || document.title;
+  const lauf = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n; (n = lauf.nextNode());) { const k = n.nodeValue.trim(); if (EN[k]) n.nodeValue = n.nodeValue.replace(k, EN[k]); }
+  document.querySelectorAll('[placeholder]').forEach(e => e.placeholder = EN[e.placeholder] || e.placeholder);
+}const VIEWS = ['list', 'form', 'busy', 'ort', 'done', 'fail'];
 const show = v => VIEWS.forEach(x => $('#' + x).hidden = x !== v);
 const esc = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const LOCK = '<svg class="lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
@@ -173,10 +195,10 @@ async function scan() {
     nets = await (await fetch('/scan')).json();
     $('#nets').innerHTML = nets.length
       ? nets.map((n, i) => `<button class="net" data-i="${i}">${bars(n.rssi)}<span class="name">${esc(n.ssid)}</span>${n.open ? '' : LOCK}</button>`).join('')
-      : '<div class="empty">Keine Netzwerke gefunden</div>';
+      : '<div class="empty">' + L('Keine Netzwerke gefunden', 'No networks found') + '</div>';
     document.querySelectorAll('.net').forEach(b => b.onclick = () => pick(nets[b.dataset.i]));
   } catch (e) {
-    $('#nets').innerHTML = '<div class="empty">Suche fehlgeschlagen</div>';
+    $('#nets').innerHTML = '<div class="empty">' + L('Suche fehlgeschlagen', 'Search failed') + '</div>';
   }
   $('#refresh').classList.remove('spin');
 }
@@ -225,7 +247,7 @@ async function ortFragen() {
   try {
     const o = await (await fetch('/ort')).json();
     if (o.name) {
-      o.info = o.gewaehlt ? 'zuletzt gewählt' : 'ungefähr';
+      o.info = o.gewaehlt ? L('zuletzt gewählt', 'chosen last time') : L('ungefähr', 'approximate');
       $('#vorschlag').innerHTML = ortKnopf(o);
       $('#vorschlag').onclick = () => waehle(o);
       $('#vorschlagWrap').hidden = false;
@@ -236,7 +258,7 @@ async function ortFragen() {
 async function waehle(o) {
   $('#fertigOrt').textContent = o.name;
   show('done');
-  try { await fetch('/ort', {method: 'POST', body: new URLSearchParams({name: o.name, lat: o.lat, lon: o.lon})}); } catch (e) {}
+  try { await fetch('/ort', {method: 'POST', body: new URLSearchParams({name: o.name, lat: o.lat, lon: o.lon, sprache: SPR})}); } catch (e) {}
 }
 
 $('#sucheForm').onsubmit = async e => {
@@ -248,17 +270,17 @@ $('#sucheForm').onsubmit = async e => {
     const liste = await (await fetch('/orte?q=' + encodeURIComponent(q))).json();
     $('#treffer').innerHTML = liste.length
       ? liste.map((o, i) => `<button type="button" class="ortbtn" data-i="${i}">${ortKnopf(o)}</button>`).join('')
-      : '<div class="empty">Nichts gefunden – anders schreiben?</div>';
+      : '<div class="empty">' + L('Nichts gefunden – anders schreiben?', 'Nothing found – try another spelling?') + '</div>';
     document.querySelectorAll('#treffer .ortbtn').forEach(b => b.onclick = () => waehle(liste[b.dataset.i]));
   } catch (e) {
-    $('#treffer').innerHTML = '<div class="empty">Suche fehlgeschlagen</div>';
+    $('#treffer').innerHTML = '<div class="empty">' + L('Suche fehlgeschlagen', 'Search failed') + '</div>';
   }
 };
 
 $('#spaeter').onclick = async () => {
-  $('#fertigOrt').textContent = 'den ungefähren Ort';
+  $('#fertigOrt').textContent = L('den ungefähren Ort', 'the approximate location');
   show('done');
-  try { await fetch('/ort', {method: 'POST', body: new URLSearchParams({spaeter: 1})}); } catch (e) {}
+  try { await fetch('/ort', {method: 'POST', body: new URLSearchParams({spaeter: 1, sprache: SPR})}); } catch (e) {}
 };
 
 scan();

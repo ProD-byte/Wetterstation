@@ -1,5 +1,6 @@
 #include "wetter.h"
 #include "ort.h"
+#include "einstellungen.h"
 #include "netzupdate.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -14,7 +15,11 @@ static const char *URL_REST =
     "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max"
     "&timezone=auto&forecast_days=4&forecast_hours=24";
 
-const char *POLLEN_NAME[5] = {"Erle", "Birke", "Gräser", "Beifuß", "Ambrosia"};
+const char *pollenName(int i) {
+  static const char *DE[5] = {"Erle", "Birke", "Gräser", "Beifuß", "Ambrosia"};
+  static const char *EN[5] = {"Alder", "Birch", "Grass", "Mugwort", "Ragweed"};
+  return TX(DE[i], EN[i]);
+}
 
 const uint32_t ABSTAND_OK     = 15 * 60 * 1000;  // alle 15 min neu
 const uint32_t ABSTAND_FEHLER = 60 * 1000;       // nach Fehler in 1 min nochmal
@@ -75,7 +80,7 @@ static bool wetterAbrufen(Wetter &w, const Ort &ort) {
   // Regen in den naechsten 2 Stunden (Viertelstunden): Beginn oder Ende ankuendigen
   JsonArray zeit15 = doc["minutely_15"]["time"];
   JsonArray regen15 = doc["minutely_15"]["precipitation"];
-  w.regenHinweis[0] = 0;
+  w.regenArt = 0;
   int n15 = min((int)regen15.size(), 8);
   if (n15 > 1) {
     bool jetztNass = (regen15[0] | 0.0f) >= 0.1f;
@@ -83,7 +88,8 @@ static bool wetterAbrufen(Wetter &w, const Ort &ort) {
       bool nass = (regen15[i] | 0.0f) >= 0.1f;
       const char *z = zeit15[i];
       if (nass != jetztNass && z) {
-        snprintf(w.regenHinweis, sizeof(w.regenHinweis), jetztNass ? "Regen bis %.5s" : "Regen ab %.5s", z + 11);
+        w.regenArt = jetztNass ? 2 : 1;
+        strlcpy(w.regenZeit, z + 11, sizeof(w.regenZeit));
         break;
       }
     }
@@ -115,7 +121,7 @@ static bool wetterAbrufen(Wetter &w, const Ort &ort) {
 
   w.gueltig = true;
   w.abruf = millis();
-  Serial.printf("Wetter %s: %.1f Grad, Code %d %s\n", ort.name, w.temp, w.code, w.regenHinweis);
+  Serial.printf("Wetter %s: %.1f Grad, Code %d\n", ort.name, w.temp, w.code);
   return true;
 }
 
@@ -141,6 +147,7 @@ static bool luftAbrufen(Wetter &w, const Ort &ort) {
 static void warnungAbrufen(Wetter &w, const Ort &ort) {
   JsonDocument filter;
   filter["alerts"][0]["event_de"] = true;
+  filter["alerts"][0]["event_en"] = true;
   filter["alerts"][0]["severity"] = true;
   JsonDocument doc;
   WiFiClientSecure client;
@@ -151,6 +158,7 @@ static void warnungAbrufen(Wetter &w, const Ort &ort) {
   if (!http.begin(client, url)) return;
   if (http.GET() == 200 && !deserializeJson(doc, http.getString(), DeserializationOption::Filter(filter))) {
     w.warnung[0] = 0;
+    w.warnungEn[0] = 0;
     w.warnStufe = 0;
     for (JsonObject a : doc["alerts"].as<JsonArray>()) {
       String s = a["severity"] | "";
@@ -158,6 +166,7 @@ static void warnungAbrufen(Wetter &w, const Ort &ort) {
       if (stufe > w.warnStufe) {
         w.warnStufe = stufe;
         strlcpy(w.warnung, a["event_de"] | "Warnung", sizeof(w.warnung));
+        strlcpy(w.warnungEn, a["event_en"] | "Weather warning", sizeof(w.warnungEn));
       }
     }
   }

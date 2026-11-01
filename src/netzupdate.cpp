@@ -1,4 +1,5 @@
 #include "netzupdate.h"
+#include "einstellungen.h"
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
@@ -47,7 +48,7 @@ static UpdateAnzeige anzeige = nullptr;
 
 void updateInstallieren(UpdateAnzeige a) {
   anzeige = a;
-  if (anzeige) anzeige(0, "lade neue Version");
+  if (anzeige) anzeige(0, TX("lade neue Version", "downloading new version"));
   WiFiClientSecure client;
   client.setInsecure();
   httpUpdate.rebootOnUpdate(false);  // erst "fertig" zeigen, dann selbst neu starten
@@ -55,17 +56,17 @@ void updateInstallieren(UpdateAnzeige a) {
   httpUpdate.onProgress([](int fertig, int gesamt) {
     static int zuletzt = -1;
     int p = gesamt > 0 ? (int64_t)fertig * 100 / gesamt : 0;
-    if (p != zuletzt && anzeige) anzeige(p, "nicht ausschalten");
+    if (p != zuletzt && anzeige) anzeige(p, TX("nicht ausschalten", "do not switch off"));
     zuletzt = p;
   });
   t_httpUpdate_return r = httpUpdate.update(client, String(SEITE) + "firmware.bin");
   if (r == HTTP_UPDATE_OK) {
-    if (anzeige) anzeige(100, "fertig - starte neu");
+    if (anzeige) anzeige(100, TX("fertig - starte neu", "done - restarting"));
     delay(1500);
     ESP.restart();
   }
   Serial.printf("Update fehlgeschlagen: %s\n", httpUpdate.getLastErrorString().c_str());
-  if (anzeige) anzeige(0, "fehlgeschlagen");
+  if (anzeige) anzeige(0, TX("fehlgeschlagen", "failed"));
   delay(3000);
   neuerBuild = 0;  // nicht dauernd neu versuchen - in 6 Stunden wieder
 }

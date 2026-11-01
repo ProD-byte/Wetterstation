@@ -15,6 +15,7 @@ void einstellungenLaden() {
   e.nachtVon = p.getUChar("von", e.nachtVon) % 24;
   e.nachtBis = p.getUChar("bis", e.nachtBis) % 24;
   e.autoUpdate = p.getBool("auto", e.autoUpdate);
+  e.sprache = p.getUChar("sprache", e.sprache) % 2;
   p.end();
   einst = e;
 }
@@ -29,5 +30,6 @@ void einstellungenSpeichern() {
   p.putUChar("von", einst.nachtVon);
   p.putUChar("bis", einst.nachtBis);
   p.putBool("auto", einst.autoUpdate);
+  p.putUChar("sprache", einst.sprache);
   p.end();
 }

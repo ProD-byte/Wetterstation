@@ -144,6 +144,7 @@ html.einbetten .wrap { padding-block: 4px 8px; gap: 16px; }
   <section class="controls" aria-label="Simulation steuern">
     <div class="row"><span>Wetter</span><div class="chips" id="wetterWahl"></div></div>
     <div class="row"><span>Tageszeit</span><div class="chips" id="tagWahl"></div></div>
+    <div class="row"><span>Sprache</span><div class="chips" id="sprachWahl"></div></div>
     <div class="row"><span>Akku</span><div class="chips" id="akkuWahl"></div></div>
     <div class="row"><span>Darstellung</span><div class="chips" id="pixelWahl"></div></div>
     <p class="note" id="quelle"></p>
@@ -211,7 +212,8 @@ const DEMOS = [
   { id: 73, name: "Schnee" }, { id: 95, name: "Gewitter" }
 ];
 
-let modus = "echt", tagModus = "echt", akkuModus = "usb";
+let modus = "echt", tagModus = "echt", akkuModus = "usb", englisch = false;
+const L = (de, en) => englisch ? en : de;
 let w = wetterAus(ECHT);
 
 function baueWetter() {
@@ -266,6 +268,7 @@ function bildFuerCode(code) {
   return "BEDECKT";
 }
 function textFuerCode(code, tag) {
+  if (englisch) { const e = { 0: tag ? "Sunny" : "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Fog", 48: "Freezing fog", 51: "Drizzle", 53: "Drizzle", 55: "Drizzle", 56: "Freezing drizzle", 57: "Freezing drizzle", 61: "Light rain", 63: "Rain", 65: "Heavy rain", 66: "Freezing rain", 67: "Freezing rain", 71: "Light snow", 73: "Snow", 75: "Heavy snow", 77: "Snow grains", 80: "Showers", 81: "Showers", 82: "Heavy showers", 85: "Snow showers", 86: "Snow showers", 95: "Thunderstorm", 96: "Storm, hail", 99: "Storm, hail" }; return e[code] || "Unknown"; }
   const t = { 0: tag ? "Sonnig" : "Klar", 1: "Heiter", 2: "Teils bewölkt", 3: "Bedeckt", 45: "Nebel", 48: "Reifnebel",
     51: "Nieselregen", 53: "Nieselregen", 55: "Nieselregen", 56: "Eisniesel", 57: "Eisniesel", 61: "Leichter Regen",
     63: "Regen", 65: "Starkregen", 66: "Eisregen", 67: "Eisregen", 71: "Leichter Schnee", 73: "Schnee", 75: "Starker Schnee",
@@ -434,8 +437,10 @@ function schreibeTemp(wert, x, y, f, a) {
 function tropfenSymbol(x, y, f) { dreieck(x - 3, y - 1, x + 3, y - 1, x, y - 7, f); kreis(x, y, 3, f); }
 
 // ---------- Seiten (wie main.cpp) ----------
-const WOCHENTAG = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
-const WOCHENTAG_KURZ = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+const WOCHENTAG_DE = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+const WOCHENTAG_EN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const WOCHENTAG_KURZ_DE = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+const WOCHENTAG_KURZ_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // Titel; bei DWD-Warnung abwechselnd mit der Warnung (wie titel() in main.cpp)
 function warnzeichen(cx, cy, g, f, a) {
@@ -448,7 +453,7 @@ function titel(ox, text, t) {
   if (w.warnung && Math.floor(t / 2500) % 2) {
     const f = w.warnStufe >= 3 ? rgb(255, 80, 70) : rgb(255, 160, 40);
     warnzeichen(ox + 12, 8, 12, f, 0.6 + 0.4 * Math.sin(t * 0.012));
-    schreibe(w.warnung, ox + 22, 13, f, "l");
+    schreibe(L(w.warnung, "Severe gusts"), ox + 22, 13, f, "l");
   } else schreibe(text, ox + 6, 13, WEISS, "l");
 }
 
@@ -460,11 +465,11 @@ function seiteJetzt(ox, t) {
   schrift("s9"); if (breite(text) > 118) schrift("f2");
   schreibe(text, ox + 118, 88, WEISS, "l");
   schrift("f2");
-  schreibe("Gefühlt", ox + 118, 106, HELL, "l");
-  schreibeTemp(w.gefuehlt, ox + 122 + breite("Gefühlt"), 106, HELL, "l");
+  schreibe(L("Gefühlt", "Feels like"), ox + 118, 106, HELL, "l");
+  schreibeTemp(w.gefuehlt, ox + 122 + breite(L("Gefühlt", "Feels like")), 106, HELL, "l");
   if (w.regenHinweis) {
     tropfenSymbol(ox + 122, 118, rgb(130, 190, 255));
-    schreibe(w.regenHinweis, ox + 130, 122, rgb(150, 205, 255), "l");
+    schreibe(englisch ? w.regenHinweis.replace("Regen ab", "Rain from").replace("Regen bis", "Rain until") : w.regenHinweis, ox + 130, 122, rgb(150, 205, 255), "l");
     return;
   }
   schreibe(`Wind ${Math.round(w.wind)} km/h`, ox + 118, 122, HELL, "l");
@@ -474,7 +479,7 @@ function seiteJetzt(ox, t) {
 }
 
 function seiteStunden(ox, t) {
-  titel(ox, "Nächste 24 Stunden", t);
+  titel(ox, L("Nächste 24 Stunden", "Next 24 hours"), t);
   const n = w.stdTemp.length;
   let tmin = Math.min(...w.stdTemp), tmax = Math.max(...w.stdTemp);
   if (tmax - tmin < 4) { const m = (tmax + tmin) / 2; tmin = m - 2; tmax = m + 2; }
@@ -512,7 +517,7 @@ function seiteStunden(ox, t) {
       c.fillRect(Math.round(px(i)) - 3, 109 - h, 6, h); c.globalAlpha = 1;
     }
   } else {
-    schrift("f2"); schreibe("Kein Regen erwartet", ox + 120, 108, HELL, "m");
+    schrift("f2"); schreibe(L("Kein Regen erwartet", "No rain expected"), ox + 120, 108, HELL, "m");
   }
 
   const puls = 0.5 + 0.5 * Math.sin(t * 0.005);
@@ -524,17 +529,17 @@ function seiteStunden(ox, t) {
     kreis(x, y, 3, WEISS);
     schrift("f2");
     schreibeTemp(w.stdTemp[i], x, y - 6, WEISS, "m");
-    schreibe(i === 0 ? "jetzt" : String(w.stdStunde[i]).padStart(2, "0"), x, 125, HELL, "m");
+    schreibe(i === 0 ? L("jetzt", "now") : String(w.stdStunde[i]).padStart(2, "0"), x, 125, HELL, "m");
   }
 }
 
 function seiteTage(ox, t) {
-  titel(ox, "Die nächsten Tage", t);
+  titel(ox, L("Die nächsten Tage", "Next days"), t);
   for (let i = 0; i < 3; i++) {
     const x = ox + 6 + i * 78, mx = x + 36;
     rundRechteck(x, 20, 72, 106, 8, "#000", (i === 0 ? 95 : 70) / 255);
-    let name = i === 0 ? "Heute" : i === 1 ? "Morgen" : WOCHENTAG[w.tagWochentag[i]];
-    schrift("f2"); if (breite(name) > 66) name = WOCHENTAG_KURZ[w.tagWochentag[i]];
+    let name = i === 0 ? L("Heute", "Today") : i === 1 ? L("Morgen", "Tomorrow") : L(WOCHENTAG_DE, WOCHENTAG_EN)[w.tagWochentag[i]];
+    schrift("f2"); if (breite(name) > 66) name = L(WOCHENTAG_KURZ_DE, WOCHENTAG_KURZ_EN)[w.tagWochentag[i]];
     schreibe(name, mx, 36, WEISS, "m");
     zeichneBild(bildFuerCode(w.tagCode[i]), true, mx, 62, 44, t + i * 700);
     schrift("b12"); schreibeTemp(w.tagMax[i], mx, 101, WEISS, "m");
@@ -548,6 +553,8 @@ function seiteTage(ox, t) {
 // Seite 4: Sonne & Mond (wie seiteSonne in main.cpp)
 function mondphase(ms) { const p = ((ms / 1000 - 947182440) / 86400 / 29.530588853) % 1; return p < 0 ? p + 1 : p; }
 function mondName(p) {
+  if (englisch) return p < .03 || p > .97 ? "New moon" : p < .22 ? "Waxing crescent" : p < .28 ? "First quarter" : p < .47 ? "Waxing gibbous"
+    : p < .53 ? "Full moon" : p < .72 ? "Waning gibbous" : p < .78 ? "Last quarter" : "Waning crescent";
   return p < .03 || p > .97 ? "Neumond" : p < .22 ? "Junge Sichel" : p < .28 ? "Erstes Viertel" : p < .47 ? "Zunehmend"
     : p < .53 ? "Vollmond" : p < .72 ? "Abnehmend" : p < .78 ? "Letztes Viertel" : "Alte Sichel";
 }
@@ -564,7 +571,7 @@ function mondBild(cx, cy, r, p) {
 }
 const minuten = s => +s.slice(0, 2) * 60 + +s.slice(3, 5);
 function seiteSonne(ox, t) {
-  titel(ox, "Sonne & Mond", t);
+  titel(ox, L("Sonne & Mond", "Sun & Moon"), t);
   const CX = ox + 62, CY = 96, R = 46, auf = minuten(w.sonneAuf), unter = minuten(w.sonneUnter);
   const z = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Berlin" }));
   const frac = (z.getHours() * 60 + z.getMinutes() - auf) / (unter - auf);
@@ -578,19 +585,19 @@ function seiteSonne(ox, t) {
   schrift("f2");
   schreibe(w.sonneAuf, ox + 6, 112, WEISS, "l"); schreibe(w.sonneUnter, ox + 118, 112, WEISS, "r");
   const d = unter - auf;
-  schreibe(`Tag ${Math.floor(d / 60)} h ${String(d % 60).padStart(2, "0")} min`, ox + 6, 128, HELL, "l");
+  schreibe(`${L("Tag", "Day")} ${Math.floor(d / 60)} h ${String(d % 60).padStart(2, "0")} min`, ox + 6, 128, HELL, "l");
   const p = mondphase(Date.now());
   mondBild(ox + 185, 54, 22, p);
   schreibe(mondName(p), ox + 185, 96, WEISS, "m");
-  schreibe(`${Math.round((1 - Math.cos(p * 2 * Math.PI)) / 2 * 100)} % beleuchtet`, ox + 185, 112, HELL, "m");
-  schreibe(`UV-Index ${Math.round(w.uv)}`, ox + 185, 128, w.uv >= 6 ? rgb(255, 160, 40) : HELL, "m");
+  schreibe(`${Math.round((1 - Math.cos(p * 2 * Math.PI)) / 2 * 100)} % ${L("beleuchtet", "lit")}`, ox + 185, 112, HELL, "m");
+  schreibe(`${L("UV-Index", "UV index")} ${Math.round(w.uv)}`, ox + 185, 128, w.uv >= 6 ? rgb(255, 160, 40) : HELL, "m");
 }
 
 // Seite 5: Luft & Pollen (wie seiteLuft in main.cpp)
 const POLLEN = ["Erle", "Birke", "Gräser", "Beifuß", "Ambrosia"];
 function seiteLuft(ox, t) {
-  titel(ox, "Luft & Pollen", t);
-  const STUFE = ["Sehr gut", "Gut", "Mäßig", "Schlecht", "Sehr schlecht", "Extrem"];
+  titel(ox, L("Luft & Pollen", "Air & Pollen"), t);
+  const STUFE = L(["Sehr gut", "Gut", "Mäßig", "Schlecht", "Sehr schlecht", "Extrem"], ["Very good", "Good", "Moderate", "Poor", "Very poor", "Extreme"]);
   const FARBE = [rgb(72, 233, 82), rgb(136, 233, 66), rgb(255, 208, 33), rgb(255, 140, 33), rgb(255, 60, 66), rgb(160, 0, 255)];
   const stufe = Math.min(5, Math.floor(w.aqi / 20)), f = FARBE[stufe];
   const CX = ox + 56, CY = 70, R = 36;
@@ -603,11 +610,11 @@ function seiteLuft(ox, t) {
   if (ende > 31) { c.strokeStyle = f; c.beginPath(); c.arc(CX, CY, R - 3.5, winkel(30), winkel(ende)); c.stroke(); }
   schrift("b12"); schreibe(String(w.aqi), CX, CY + 8, WEISS, "m");
   schrift("f2"); schreibe(STUFE[stufe], CX, 118, f, "m");
-  schreibe(`Feinstaub ${Math.round(w.pm25)}`, CX, 133, HELL, "m");
+  schreibe(`${L("Feinstaub", "PM2.5:")} ${Math.round(w.pm25)}`, CX, 133, HELL, "m");
   const PF = [null, rgb(136, 233, 66), rgb(255, 208, 33), rgb(255, 60, 66)];
   for (let i = 0; i < 5; i++) {
     const y = 40 + i * 18, k = w.pollen[i], lvl = k < 1 ? 0 : k <= 10 ? 1 : k <= 50 ? 2 : 3;
-    schreibe(POLLEN[i], ox + 116, y, lvl ? WEISS : HELL, "l");
+    schreibe(L(POLLEN, ["Alder", "Birch", "Grass", "Mugwort", "Ragweed"])[i], ox + 116, y, lvl ? WEISS : HELL, "l");
     for (let s = 0; s < 3; s++) rundRechteck(ox + 178 + s * 19, y - 9, 16, 7, 3, s < lvl ? PF[lvl] : "#fff", s < lvl ? 1 : 50 / 255);
   }
 }
@@ -644,19 +651,19 @@ function lichtAnzeige(t) {
 function startBild(t) {
   zeichneHimmel("HEITER", false, t, false);
   zeichneBild("HEITER", true, 120, 50, 76, t);
-  schrift("b9"); schreibe("Wetter Cottbus", 120, 100, WEISS, "m");
+  schrift("b9"); schreibe(L("Wetter Cottbus", "Weather Cottbus"), 120, 100, WEISS, "m");
   const p = ["", ".", "..", "..."][Math.floor(t / 400) % 4];
   const phase = Math.floor((t - startSeit) / 4000) % 2;
   schrift("f2");
-  if (phase === 0) { schreibe("Verbinde mit WLAN" + p, 120, 117, HELL, "m"); schreibe("Zuhause", 120, 132, rgb(150, 160, 190), "m"); }
-  else schreibe("Hole Wetterdaten" + p, 120, 117, HELL, "m");
+  if (phase === 0) { schreibe(L("Verbinde mit WLAN", "Connecting to Wi-Fi") + p, 120, 117, HELL, "m"); schreibe("Zuhause", 120, 132, rgb(150, 160, 190), "m"); }
+  else schreibe(L("Hole Wetterdaten", "Loading weather") + p, 120, 117, HELL, "m");
 }
 
 // WLAN-Einrichtung (wie wlanBild in main.cpp): erst WLAN, dann Standort - wechselt alle 5 s
 function wlanBild(t) {
   if (Math.floor((t - startSeit) / 5000) % 2 === 1) return ortBild(t);
   zeichneHimmel("KLAR", false, t, false);
-  schrift("b9"); schreibe("WLAN einrichten", 120, 20, WEISS, "m");
+  schrift("b9"); schreibe(L("WLAN einrichten", "Wi-Fi setup"), 120, 20, WEISS, "m");
   const cx = 34, cy = 82;
   for (let i = 0; i < 3; i++) {
     const an = 0.5 + 0.5 * Math.sin(t * 0.006 - i * 1.1), r = 10 + i * 9;
@@ -665,26 +672,26 @@ function wlanBild(t) {
   }
   kreis(cx, cy, 4, rgb(255, 198, 44));
   schrift("f2");
-  schreibe("1. Mit dem Handy ins WLAN", 64, 46, HELL, "l");
+  schreibe(L("1. Mit dem Handy ins WLAN", "1. Connect your phone to"), 64, 46, HELL, "l");
   schreibe("Wetterstation-Setup", 64, 64, rgb(255, 198, 44), "l");
-  schreibe("2. Seite öffnet sich selbst:", 64, 88, HELL, "l");
-  schreibe("dein WLAN wählen und", 64, 104, HELL, "l");
-  schreibe("Passwort eingeben", 64, 120, HELL, "l");
+  schreibe(L("2. Seite öffnet sich selbst:", "2. A page opens by itself:"), 64, 88, HELL, "l");
+  schreibe(L("dein WLAN wählen und", "choose your Wi-Fi and"), 64, 104, HELL, "l");
+  schreibe(L("Passwort eingeben", "enter the password"), 64, 120, HELL, "l");
 }
 
 function ortBild(t) {
   zeichneHimmel("KLAR", false, t, false);
-  schrift("b9"); schreibe("WLAN verbunden!", 120, 20, rgb(90, 220, 110), "m");
+  schrift("b9"); schreibe(L("WLAN verbunden!", "Wi-Fi connected!"), 120, 20, rgb(90, 220, 110), "m");
   const cx = 34, cy = 80, hub = Math.abs(Math.sin(t * 0.004)) * 6, gelb = rgb(255, 198, 44), y = cy - hub;
   kreis(cx, cy + 20, 9 - hub / 2, "#000", 70 / 255);
   dreieck(cx - 10, y - 2, cx + 10, y - 2, cx, y + 18, gelb);
   kreis(cx, y - 6, 11, gelb);
   kreis(cx, y - 6, 4, rgb(...verlauf("KLAR", false)[0]));
   schrift("f2");
-  schreibe("3. Jetzt am Handy:", 64, 50, HELL, "l");
-  schreibe("Wo steht die Station?", 64, 68, gelb, "l");
-  schreibe("Ort oder PLZ suchen", 64, 92, HELL, "l");
-  schreibe("oder Vorschlag antippen", 64, 108, HELL, "l");
+  schreibe(L("3. Jetzt am Handy:", "3. Now on your phone:"), 64, 50, HELL, "l");
+  schreibe(L("Wo steht die Station?", "Where is the station?"), 64, 68, gelb, "l");
+  schreibe(L("Ort oder PLZ suchen", "Search town or postcode"), 64, 92, HELL, "l");
+  schreibe(L("oder Vorschlag antippen", "or tap the suggestion"), 64, 108, HELL, "l");
 }
 
 // ---------- Ablauf ----------
@@ -766,6 +773,7 @@ chips("wetterWahl", DEMOS.map(d => [d.id, d.name]), "echt", v => {
   modus = v; baueWetter(); zeigeQuelle(); seiteSeit = jetzt(); startSeit = jetzt();
 });
 chips("tagWahl", [["echt", "Wie in den Daten"], ["tag", "Tag"], ["nacht", "Nacht"]], "echt", v => { tagModus = v; baueWetter(); });
+chips("sprachWahl", [["de", "Deutsch"], ["en", "English"]], "de", v => { englisch = v === "en"; });
 chips("akkuWahl", [["usb", "Am USB"], ["voll", "Akku 85 %"], ["leer", "Akku 15 %"]], "usb", v => { akkuModus = v; });
 chips("pixelWahl", [["pixel", "Echte Pixel"], ["glatt", "Geglättet"]], "pixel", v => setPixel(v === "pixel"));
 

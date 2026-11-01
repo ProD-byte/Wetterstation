@@ -1,4 +1,5 @@
 #include "bilder.h"
+#include "einstellungen.h"
 
 struct RGB { uint8_t r, g, b; };
 
@@ -29,29 +30,29 @@ Bild bildFuerCode(int code) {
 
 const char *textFuerCode(int code, bool tag) {
   switch (code) {
-    case 0:  return tag ? "Sonnig" : "Klar";
-    case 1:  return "Heiter";
-    case 2:  return "Teils bewölkt";
-    case 3:  return "Bedeckt";
-    case 45: return "Nebel";
-    case 48: return "Reifnebel";
-    case 51: case 53: case 55: return "Nieselregen";
-    case 56: case 57: return "Eisniesel";
-    case 61: return "Leichter Regen";
-    case 63: return "Regen";
-    case 65: return "Starkregen";
-    case 66: case 67: return "Eisregen";
-    case 71: return "Leichter Schnee";
-    case 73: return "Schnee";
-    case 75: return "Starker Schnee";
-    case 77: return "Schneegriesel";
-    case 80: case 81: return "Regenschauer";
-    case 82: return "Starke Schauer";
-    case 85: case 86: return "Schneeschauer";
-    case 95: return "Gewitter";
-    case 96: case 99: return "Gewitter, Hagel";
+    case 0:  return tag ? TX("Sonnig", "Sunny") : TX("Klar", "Clear");
+    case 1:  return TX("Heiter", "Mostly clear");
+    case 2:  return TX("Teils bewölkt", "Partly cloudy");
+    case 3:  return TX("Bedeckt", "Overcast");
+    case 45: return TX("Nebel", "Fog");
+    case 48: return TX("Reifnebel", "Freezing fog");
+    case 51: case 53: case 55: return TX("Nieselregen", "Drizzle");
+    case 56: case 57: return TX("Eisniesel", "Freezing drizzle");
+    case 61: return TX("Leichter Regen", "Light rain");
+    case 63: return TX("Regen", "Rain");
+    case 65: return TX("Starkregen", "Heavy rain");
+    case 66: case 67: return TX("Eisregen", "Freezing rain");
+    case 71: return TX("Leichter Schnee", "Light snow");
+    case 73: return TX("Schnee", "Snow");
+    case 75: return TX("Starker Schnee", "Heavy snow");
+    case 77: return TX("Schneegriesel", "Snow grains");
+    case 80: case 81: return TX("Regenschauer", "Showers");
+    case 82: return TX("Starke Schauer", "Heavy showers");
+    case 85: case 86: return TX("Schneeschauer", "Snow showers");
+    case 95: return TX("Gewitter", "Thunderstorm");
+    case 96: case 99: return TX("Gewitter, Hagel", "Storm, hail");
   }
-  return "Unbekannt";
+  return TX("Unbekannt", "Unknown");
 }
 
 // ------------------------------------------------------------
@@ -267,14 +268,14 @@ float mondphase(time_t jetzt) {
 
 const char *mondName(float p) {
   // kurz genug fuer die rechte Haelfte des Displays
-  if (p < 0.03f || p > 0.97f) return "Neumond";
-  if (p < 0.22f) return "Junge Sichel";
-  if (p < 0.28f) return "Erstes Viertel";
-  if (p < 0.47f) return "Zunehmend";
-  if (p < 0.53f) return "Vollmond";
-  if (p < 0.72f) return "Abnehmend";
-  if (p < 0.78f) return "Letztes Viertel";
-  return "Alte Sichel";
+  if (p < 0.03f || p > 0.97f) return TX("Neumond", "New moon");
+  if (p < 0.22f) return TX("Junge Sichel", "Waxing crescent");
+  if (p < 0.28f) return TX("Erstes Viertel", "First quarter");
+  if (p < 0.47f) return TX("Zunehmend", "Waxing gibbous");
+  if (p < 0.53f) return TX("Vollmond", "Full moon");
+  if (p < 0.72f) return TX("Abnehmend", "Waning gibbous");
+  if (p < 0.78f) return TX("Letztes Viertel", "Last quarter");
+  return TX("Alte Sichel", "Waning crescent");
 }
 
 void zeichneMondphase(TFT_eSprite &s, int cx, int cy, int r, float phase) {

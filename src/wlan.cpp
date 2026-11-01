@@ -7,6 +7,7 @@
 
 #include "wlan.h"
 #include "ort.h"
+#include "einstellungen.h"
 #include "portal_html.h"
 
 #include <algorithm>
@@ -235,6 +236,12 @@ static void seiteOrtSpeichern() {
     ortGewaehlt = o.name;
   }
   // "Ueberspringen": nichts speichern - dann ermittelt die Wetterstation den Ort selbst
+
+  // Sprache des Handys uebernehmen (die Einrichtungsseite erscheint schon darin)
+  if (portal->hasArg("sprache")) {
+    einst.sprache = portal->arg("sprache") == "en" ? 1 : 0;
+    einstellungenSpeichern();
+  }
   ortFertig = true;
   ortFertigSeit = millis();
   portal->send(200, "text/plain", "ok");

@@ -13,7 +13,9 @@ struct Wetter {
   float temp = 0, gefuehlt = 0, wind = 0;
   int feuchte = 0, code = 0;
   bool tag = true;
-  char regenHinweis[24] = "";  // "Regen ab 14:15" / "Regen bis 14:30" (naechste 2 Stunden)
+  // Regen in den naechsten 2 Stunden: 0 = nichts, 1 = beginnt um regenZeit, 2 = hoert um regenZeit auf
+  int regenArt = 0;
+  char regenZeit[6] = "";
 
   // naechste 24 Stunden
   int stunden = 0;
@@ -39,12 +41,13 @@ struct Wetter {
 
   // DWD-Warnung (die schwerste, nur in Deutschland)
   char warnung[48] = "";  // leer = keine
+  char warnungEn[48] = "";
   int warnStufe = 0;      // 1 gering ... 4 extrem
 
   uint32_t abruf = 0;  // millis() beim letzten Abruf
 };
 
-extern const char *POLLEN_NAME[5];
+const char *pollenName(int i);  // in der eingestellten Sprache
 
 enum WetterStatus { VERBINDE, ORTUNG, LADE, FERTIG, FEHLER };
 

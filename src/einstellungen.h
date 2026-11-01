@@ -13,9 +13,13 @@ struct Einstellungen {
   uint8_t nachtVon = 22;      // Uhrzeit (volle Stunde)
   uint8_t nachtBis = 6;
   bool autoUpdate = true;     // neue Builds von GitHub selbst installieren
+  uint8_t sprache = 0;        // 0 = Deutsch, 1 = Englisch
 };
 
 extern Einstellungen einst;
+
+// Text in der eingestellten Sprache: TX("Heute", "Today")
+#define TX(de, en) (einst.sprache ? (en) : (de))
 
 void einstellungenLaden();
 void einstellungenSpeichern();
