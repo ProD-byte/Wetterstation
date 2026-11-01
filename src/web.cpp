@@ -9,8 +9,30 @@
 #include "orte.h"
 #include <WiFi.h>
 #include <WebServer.h>
+#include <TFT_eSPI.h>
 
 static WebServer server(80);
+
+extern TFT_eSprite bild;  // Bildspeicher des Displays (main.cpp)
+extern int B, H;
+
+// Bildschirmfoto: der Bildspeicher roh (RGB565, B x H, Zeile fuer Zeile) - zum Pruefen und fuer Videos
+static void bildSenden() {
+  const uint8_t *p = (const uint8_t *)bild.getPointer();
+  if (!p) return server.send(503, "text/plain", "kein Bild");
+  size_t n = (size_t)B * H * 2;
+  server.sendHeader("X-Breite", String(B));
+  server.sendHeader("X-Hoehe", String(H));
+  server.sendHeader("Cache-Control", "no-store");
+  server.setContentLength(n);
+  server.send(200, "application/octet-stream", "");
+  WiFiClient c = server.client();
+  for (size_t ab = 0; ab < n;) {
+    size_t k = c.write(p + ab, min((size_t)4096, n - ab));
+    if (!k) break;
+    ab += k;
+  }
+}
 
 static String jsonText(const String &s) {
   String aus;
@@ -138,6 +160,7 @@ void webStart() {
   server.on("/api/ort", HTTP_POST, ortSetzen);
   server.on("/api/ort-auto", HTTP_POST, ortAutomatisch);
   server.on("/api/name", HTTP_POST, nameSetzen);
+  server.on("/api/bild", HTTP_GET, bildSenden);
   server.on("/api/verlauf", HTTP_GET, []() {
     server.sendHeader("Cache-Control", "no-store");
     server.send(200, "application/json", verlaufJson());
