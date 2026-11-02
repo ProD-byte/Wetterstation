@@ -215,6 +215,7 @@ const DEMOS = [
   { id: "echt", name: "Echte Daten" },
   { id: "wlan", name: "WLAN einrichten" },
   { id: "start", name: "Startbild" },
+  { id: "pause", name: "Wetterdienst-Pause" },
   { id: 0, name: "Sonnig" }, { id: 2, name: "Teils bewölkt" }, { id: 3, name: "Bedeckt" },
   { id: 45, name: "Nebel" }, { id: 53, name: "Niesel" }, { id: 63, name: "Regen" },
   { id: 73, name: "Schnee" }, { id: 95, name: "Gewitter" }
@@ -907,6 +908,33 @@ function startBild(t) {
   else schreibe(L("Hole Wetterdaten", "Loading weather") + p, W / 2, 149 + dy, HELL, "m");
 }
 
+// Wetterdienst ueberlastet (wie schlafendeWolke/startBild in main.cpp): Wolke schlaeft, "z" steigen auf
+function pauseBild(t) {
+  zeichneHimmel("HEITER", false, t, false);
+  const dy = hoch() ? 54 : 0, cx = W / 2 - 6, cy = 66 + dy + Math.round(3 * Math.sin(t / 700));
+  const hell = rgb(240, 244, 250), gesicht = rgb(60, 66, 84);
+  for (const [o, f] of [[3, rgb(168, 182, 210)], [0, hell]]) {
+    rundRechteck(cx - 40 + o, cy - 2 + o, 80, 26, 13, f);
+    kreis(cx - 18 + o, cy - 2 + o, 17, f); kreis(cx + 8 + o, cy - 10 + o, 22, f); kreis(cx + 30 + o, cy + 4 + o, 13, f);
+  }
+  c.strokeStyle = gesicht; c.lineWidth = 2; c.lineCap = "round";
+  for (const ex of [cx - 9, cx + 13]) { c.beginPath(); c.arc(ex, cy + 3, 5, Math.PI * 0.2, Math.PI * 0.8); c.stroke(); }
+  kreis(cx - 20, cy + 12, 4, rgb(255, 140, 150), 0.45); kreis(cx + 24, cy + 12, 4, rgb(255, 140, 150), 0.45);
+  kreis(cx + 2, cy + 15, 3, gesicht);
+  for (let i = 0; i < 3; i++) {
+    const p = ((t + i * 900) % 2700) / 2700, zx = cx + 32 + p * 24 + 3 * Math.sin(p * 6.3 + i), zy = cy - 22 - p * 30;
+    schrift(p < 0.4 ? "f2" : "s9"); c.globalAlpha = Math.min(1, p * 5, (1 - p) * 2.5);
+    c.fillStyle = WEISS; c.fillText("z", zx, zy); c.globalAlpha = 1;
+  }
+  const titel = L("Wetterdienst überlastet", "Weather service overloaded");
+  schrift(hoch() ? "b9" : "b12"); if (breite(titel) > W - 12) schrift("s9"); if (breite(titel) > W - 12) schrift("f2");
+  schreibe(titel, W / 2, 128 + dy, WEISS, "m");
+  const rest = 59 - Math.floor((t - startSeit) / 1000) % 60;
+  schrift("f2");
+  schreibe(L("Er macht gerade Pause", "It's taking a short break"), W / 2, 149 + dy, HELL, "m");
+  schreibe(L("neuer Versuch in 0:", "retrying in 0:") + String(rest).padStart(2, "0"), W / 2, 165 + dy, rgb(150, 160, 190), "m");
+}
+
 // hochkant: Symbol oben, Anleitung in kurzen Zeilen (wie wlanBild in main.cpp)
 const EINR_HOCH = [["1. Mit dem Handy", "1. Connect your phone", 0], ["ins WLAN", "to the Wi-Fi", 0], ["Wetterstation-Setup", "Wetterstation-Setup", 1],
   ["2. Die Seite öffnet sich", "2. A page opens", 0], ["selbst: dein WLAN", "by itself: choose", 0], ["wählen, Passwort", "your Wi-Fi, enter", 0], ["eingeben", "the password", 0]];
@@ -980,6 +1008,8 @@ function frame() {
   c.setTransform(k, 0, 0, k, 0, 0);
   if (modus === "start") {
     startBild(t);
+  } else if (modus === "pause") {
+    pauseBild(t);
   } else if (modus === "wlan") {
     wlanBild(t);
   } else {
@@ -1021,7 +1051,7 @@ keySeite.addEventListener("pointerup", () => {
   clearTimeout(sprachTimer); sprachTimer = null;
   const t = jetzt();
   if (infoBis > t) { infoBis = t; return; }  // kurz druecken schliesst die Info
-  if (modus === "start" || modus === "wlan" || wechsel) return;
+  if (modus === "start" || modus === "pause" || modus === "wlan" || wechsel) return;
   naechsteSeite(t); letzterTastendruck = t;
   if (still) frame();
 });
@@ -1031,7 +1061,7 @@ keySeite.addEventListener("keydown", e => {  // Tastatur: Enter = kurz, Shift+En
   e.preventDefault();
   if (e.shiftKey) return spracheWechseln();
   const t = jetzt();
-  if (modus !== "start" && modus !== "wlan" && !wechsel) { naechsteSeite(t); letzterTastendruck = t; }
+  if (modus !== "start" && modus !== "pause" && modus !== "wlan" && !wechsel) { naechsteSeite(t); letzterTastendruck = t; }
 });
 document.getElementById("keyLicht").addEventListener("click", () => {
   const t = jetzt();
@@ -1062,6 +1092,8 @@ function zeigeQuelle() {
     ? "Echte Werte für 03046 Cottbus von open-meteo.com, abgerufen am 1. November 2026 um 07:30 Uhr. Das Gerät holt sie alle 15 Minuten neu."
     : modus === "start"
       ? "So sieht das Display aus, bis die ersten Daten da sind. Unten steht der Name deines WLANs."
+    : modus === "pause"
+      ? "Ist der Wetterdienst überlastet oder nicht erreichbar, schläft die Wolke, bis der nächste Versuch klappt. Daten bis 2 Stunden alt zeigt die Station weiter an, dann mit „Stand 14:30“ oben rechts."
       : modus === "wlan"
         ? "Beim ersten Start (oder Taste IO14 drei Sekunden halten) öffnet die Wetterstation das WLAN „Wetterstation-Setup“. Darin wählst du am Handy erst dein WLAN, dann den Ort fürs Wetter. Ohne Auswahl findet sie ihn ungefähr über den Internetanschluss."
         : "Vorführ-Wetter, damit du alle Animationen sehen kannst. Temperaturen und Regen sind teilweise angepasst.";

@@ -743,6 +743,19 @@ void statusLeiste() {
   if (hoch()) schreibe(bild, uhr, 8, 18, WEISS, LINKS);  // hochkant: Uhr links, Titel eine Zeile tiefer
   else schreibe(bild, uhr, B - 37, 18, WEISS, RECHTS);
 
+  // Wetterdienst gerade nicht erreichbar: alte Daten mit "Stand 14:30" kennzeichnen, damit niemand getaeuscht wird
+  if (w.stand && time(nullptr) - w.stand > 20 * 60) {
+    struct tm s;
+    localtime_r(&w.stand, &s);
+    char stand[24];
+    strftime(stand, sizeof(stand), TX("Stand %H:%M", "as of %H:%M"), &s);
+    int uhrBreite = breite(bild, uhr);
+    schrift(bild, S_K);
+    const uint16_t orange = farbe(255, 190, 90);
+    if (hoch()) schreibe(bild, stand, 8 + uhrBreite + 8, 18, orange, LINKS);
+    else schreibe(bild, stand, B - 9, 33, orange, RECHTS);
+  }
+
   // Akku-Symbol
   int x = B - 31, y = 6;
   bild.drawRoundRect(x, y, 22, 12, 2, WEISS);
@@ -814,9 +827,86 @@ void infoAnzeige(uint32_t t) {
 // ------------------------------------------------------------
 // Startbild, solange noch keine Wetterdaten da sind
 // ------------------------------------------------------------
+// Schlafende Wolke (Wetterdienst macht Pause): schwebt sanft auf und ab, kleine "z" steigen auf.
+// keinNetz: wach, grau und rot durchgestrichen
+void schlafendeWolke(int cx, int cy, uint32_t t, bool keinNetz) {
+  cy += lroundf(3 * sinf(t / 700.0f));
+  const uint16_t hell = keinNetz ? farbe(176, 184, 198) : farbe(240, 244, 250);
+  const uint16_t schatten = keinNetz ? farbe(110, 118, 134) : farbe(168, 182, 210);
+  const uint16_t gesicht = farbe(60, 66, 84);
+  for (int o = 3; o >= 0; o -= 3) {  // erst der Schatten leicht versetzt, dann die Wolke
+    uint16_t f = o ? schatten : hell;
+    bild.fillSmoothRoundRect(cx - 40 + o, cy - 2 + o, 80, 26, 13, f);
+    bild.fillSmoothCircle(cx - 18 + o, cy - 2 + o, 17, f);
+    bild.fillSmoothCircle(cx + 8 + o, cy - 10 + o, 22, f);
+    bild.fillSmoothCircle(cx + 30 + o, cy + 4 + o, 13, f);
+  }
+  if (keinNetz) {
+    bild.fillSmoothCircle(cx - 9, cy + 5, 3, gesicht);
+    bild.fillSmoothCircle(cx + 13, cy + 5, 3, gesicht);
+    bild.drawWideLine(cx - 4, cy + 15, cx + 8, cy + 15, 2, gesicht);
+    bild.drawWideLine(cx - 36, cy + 26, cx + 42, cy - 28, 5, farbe(240, 80, 70));
+    return;
+  }
+  // geschlossene Augen, rote Baeckchen, kleiner offener Mund
+  bild.drawSmoothArc(cx - 9, cy + 3, 6, 4, 290, 70, gesicht, hell, true);
+  bild.drawSmoothArc(cx + 13, cy + 3, 6, 4, 290, 70, gesicht, hell, true);
+  const uint16_t rosa = bild.alphaBlend(110, farbe(255, 140, 150), hell);
+  bild.fillSmoothCircle(cx - 20, cy + 12, 4, rosa);
+  bild.fillSmoothCircle(cx + 24, cy + 12, 4, rosa);
+  bild.fillSmoothCircle(cx + 2, cy + 15, 3, gesicht);
+  // drei "z" steigen nacheinander schraeg nach oben und werden dabei groesser und blasser
+  bild.setTextDatum(L_BASELINE);
+  for (int i = 0; i < 3; i++) {
+    float p = ((t + i * 900) % 2700) / 2700.0f;
+    int zx = cx + 32 + p * 24 + 3 * sinf(p * 6.3f + i), zy = cy - 22 - p * 30;
+    float sichtbar = min(1.0f, min(p * 5, (1 - p) * 2.5f));
+    schrift(bild, p < 0.4f ? S_K : S_M);
+    bild.setTextColor(bild.alphaBlend(255 * sichtbar, WEISS, hintergrund(zx + 4, zy - 5)));
+    bild.drawString("z", zx, zy);
+  }
+}
+
+// Zeile mittig, bei Bedarf in kleinerer Schrift, damit sie auf den Bildschirm passt
+static void zeileMittig(const char *txt, int y, uint16_t f, Schrift s) {
+  schrift(bild, s);
+  if (breite(bild, txt) > B - 12) schrift(bild, S_M);
+  if (breite(bild, txt) > B - 12) schrift(bild, S_K);
+  schreibe(bild, kuerzen(txt, B - 8).c_str(), B / 2, y, f, MITTE);
+}
+
 void startBild(uint32_t t) {
   zeichneHimmel(bild, HEITER, false, t, false);
   const int dy = hoch() ? 54 : 0;  // hochkant alles etwas tiefer in die Mitte
+
+  // Wetterdienst nicht erreichbar: schlafende Wolke, was los ist und wann der naechste Versuch kommt
+  if (wetterStatus() == FEHLER) {
+    WetterFehler f = wetterFehler();
+    schlafendeWolke(B / 2 - 6, 66 + dy, t, f == KEIN_INTERNET);
+    const char *titel, *grund;
+    String netz = String(TX("WLAN ok: ", "Wi-Fi OK: ")) + WiFi.SSID();
+    if (f == UEBERLASTET) {
+      titel = TX("Wetterdienst überlastet", "Weather service overloaded");
+      grund = TX("Er macht gerade Pause", "It's taking a short break");
+    } else if (f == KEIN_INTERNET) {
+      titel = TX("Keine Internetverbindung", "No internet connection");
+      grund = netz.c_str();
+    } else {
+      titel = TX("Wetterdienst nicht erreichbar", "Weather service unreachable");
+      grund = TX("Open-Meteo antwortet nicht", "Open-Meteo is not responding");
+    }
+    zeileMittig(titel, 128 + dy, f == KEIN_INTERNET ? farbe(255, 120, 110) : WEISS, hoch() ? S_MF : S_GF);
+    char versuch[40];
+    static const char *punkte[] = {"", ".", "..", "..."};
+    int s = wetterNaechsterVersuch();
+    if (s > 0) snprintf(versuch, sizeof(versuch), TX("neuer Versuch in %d:%02d", "retrying in %d:%02d"), s / 60, s % 60);
+    else snprintf(versuch, sizeof(versuch), TX("versuche es gerade%s", "trying now%s"), punkte[(t / 400) % 4]);
+    schrift(bild, S_K);
+    schreibe(bild, kuerzen(grund, B - 8).c_str(), B / 2, 149 + dy, HELL, MITTE);
+    schreibe(bild, versuch, B / 2, 165 + dy, farbe(150, 160, 190), MITTE);
+    return;
+  }
+
   zeichneBild(bild, HEITER, true, B / 2, 62 + dy, 100, t);
 
   schrift(bild, hoch() ? S_MF : S_GF);
@@ -837,8 +927,7 @@ void startBild(uint32_t t) {
       snprintf(zeile1, sizeof(zeile1), TX("Hole Wetterdaten%s", "Loading weather%s"), p);
       break;
     default:
-      strcpy(zeile1, TX("Abruf fehlgeschlagen", "Download failed"));
-      strcpy(zeile2, TX("neuer Versuch in 1 min", "retrying in 1 min"));
+      zeile1[0] = 0;
       break;
   }
   schrift(bild, S_K);

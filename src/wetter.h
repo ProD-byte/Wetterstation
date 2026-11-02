@@ -47,15 +47,23 @@ struct Wetter {
   int32_t utcAbweichung = 3600;  // Zeitzone des Orts in Sekunden (inkl. Sommerzeit)
 
   uint32_t abruf = 0;  // millis() beim letzten Abruf
+  time_t stand = 0;    // Uhrzeit (Unix) des letzten erfolgreichen Abrufs - fuer "Stand 14:30"
 };
+
+// Aelter als das werden Daten nicht mehr angezeigt (Wetterdienst laenger nicht erreichbar)
+const time_t DATEN_MAX_ALTER = 2 * 3600;
 
 const char *pollenName(int i);  // in der eingestellten Sprache
 
 enum WetterStatus { VERBINDE, ORTUNG, LADE, FERTIG, FEHLER };
+// Warum der letzte Abruf gescheitert ist (fuer den Hinweis auf dem Display)
+enum WetterFehler { KEIN_FEHLER, UEBERLASTET, KEIN_INTERNET, NICHT_ERREICHBAR };
 
 void wetterStart();
 bool wetterHolen(Wetter &w);  // Kopie der neuesten Daten, false solange noch keine da sind
 WetterStatus wetterStatus();
+WetterFehler wetterFehler();
+int wetterNaechsterVersuch();  // Sekunden bis zum naechsten Versuch nach einem Fehler (0 = laeuft gerade)
 void wetterNeuLaden();        // z. B. nach Ortswechsel auf der Einstellungsseite
 void wetterOrteNeu();         // weitere Orte geaendert -> gleich deren Wetter holen
 void wetterOrtAutomatisch();  // Ort wieder ueber die Internet-Adresse bestimmen (im Hintergrund)
