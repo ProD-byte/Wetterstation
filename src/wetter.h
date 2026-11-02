@@ -48,6 +48,7 @@ struct Wetter {
 
   uint32_t abruf = 0;  // millis() beim letzten Abruf
   time_t stand = 0;    // Uhrzeit (Unix) des letzten erfolgreichen Abrufs - fuer "Stand 14:30"
+  uint8_t quelle = 0;  // woher die Daten kommen (Quelle in ersatz.h): 0 = Open-Meteo, sonst Ersatzdienst
 };
 
 // Aelter als das werden Daten nicht mehr angezeigt (Wetterdienst laenger nicht erreichbar)

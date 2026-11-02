@@ -5,6 +5,7 @@
 #include "radar.h"
 #include "verlauf.h"
 #include "orte.h"
+#include "ersatz.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -29,6 +30,7 @@ const uint32_t ABSTAND_OK     = 15 * 60 * 1000;  // alle 15 min neu
 // nach Fehlern immer laengere Pausen (1, 2, 5, 10 min) plus ein paar zufaellige Sekunden - wenn der
 // Wetterdienst ueberlastet ist, sollen nicht alle Stationen gleichzeitig jede Minute anklopfen
 const uint32_t ABSTAND_FEHLER[] = {60 * 1000, 2 * 60 * 1000, 5 * 60 * 1000, 10 * 60 * 1000};
+const uint32_t ABSTAND_ERSATZ = 5 * 60 * 1000;   // laeuft der Ersatzdienst: alle 5 min schauen, ob Open-Meteo wieder geht
 const uint32_t ABSTAND_LUFT   = 60 * 60 * 1000;  // Luft & Pollen stuendlich
 const uint32_t ABSTAND_UPDATE = 6 * 60 * 60 * 1000;
 const uint32_t ABSTAND_RADAR  = 10 * 60 * 1000;
@@ -279,6 +281,23 @@ static void aufgabe(void *) {
       strlcpy(neu.ort, ort.name, sizeof(neu.ort));
       int code = wetterAbrufen(neu, ort);
       if (code == 200) {
+        neu.quelle = OPEN_METEO;
+      } else {
+        // Open-Meteo hakt: Ersatzdienst. Deutsche Sprache -> Station steht wohl in Deutschland -> zuerst
+        // Bright Sky (Deutscher Wetterdienst), sonst bzw. danach MET Norway (weltweit)
+        const Quelle reihe[] = {BRIGHT_SKY, MET_NORWAY};
+        for (int i = einst.sprache == 0 ? 0 : 1; i < 2; i++) {
+          if (ersatzAbrufen(neu, ort, reihe[i]) != 200) continue;
+          Serial.printf("Wetter %s ueber %s: %.1f Grad, Code %d\n", ort.name, quellenName(reihe[i]), neu.temp, neu.code);
+          neu.quelle = reihe[i];
+          neu.gueltig = true;
+          neu.abruf = millis();
+          neu.stand = time(nullptr);
+          code = 200;
+          break;
+        }
+      }
+      if (code == 200) {
         warnungAbrufen(neu, ort);
         if ((int32_t)(millis() - naechsteLuft) >= 0 && luftAbrufen(neu, ort)) naechsteLuft = millis() + ABSTAND_LUFT;
         xSemaphoreTake(sperre, portMAX_DELAY);
@@ -288,7 +307,7 @@ static void aufgabe(void *) {
         status = FERTIG;
         fehler = KEIN_FEHLER;
         fehlversuche = 0;
-        naechster = millis() + ABSTAND_OK;
+        naechster = millis() + (neu.quelle == OPEN_METEO ? ABSTAND_OK : ABSTAND_ERSATZ);
       } else {
         IPAddress ip;
         if (code == 429 || code == 502 || code == 503 || code == 504) fehler = UEBERLASTET;

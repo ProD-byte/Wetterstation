@@ -15,6 +15,7 @@
 #include <ArduinoOTA.h>
 #include <time.h>
 #include "wetter.h"
+#include "ersatz.h"
 #include "bilder.h"
 #include "wlan.h"
 #include "ort.h"
@@ -743,17 +744,23 @@ void statusLeiste() {
   if (hoch()) schreibe(bild, uhr, 8, 18, WEISS, LINKS);  // hochkant: Uhr links, Titel eine Zeile tiefer
   else schreibe(bild, uhr, B - 37, 18, WEISS, RECHTS);
 
-  // Wetterdienst gerade nicht erreichbar: alte Daten mit "Stand 14:30" kennzeichnen, damit niemand getaeuscht wird
+  // Wetterdienst gerade nicht erreichbar: alte Daten mit "Stand 14:30" kennzeichnen, damit niemand getaeuscht wird;
+  // Daten vom Ersatzdienst mit dessen Namen
+  char hinweis[24] = "";
+  uint16_t hinweisFarbe = farbe(255, 190, 90);
   if (w.stand && time(nullptr) - w.stand > 20 * 60) {
     struct tm s;
     localtime_r(&w.stand, &s);
-    char stand[24];
-    strftime(stand, sizeof(stand), TX("Stand %H:%M", "as of %H:%M"), &s);
+    strftime(hinweis, sizeof(hinweis), TX("Stand %H:%M", "as of %H:%M"), &s);
+  } else if (w.quelle) {
+    snprintf(hinweis, sizeof(hinweis), hoch() ? "%s" : "via %s", quellenName(w.quelle));
+    hinweisFarbe = farbe(140, 200, 255);
+  }
+  if (*hinweis) {
     int uhrBreite = breite(bild, uhr);
     schrift(bild, S_K);
-    const uint16_t orange = farbe(255, 190, 90);
-    if (hoch()) schreibe(bild, stand, 8 + uhrBreite + 8, 18, orange, LINKS);
-    else schreibe(bild, stand, B - 9, 33, orange, RECHTS);
+    if (hoch()) schreibe(bild, hinweis, 8 + uhrBreite + 8, 18, hinweisFarbe, LINKS);
+    else schreibe(bild, hinweis, B - 9, 33, hinweisFarbe, RECHTS);
   }
 
   // Akku-Symbol
