@@ -913,32 +913,36 @@ void wlanBild(WlanPhase phase, const char *netz) {
     schrift(bild, S_K);
     schreibe(bild, TX("Verbinde mit WLAN ...", "Connecting to Wi-Fi ..."), B / 2, 149 + dy, HELL, MITTE);
     schreibe(bild, kuerzen(netz, B - 8).c_str(), B / 2, 165 + dy, farbe(150, 160, 190), MITTE);
-  } else if (phase == WLAN_EINRICHTUNG) {
-    schreibe(bild, TX("WLAN einrichten", "Wi-Fi setup"), B / 2, 27, WEISS, MITTE);
-    wlanSymbol(46, 110, t);
-    schrift(bild, S_M);
-    schreibe(bild, TX("1. Mit dem Handy ins WLAN", "1. Connect your phone to"), 94, 60, HELL, LINKS);
-    schrift(bild, S_MF);
-    schreibe(bild, WLAN_SETUP_NAME, 94, 82, farbe(255, 198, 44), LINKS);
-    schrift(bild, S_M);
-    schreibe(bild, TX("2. Seite öffnet sich selbst:", "2. A page opens by itself:"), 94, 112, HELL, LINKS);
-    schreibe(bild, TX("dein WLAN wählen und", "choose your Wi-Fi and"), 94, 134, HELL, LINKS);
-    schreibe(bild, TX("Passwort eingeben", "enter the password"), 94, 156, HELL, LINKS);
+  } else if (phase == WLAN_EINRICHTUNG || phase == WLAN_ORT) {
+    // quer: Symbol links, Anleitung rechts daneben; zu breite Zeilen in kleinerer Schrift
+    auto zeile = [](const char *txt, int y, uint16_t f, Schrift s) {
+      schrift(bild, s);
+      if (breite(bild, txt) > B - 98) schrift(bild, s == S_MF ? S_M : S_K);
+      if (breite(bild, txt) > B - 98) schrift(bild, S_K);
+      schreibe(bild, txt, 94, y, f, LINKS);
+    };
+    const uint16_t gelb = farbe(255, 198, 44);
+    if (phase == WLAN_EINRICHTUNG) {
+      schreibe(bild, TX("WLAN einrichten", "Wi-Fi setup"), B / 2, 27, WEISS, MITTE);
+      wlanSymbol(46, 110, t);
+      zeile(TX("1. Handy ins WLAN:", "1. Connect your phone to:"), 60, HELL, S_M);
+      zeile(WLAN_SETUP_NAME, 82, gelb, S_MF);
+      zeile(TX("2. Seite öffnet sich selbst:", "2. A page opens by itself:"), 112, HELL, S_M);
+      zeile(TX("dein WLAN wählen und", "choose your Wi-Fi and"), 134, HELL, S_M);
+      zeile(TX("Passwort eingeben", "enter the password"), 156, HELL, S_M);
+    } else {
+      schreibe(bild, TX("WLAN verbunden!", "Wi-Fi connected!"), B / 2, 27, farbe(90, 220, 110), MITTE);
+      ortSymbol(46, 100, t);
+      zeile(TX("3. Jetzt am Handy:", "3. Now on your phone:"), 62, HELL, S_M);
+      zeile(TX("Wo steht die Station?", "Where is the station?"), 86, gelb, S_MF);
+      zeile(TX("Ort oder PLZ suchen", "Search town or postcode"), 118, HELL, S_M);
+      zeile(TX("oder Vorschlag antippen", "or tap the suggestion"), 140, HELL, S_M);
+    }
   } else if (phase == WLAN_TESTE) {
     zeichneBild(bild, HEITER, true, B / 2, 62 + dy, 100, t);
     schreibe(bild, TX("Verbinde ...", "Connecting ..."), B / 2, 128 + dy, WEISS, MITTE);
     schrift(bild, S_K);
     schreibe(bild, kuerzen(netz, B - 8).c_str(), B / 2, 152 + dy, farbe(255, 198, 44), MITTE);
-  } else if (phase == WLAN_ORT) {
-    schreibe(bild, TX("WLAN verbunden!", "Wi-Fi connected!"), B / 2, 27, farbe(90, 220, 110), MITTE);
-    ortSymbol(46, 100, t);
-    schrift(bild, S_M);
-    schreibe(bild, TX("3. Jetzt am Handy:", "3. Now on your phone:"), 94, 62, HELL, LINKS);
-    schrift(bild, S_MF);
-    schreibe(bild, TX("Wo steht die Station?", "Where is the station?"), 94, 86, farbe(255, 198, 44), LINKS);
-    schrift(bild, S_M);
-    schreibe(bild, TX("Ort oder PLZ suchen", "Search town or postcode"), 94, 118, HELL, LINKS);
-    schreibe(bild, TX("oder Vorschlag antippen", "or tap the suggestion"), 94, 140, HELL, LINKS);
   } else if (phase == WLAN_OK) {
     zeichneBild(bild, KLAR, true, B / 2, 62 + dy, 100, t);
     schreibe(bild, TX("Fertig!", "Done!"), B / 2, 128 + dy, farbe(90, 220, 110), MITTE);
@@ -1114,6 +1118,7 @@ void lageSetzen() {
     bild.setColorDepth(8);
     bild.createSprite(B, H);
   }
+  bild.setTextWrap(false, false);  // zu lange Zeilen abschneiden statt links neu anfangen
   wechsel = false;  // laufende Schiebe-Animation passt nicht mehr
 }
 
