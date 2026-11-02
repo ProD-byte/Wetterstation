@@ -20,9 +20,11 @@ Geschrieben mit **VS Code + PlatformIO** (Arduino-Kern 2.0.14 – TFT_eSPI läuf
 | 📡 **Regenradar** | Radarbilder der letzten Stunde ([RainViewer](https://www.rainviewer.com/)) als Animation auf einer dunklen Karte ([OpenStreetMap](https://www.openstreetmap.org/copyright)); Ausschnitt nah, mittel oder weit. Ist nirgends Regen, steht „Kein Regen in der Nähe“ da |
 | 📉 **Letzte 7 Tage** | Temperatur, Luftdruck und Regen der vergangenen Woche (auch als Diagramm auf der Einstellungsseite) |
 | 🗺️ **Orte** | bis zu 3 weitere Orte im Vergleich mit deinem (Seite erscheint nur, wenn welche eingetragen sind) |
+| 🛰️ **ISS** | wann die Raumstation über deinem Ort zu sehen ist, mit Bahn, Richtung und Höhe – die Station rechnet es aus den Bahndaten von [CelesTrak](https://celestrak.org/) selbst aus, weltweit. Die Seite erscheint nur an Tagen mit sichtbarem Überflug; 5 min vorher springt die Station dorthin und zeigt live, wohin du schauen musst |
 | ⚠️ **Warnungen** | Unwetterwarnungen des Deutschen Wetterdienstes ([brightsky.dev](https://brightsky.dev/)) blinken oben – alle, erst ab Orange, ab Rot oder gar nicht |
 | 🌙 **Himmel** | Farbverlauf passend zum Wetter, Morgen- und Abendrot, ziehende Wolken, Regen/Schnee/Nebel über den ganzen Himmel, nachts funkelnde Sterne; Nachtmodus dimmt das Display |
 | 📶 **WLAN** | Einrichtung per Handy (WLAN „Wetterstation-Setup“), merkt sich bis zu 5 Netze |
+| 🛟 **Ersatzdienst** | antwortet Open-Meteo nicht, holt die Station das Wetter von Bright Sky (DWD, bei deutscher Sprache) oder [MET Norway](https://api.met.no/) – oben steht dann „via …“. Ist gar kein Dienst erreichbar, schläft eine Wolke und zählt bis zum nächsten Versuch herunter |
 | 🌐 **Weltweit** | Uhrzeit, Nachtmodus, Sonnenauf- und -untergang richten sich nach der Zeitzone des gewählten Orts (inkl. Sommerzeit) |
 | 🏷️ **Mehrere Stationen** | Name im Netz änderbar (z. B. `wetterstation-kueche.local`), damit mehrere Stationen im selben WLAN erreichbar sind |
 | ⚙️ **Einstellungen** | im Browser unter **http://wetterstation.local**: Sprache, Ausrichtung, Ort, weitere Orte, Ausschnitt des Regenradars (nah/mittel/weit), Warnungen, Name im Netz, Helligkeit, Seiten, Blättern, Nachtmodus, Updates |
@@ -92,6 +94,8 @@ Bei jedem Hochladen baut GitHub die Firmware automatisch (`.github/workflows/bui
 | `src/einstellungen.cpp` | gespeicherte Einstellungen |
 | `src/radar.cpp` | Regenradar: Karte + Radarbilder laden, entpacken (PNGdec), im PSRAM halten |
 | `src/verlauf.cpp`, `src/orte.cpp` | letzte 7 Tage, weitere Orte |
+| `src/ersatz.cpp` | Ersatz-Wetterdienste (Bright Sky, MET Norway) |
+| `src/iss.cpp` | ISS-Überflüge: Bahndaten laden, mit SGP4 berechnen |
 | `src/schriften.h` | geglättete Schriften (erzeugt, nicht von Hand ändern) |
 | `src/netzupdate.cpp` | Update aus dem Internet (heißt nicht `update.cpp`, sonst verdeckt es unter Windows `Update.h` des ESP32-Kerns) |
 | `simulation/wetterstation.html` | Simulation (zeichnet wie die Firmware) |

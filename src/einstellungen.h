@@ -3,11 +3,11 @@
 
 #include <Arduino.h>
 
-const int SEITEN_ANZAHL = 8;  // Jetzt, 24 Stunden, Tage, Sonne & Mond, Luft & Pollen, Radar, Verlauf, Orte
+const int SEITEN_ANZAHL = 9;  // Jetzt, 24 Stunden, Tage, Sonne & Mond, Luft & Pollen, Radar, Verlauf, Orte, ISS
 
 struct Einstellungen {
   uint8_t licht = 0;          // Helligkeitsstufe am Tag (0 = hellste)
-  uint8_t seiten = 0xFF;      // welche Seiten gezeigt werden (Bit 0 = Jetzt ...)
+  uint16_t seiten = 0x1FF;    // welche Seiten gezeigt werden (Bit 0 = Jetzt ... Bit 8 = ISS)
   uint8_t wechsel = 12;       // Sekunden bis zur naechsten Seite, 0 = nur per Taste
   bool nacht = true;          // Nachtmodus: Display abends dunkler
   uint8_t nachtVon = 22;      // Uhrzeit (volle Stunde)

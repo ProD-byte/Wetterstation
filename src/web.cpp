@@ -7,6 +7,7 @@
 #include "wlan.h"
 #include "verlauf.h"
 #include "orte.h"
+#include "iss.h"
 #include <WiFi.h>
 #include <WebServer.h>
 #include <TFT_eSPI.h>
@@ -57,7 +58,13 @@ static void status() {
              ",\"nacht\":" + (einst.nacht ? "true" : "false") + ",\"von\":" + einst.nachtVon + ",\"bis\":" +
              einst.nachtBis + ",\"auto\":" + (einst.autoUpdate ? "true" : "false") + ",\"sprache\":" + einst.sprache +
              ",\"lage\":" + einst.lage + ",\"radarzoom\":" + einst.radarZoom +
-             ",\"warnab\":" + einst.warnAb + ",\"name\":\"" + einst.name + "\"}}";
+             ",\"warnab\":" + einst.warnAb + ",\"name\":\"" + einst.name + "\"}";
+  // naechster sichtbarer ISS-Ueberflug (Unix-Zeit, Grad)
+  IssUeberflug u;
+  if (issHolen(u))
+    j += ",\"iss\":{\"ab\":" + String((long)u.sichtAb) + ",\"bis\":" + String((long)u.sichtBis) + ",\"hoch\":" +
+         String(u.maxHoehe, 0) + ",\"von\":" + String(u.azAb, 0) + ",\"nach\":" + String(u.azBis, 0) + "}";
+  j += "}";
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", j);
 }
@@ -65,7 +72,7 @@ static void status() {
 static void einstellungenSetzen() {
   auto zahl = [](const char *n, int alt) { return server.hasArg(n) ? server.arg(n).toInt() : alt; };
   einst.licht = constrain(zahl("licht", einst.licht), 0, 3);
-  einst.seiten = zahl("seiten", einst.seiten) & 0xFF;
+  einst.seiten = zahl("seiten", einst.seiten) & 0x1FF;
   if (!einst.seiten) einst.seiten = 1;
   einst.wechsel = constrain(zahl("wechsel", einst.wechsel), 0, 120);
   // Kontrollkaestchen kommen als "true"/"false" oder 1/0

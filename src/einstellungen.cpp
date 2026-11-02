@@ -8,7 +8,9 @@ void einstellungenLaden() {
   p.begin("einst", true);
   Einstellungen e;
   e.licht = p.getUChar("licht", e.licht) % 4;
-  e.seiten = p.getUChar("seiten8", e.seiten);  // neuer Schluessel: frueher gab es nur 5 Seiten
+  // neuer Schluessel je Seitenzahl: frueher 5, dann 8 Seiten - die ISS ist bei alten Einstellungen erst mal an
+  if (p.isKey("seiten9")) e.seiten = p.getUShort("seiten9", e.seiten);
+  else e.seiten = p.getUChar("seiten8", 0xFF) | 0x100;
   if (!e.seiten) e.seiten = 1;  // mindestens "Jetzt"
   e.wechsel = p.getUChar("wechsel", e.wechsel);
   e.nacht = p.getBool("nacht", e.nacht);
@@ -30,7 +32,7 @@ void einstellungenSpeichern() {
   Preferences p;
   p.begin("einst", false);
   p.putUChar("licht", einst.licht);
-  p.putUChar("seiten8", einst.seiten);
+  p.putUShort("seiten9", einst.seiten);
   p.putUChar("wechsel", einst.wechsel);
   p.putBool("nacht", einst.nacht);
   p.putUChar("von", einst.nachtVon);

@@ -6,6 +6,7 @@
 #include "verlauf.h"
 #include "orte.h"
 #include "ersatz.h"
+#include "iss.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -327,6 +328,11 @@ static void aufgabe(void *) {
       Ort ort = ortAktuell();
       verlaufAktualisieren(ort.lat, ort.lon);
       naechsterVerlauf = millis() + ABSTAND_VERLAUF;
+    }
+    // ISS-Ueberfluege (Bahndaten taeglich, gerechnet wird nur bei Bedarf)
+    if (aktuell.gueltig) {
+      Ort ort = ortAktuell();
+      issAktualisieren(ort.lat, ort.lon);
     }
     if (orteNeu || (aktuell.gueltig && (int32_t)(millis() - naechsteOrte) >= 0)) {
       orteNeu = false;

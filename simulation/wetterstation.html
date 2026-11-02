@@ -164,6 +164,7 @@ html.einbetten .wrap { padding-block: 4px 8px; gap: 16px; }
     <div><span class="tag">Seite 6</span><h2>Regenradar</h2><p>Echte Radarbilder der letzten Stunde (RainViewer) auf einer dunklen Karte deiner Gegend, als Animation. Hier mit erfundenem Beispiel-Regen. Das Gerät zeigt den echten Regen (Ausschnitt nah, mittel oder weit, einstellbar unter wetterstation.local), und wenn es nirgends regnet, steht „Kein Regen in der Nähe“ auf der Karte.</p></div>
     <div><span class="tag">Seite 7</span><h2>Letzte 7 Tage</h2><p>Temperatur, Luftdruck und Regen der vergangenen Woche – auch als Diagramm auf der Einstellungsseite.</p></div>
     <div><span class="tag">Seite 8</span><h2>Orte im Vergleich</h2><p>Bis zu drei weitere Orte, die du auf der Einstellungsseite einträgst, neben deinem eigenen.</p></div>
+    <div><span class="tag">Seite 9</span><h2>ISS-Überflug</h2><p>Wann die Raumstation über deinem Ort zu sehen ist – die Station rechnet es selbst aus, weltweit. Die Seite erscheint nur an Tagen mit einem sichtbaren Überflug, 5 Minuten vorher springt sie von selbst dorthin und zeigt dann live, wohin du schauen musst.</p></div>
     <div><span class="tag">Immer</span><h2>Warnungen &amp; Regen</h2><p>DWD-Unwetterwarnungen blinken oben im Wechsel mit dem Titel. Beginnt oder endet Regen in den nächsten zwei Stunden, steht die Uhrzeit auf Seite 1. Probier „Gewitter“.</p></div>
   </section>
 
@@ -853,9 +854,56 @@ function seiteOrte(ox, t) {
   });
 }
 
+// ISS-Ueberflug (wie seiteIss in main.cpp) - hier ein Beispiel: Sued-Ueberflug von WSW nach O, bis 42 Grad
+const ISS_BAHN = Array.from({ length: 37 }, (_, i) => { const u = i / 36; return { az: 250 - 150 * u, el: 42 * Math.sin(Math.PI * u), sicht: u < 0.85 }; });
+const RICHT = () => L(["N", "NO", "O", "SO", "S", "SW", "W", "NW"], ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]);
+const richtung = az => RICHT()[Math.round((((az % 360) + 360) % 360) / 45) % 8];
+function issZeichnen(x, y) {
+  c.fillStyle = rgb(205, 214, 228); c.fillRect(x - 12, y, 25, 1);
+  for (const sx of [-11, -7, 7, 11]) {
+    c.fillStyle = rgb(217, 164, 65); c.fillRect(x + sx - 1, y - 6, 3, 5); c.fillRect(x + sx - 1, y + 2, 3, 5);
+    c.fillStyle = rgb(120, 86, 30); c.fillRect(x + sx, y - 6, 1, 5); c.fillRect(x + sx, y + 2, 1, 5);
+  }
+  c.fillStyle = rgb(242, 245, 250); c.fillRect(x - 3, y - 2, 7, 4);
+  c.fillStyle = rgb(154, 166, 187); c.fillRect(x, y - 2, 1, 4);
+}
+function seiteIss(ox, t) {
+  titel(ox, L("ISS über Cottbus", "ISS over Cottbus"), t);
+  const hk = hoch(), mitte = 175;
+  schrift("f2"); schreibe(L("in 1 h 35 min", "in 1 h 35 min"), ox + 8, hk ? HOCH_TITEL_Y + 18 : 36, rgb(255, 190, 90), "l");
+  const hor = hk ? 196 : 108, hoehe = hk ? 110 : 64, cx = ox + W / 2, halb = hk ? 74 : 140;
+  const rel = az => ((az - mitte + 540) % 360) - 180;
+  const px = az => cx + Math.max(-100, Math.min(100, rel(az))) / 100 * halb, py = el => hor - Math.sqrt(Math.max(0, el) / 90) * hoehe;
+  linie(cx - halb - 6, hor, cx + halb + 6, hor, 1, rgb(170, 180, 205), 0.5);
+  schrift("f2");
+  for (let k = 0; k < 8; k++) if (Math.abs(rel(k * 45)) <= 96) schreibe(richtung(k * 45), px(k * 45), hor + 12, rgb(150, 160, 190), "m");
+  for (let i = 0; i + 1 < ISS_BAHN.length; i++) {
+    const a = ISS_BAHN[i], b = ISS_BAHN[i + 1];
+    if (a.sicht && b.sicht) linie(px(a.az), py(a.el), px(b.az), py(b.el), 1.5, rgb(255, 236, 190), 0.6);
+    else kreis(px(a.az), py(a.el), 0.6, rgb(170, 180, 205), 0.6);
+  }
+  const ende = ISS_BAHN.filter(p => p.sicht).length - 1;
+  const ort = p => { p = Math.max(0, Math.min(ISS_BAHN.length - 1.001, p)); const i = Math.floor(p), f = p - i, a = ISS_BAHN[i], b = ISS_BAHN[i + 1];
+    return [px(a.az + (b.az - a.az) * f), py(a.el + (b.el - a.el) * f)]; };
+  const pos = (t % 7000) / 7000 * ende;
+  for (let k = 14; k >= 1; k--) { const [x, y] = ort(pos - k * 0.12); kreis(x, y, 2, rgb(255, 236, 190), 0.67 * (14 - k) / 14); }
+  const [x, y] = ort(pos);
+  kreis(x, y, 6, rgb(255, 240, 200), 45 / 255);
+  issZeichnen(Math.round(x), Math.round(y));
+  const wann = L("Heute 19:42", "Today 19:42"), dauer = L("5 min sichtbar", "visible 5 min");
+  const bis = richtung(ISS_BAHN[ende].az), weg = L(`von ${richtung(250)} nach ${bis}`, `from ${richtung(250)} to ${bis}`), gipfel = L("bis 42° hoch", "up to 42°");
+  if (hk) {
+    schrift("b9"); schreibe(wann, ox + W / 2, 236, WEISS, "m");
+    schrift("f2"); schreibe(dauer, ox + W / 2, 256, WEISS, "m"); schreibe(weg, ox + W / 2, 276, HELL, "m"); schreibe(gipfel, ox + W / 2, 294, HELL, "m");
+  } else {
+    schrift("s9"); schreibe(`${wann} · ${dauer}`, ox + W / 2, 143, WEISS, "m");
+    schrift("f2"); schreibe(`${weg} · ${gipfel}`, ox + W / 2, 158, HELL, "m");
+  }
+}
+
 function zeichneSeite(s, ox, t) {
   if (ox <= -W || ox >= W) return;
-  [seiteJetzt, seiteStunden, seiteTage, seiteSonne, seiteLuft, seiteRadar, seiteVerlauf, seiteOrte][s](ox, t);
+  [seiteJetzt, seiteStunden, seiteTage, seiteSonne, seiteLuft, seiteRadar, seiteVerlauf, seiteOrte, seiteIss][s](ox, t);
 }
 function statusLeiste() {
   const uhr = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Berlin" }).format(new Date());
@@ -986,7 +1034,7 @@ function ortBild(t) {
 }
 
 // ---------- Ablauf ----------
-const SEITEN = 8, AUTO_WEITER = 12000, WECHSEL_DAUER = 380;
+const SEITEN = 9, AUTO_WEITER = 12000, WECHSEL_DAUER = 380;
 const HELLIGKEIT = [255, 160, 80, 30];
 let seite = 0, alteSeite = 0, wechsel = false, wechselStart = 0, seiteSeit = 0, letzterTastendruck = -1e9;
 let lichtStufe = 0, lichtAnzeigeBis = 0, startSeit = 0;
