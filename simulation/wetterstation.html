@@ -148,6 +148,7 @@ html.einbetten .wrap { padding-block: 4px 8px; gap: 16px; }
   <section class="controls" aria-label="Simulation steuern">
     <div class="row"><span>Wetter</span><div class="chips" id="wetterWahl"></div></div>
     <div class="row"><span>Tageszeit</span><div class="chips" id="tagWahl"></div></div>
+    <div class="row"><span>Jahreszeit</span><div class="chips" id="jahrWahl"></div></div>
     <div class="row"><span>Sprache</span><div class="chips" id="sprachWahl"></div></div>
     <div class="row"><span>Ausrichtung</span><div class="chips" id="lageWahl"></div></div>
     <div class="row"><span>Akku</span><div class="chips" id="akkuWahl"></div></div>
@@ -218,8 +219,12 @@ const DEMOS = [
   { id: "pause", name: "Wetterdienst-Pause" },
   { id: 0, name: "Sonnig" }, { id: 2, name: "Teils bewölkt" }, { id: 3, name: "Bedeckt" },
   { id: 45, name: "Nebel" }, { id: 53, name: "Niesel" }, { id: 63, name: "Regen" },
-  { id: 73, name: "Schnee" }, { id: 95, name: "Gewitter" }
+  { id: 73, name: "Schnee" }, { id: 95, name: "Gewitter" }, { id: 99, name: "Hagel" },
+  { id: "bogen", name: "Regenbogen" }, { id: "sturm", name: "Sturm" }, { id: "hitze", name: "Hitze" }, { id: "silvester", name: "Silvester" }
 ];
+// Jahreszeit fuer Blaetter, Blueten und Gluehwuermchen ("echt" = heutiger Monat)
+let jahrModus = "echt";
+const JAHR_MONAT = { fruehling: 3, sommer: 6, herbst: 9, winter: 0 };
 
 let modus = "echt", tagModus = "echt", akkuModus = "usb", englisch = false;
 const L = (de, en) => englisch ? en : de;
@@ -230,7 +235,7 @@ function baueWetter() {
   if (typeof modus === "number") {
     w.code = modus;
     w.tagCode[0] = modus;
-    const nass = [53, 63, 73, 95].includes(modus);
+    const nass = [53, 63, 73, 95, 99].includes(modus);
     if (nass) {
       w.stdRegen = w.stdRegen.map((_, i) => Math.round(Math.max(0, 85 * Math.exp(-((i - 6) ** 2) / 30) + (i % 5) * 3)));
       w.tagRegen[0] = 85;
@@ -243,8 +248,13 @@ function baueWetter() {
     if (modus === 0) { w.temp = 11.4; w.gefuehlt = 10.2; w.feuchte = 61; w.uv = 4.6; w.aqi = 12; w.pollen = [0, 38, 74, 4, 0]; }
     if (modus === 2) { w.aqi = 46; w.pm25 = 18; w.pollen = [12, 0, 22, 0, 0]; }
     if (modus === 53 || modus === 63) w.regenHinweis = modus === 63 ? "Regen bis 14:30" : "Regen ab 14:15";
-    if (modus === 95) { w.wind = 38; w.warnung = "Schwere Sturmböen"; w.warnStufe = 3; w.regenHinweis = "Regen bis 15:45"; }
+    if (modus === 95 || modus === 99) { w.wind = 38; w.warnung = "Schwere Sturmböen"; w.warnStufe = 3; w.regenHinweis = "Regen bis 15:45"; }
   }
+  // besondere Lagen: Regenbogen nach dem Schauer, Sturm, Hitze, Silvester
+  if (modus === "bogen") { w.code = 1; w.tagCode[0] = 1; w.tag = true; }
+  if (modus === "sturm") { w.code = 3; w.tagCode[0] = 3; w.wind = 68; w.warnung = "Sturmböen"; w.warnStufe = 2; }
+  if (modus === "hitze") { w.code = 0; w.tagCode[0] = 0; w.tag = true; w.temp = 33.4; w.gefuehlt = 35.1; w.feuchte = 28; w.uv = 8.2; }
+  if (modus === "silvester") { w.code = 0; w.tag = false; w.temp = -1.2; w.gefuehlt = -4; }
   if (tagModus !== "echt") w.tag = tagModus !== "nacht";
 }
 
@@ -362,6 +372,46 @@ function himmelEffekte(b, tag, t) {
       kreis(hx, hy, 1.5, "#fff", a);
     }
   }
+  const lage = himmelLage();
+  // Hagel: Koerner prasseln ueber den ganzen Himmel und springen unten auf
+  if (b === "GEWITTER" && lage.hagel) hagel(0, W, -10, H - 4, 22, 900, 60, t);
+  // Sturm: Blaetter wirbeln quer durchs Bild
+  const herbst = lage.monat >= 8 && lage.monat <= 10;
+  const BLATT_F = herbst || lage.monat === 11 || lage.monat <= 1 ? [[230, 120, 40], [200, 70, 40], [230, 180, 50], [150, 90, 40]] : [[90, 170, 70], [120, 190, 80], [70, 140, 60], [150, 200, 90]];
+  if (lage.wind >= 40) {
+    for (let i = 0; i < 8; i++) {
+      const z = zufall(i + 300), per = 2200 + z % 1600, p = ((t + i * 977) % per) / per;
+      const x = -20 + (W + 40) * p, y = 20 + (z >>> 8) % (H - 40) + Math.sin(p * 9 + i) * 14;
+      blatt(x, y, 9 + z % 4, t * 0.012 * (i % 2 ? 1 : -1) + i, rgb(...BLATT_F[i % 4]), 0.95);
+    }
+  }
+  const ruhig = b === "KLAR" || b === "HEITER" || b === "BEDECKT";
+  // Herbst: ab und zu segelt ein Blatt herunter
+  if (herbst && ruhig && lage.wind < 40) {
+    const k2 = Math.floor(t / 12000), lokal = t % 12000, z = zufall(k2 + 1200);
+    if (z % 3 !== 0 && lokal < 8000) {
+      const u = lokal / 8000, x = 30 + z % (W - 60) + Math.sin(u * 7) * 26, y = -10 + (H + 20) * u;
+      blatt(x, y, 15, Math.sin(u * 7) * 0.9 + 0.6, rgb(...BLATT_F[z % 4]));
+    }
+  }
+  // Fruehling am Tag: Blueten treiben schraeg durchs Bild
+  if (lage.monat >= 2 && lage.monat <= 4 && tag && ruhig) {
+    for (let j = 0; j < 2; j++) {
+      const tt = t + j * 4500, k2 = Math.floor(tt / 9000), lokal = tt % 9000, z = zufall(k2 * 2 + j + 1500);
+      if (z % 4 === 0 || lokal > 7500) continue;
+      const u = lokal / 7500, x = W + 10 - (W + 40) * u, y = 10 + (z >>> 8) % (H / 2) + u * H * 0.5 + Math.sin(u * 8) * 8;
+      bluete(x, y, 6, u * 6);
+    }
+  }
+  // warme Sommernacht: Gluehwuermchen schweben und leuchten auf
+  if (lage.monat >= 5 && lage.monat <= 7 && !tag && ruhig && lage.temp >= 15) {
+    for (let i = 0; i < 9; i++) {
+      const z = zufall(i + 700), x = W * (0.1 + 0.8 * (z % 100) / 100) + Math.sin(t * 0.0005 + i * 2) * 24;
+      const y = H * (0.45 + 0.45 * ((z >>> 8) % 100) / 100) + Math.sin(t * 0.0007 + i) * 12;
+      const g2 = Math.max(0, Math.sin(t * 0.0021 + i * 1.7)) ** 3;
+      kreis(x, y, 8, rgb(220, 255, 120), 0.2 * g2); kreis(x, y, 4, rgb(220, 255, 120), 0.3 * g2); kreis(x, y, 1.8, rgb(240, 255, 170), 0.3 + 0.7 * g2);
+    }
+  }
   // schoenes Wetter am Tag: ab und zu zieht ein kleiner Vogelschwarm vorbei
   if (tag && (b === "KLAR" || b === "HEITER")) {
     const k2 = Math.floor(t / 22000), lokal = t % 22000, z = zufall(k2 + 900);
@@ -389,12 +439,20 @@ function sonnenstrahlen(t) {
   }
 }
 
+// sanfter Wetterwechsel: aendert sich Wetter oder Tag/Nacht, blendet der Himmel in 4 s ueber (wie in bilder.cpp)
+const himmelWechsel = { b: null, tag: null, ab: 0, vonO: null, vonU: null, jetztO: null, jetztU: null };
 function zeichneHimmel(b, tag, t, blitz, daemmerung = 0) {
   let [o, u] = verlauf(b, tag);
   if (daemmerung > 0) {  // Morgen- und Abendrot
     const d = Math.min(daemmerung, 1) * (b === "KLAR" || b === "HEITER" ? 1 : 0.45);
     o = misch(o, [72, 52, 118], d * 0.6); u = misch(u, [255, 146, 92], d * 0.8);
   }
+  const hw = himmelWechsel;
+  if (hw.b === null) Object.assign(hw, { b, tag, ab: t - 9999, vonO: o, vonU: u });
+  else if (hw.b !== b || hw.tag !== tag) Object.assign(hw, { b, tag, ab: t, vonO: hw.jetztO, vonU: hw.jetztU });
+  const fw = Math.min(1, (t - hw.ab) / 4000), fs = fw * fw * (3 - 2 * fw);
+  if (fw < 1) { o = misch(hw.vonO, o, fs); u = misch(hw.vonU, u, fs); }
+  hw.jetztO = o; hw.jetztU = u;
   const g = c.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, rgb(...o)); g.addColorStop(1, rgb(...u));
   c.fillStyle = g; c.fillRect(0, 0, W, H);
@@ -414,7 +472,62 @@ function zeichneHimmel(b, tag, t, blitz, daemmerung = 0) {
     }
   }
   if (tag && b === "HEITER") sonnenstrahlen(t);
+  if (tag && (b === "KLAR" || b === "HEITER")) regenbogen(himmelLage().regenbogen);
   himmelEffekte(b, tag, t);
+}
+
+// Hitze ab 30 Grad: die unteren Zeilen flimmern (verschieben sich um ein Pixel hin und her)
+function hitzeFlimmern(t) {
+  if (w.temp < 30) return;
+  const band = 34;
+  for (let y = H - band; y < H; y++) {
+    const st = (y - (H - band)) / band, d = Math.round(Math.sin(t * 0.006 + y * 0.55) * 1.4 * st);
+    if (d) c.drawImage(cv, 0, y * k, W * k, k, d, y, W, 1);
+  }
+}
+
+// ---------- Silvester (wie silvesterBild in main.cpp) ----------
+// Sekunden relativ zu Mitternacht: -600..0 Countdown, 0..62 neues Jahr mit Feuerwerk; sonst null
+function silvesterZeit() {
+  if (modus !== "silvester") return null;
+  return (jetzt() - startSeit) / 1000 - 15;  // Vorfuehrung: 15 s vor Mitternacht
+}
+function silvesterBild(rel, t) {
+  const neu = 2027, alt = neu - 1, gold = rgb(255, 210, 90), MX = W / 2, hk = hoch();
+  zeichneHimmel("KLAR", false, t, false);
+  if (rel >= 0) feuerwerk(rel, neu);
+  const YJ = hk ? 170 : 104;
+  if (rel < 0) {
+    const rest = Math.min(599, Math.ceil(-rel));
+    schrift("b9"); schreibe(L("Silvester", "New Year's Eve"), 8, hk ? HOCH_TITEL_Y : 18, gold, "l");
+    schrift("b24");
+    if (rest <= 10) {  // letzte 10 Sekunden: grosse Zahl mit Ring, der in jeder Sekunde abläuft
+      const anteil = rest - -rel;
+      c.strokeStyle = gold; c.lineWidth = 4; c.lineCap = "round"; c.globalAlpha = 0.9;
+      c.beginPath(); c.arc(MX, YJ - 23, 46, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * anteil); c.stroke(); c.globalAlpha = 1;
+      schreibe(String(rest), MX, YJ, WEISS, "m");
+    } else schreibe(`${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, "0")}`, MX, YJ, WEISS, "m");
+    schrift("s9"); schreibe(L(`bis ${neu}`, `until ${neu}`), MX, YJ + 34, HELL, "m");
+    // Fortschritt der letzten 10 Minuten
+    const bx = W * 0.15, bb = W * 0.7, by = H - 14;
+    rundRechteck(bx, by, bb, 4, 2, "#fff", 0.2); rundRechteck(bx, by, bb * (1 - rest / 600), 4, 2, gold);
+    return;
+  }
+  // altes Jahr wird zum neuen: geaenderte Ziffern rollen nach oben weg, die neuen kommen von unten
+  schrift("b24");
+  const as = String(alt), ns = String(neu), bw = breite(ns), x0 = MX - bw / 2;
+  const u = Math.min(1, rel / 1.6), e = 1 - Math.pow(1 - u, 3);
+  for (let i = 0; i < ns.length; i++) {
+    const x = x0 + breite(ns.slice(0, i));
+    if (as[i] === ns[i]) { schreibe(ns[i], x, YJ, WEISS, "l"); continue; }
+    c.globalAlpha = 1 - e; schreibe(as[i], x, YJ - 40 * e, WEISS, "l");
+    c.globalAlpha = e; schreibe(ns[i], x, YJ + 40 * (1 - e), gold, "l"); c.globalAlpha = 1;
+  }
+  if (rel > 1.8) {
+    const a = Math.min(1, (rel - 1.8) / 0.8);
+    schrift(hk ? "b9" : "b12"); c.globalAlpha = a;
+    schreibe(L("Frohes neues Jahr!", "Happy New Year!"), MX, YJ + (hk ? 40 : 40), gold, "m"); c.globalAlpha = 1;
+  }
 }
 
 function kreis(x, y, r, f, a = 1) { c.globalAlpha *= a; c.fillStyle = f; c.beginPath(); c.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); c.fill(); c.globalAlpha = 1; }
@@ -427,8 +540,14 @@ function zufall(n) {
   let x = (n ^ 61) ^ (n >>> 16); x = Math.imul(x, 9) >>> 0; x ^= x >>> 4;
   x = Math.imul(x, 0x27d4eb2d) >>> 0; x ^= x >>> 15; return x >>> 0;
 }
-// Wind macht Wolken schneller und Regen schraeger
-const windFaktor = () => Math.min(3, Math.max(0.4, 0.4 + w.wind / 12));
+// Wind macht Wolken schneller (bei Sturm jagen sie) und Regen schraeger
+const windFaktor = () => Math.min(5, Math.max(0.4, 0.4 + w.wind / 12));
+// Lage fuer Himmel und Bilder (wie HimmelLage in bilder.h): Hagel, Regenbogen 0..1, Monat 0..11, Temperatur
+function himmelLage() {
+  const monat = jahrModus === "echt" ? new Date().getMonth() : JAHR_MONAT[jahrModus];
+  return { hagel: w.code === 96 || w.code === 99, regenbogen: modus === "bogen" ? Math.min(1, (jetzt() - startSeit) / 3000) : 0,
+           monat, temp: w.temp, wind: w.wind };
+}
 const windSchraeg = () => Math.min(0.9, 0.15 + w.wind / 50);
 
 // Keil: Linie, die von Radius ar auf br duenner wird (wie drawWedgeLine)
@@ -585,10 +704,74 @@ function zeichneBild(b, tag, cx, cy, g, t) {
       wolke(cx + d, cy - g * 0.12, g * 0.8, [228, 234, 242], t); break;
     case "GEWITTER": {
       const hell = blitzAktiv(t), auf = col => hell ? misch(col, [236, 236, 255], 0.5) : col;  // Wolke leuchtet beim Blitz von innen
-      teilchen(cx - g * 0.32, g * 0.64, cy + g * 0.02, g * 0.38, 5, 520, g, false, rgb(110, 160, 230), t);
+      if (himmelLage().hagel) hagel(cx - g * 0.32, g * 0.64, cy + g * 0.06, g * 0.36, 6, 800, g, t);
+      else teilchen(cx - g * 0.32, g * 0.64, cy + g * 0.02, g * 0.38, 5, 520, g, false, rgb(110, 160, 230), t);
       wolke(cx + g * 0.16 - d, cy - g * 0.2, g * 0.6, auf([92, 96, 116]), t + 700);
       wolke(cx - g * 0.04 + d, cy - g * 0.1, g * 0.84, auf([140, 146, 166]), t);
       blitzZeichen(cx + g * 0.02, cy + g * 0.06, g, hell ? rgb(255, 255, 210) : rgb(255, 206, 60), hell); break;
+    }
+  }
+}
+
+// Blatt: zwei Keile (spitz - breit - spitz) mit Stiel, dreht sich um sich selbst
+function blatt(x, y, l, wk, f, a = 1) {
+  const cx_ = Math.cos(wk) * l / 2, cy_ = Math.sin(wk) * l / 2;
+  keil(x - cx_, y - cy_, x, y, 0.4, l * 0.28, f, a);
+  keil(x, y, x + cx_, y + cy_, l * 0.28, 0.4, f, a);
+  linie(x - cx_, y - cy_, x - cx_ * 1.35, y - cy_ * 1.35, 1, f, a);
+}
+// Bluete: fuenf Blaetter um eine gelbe Mitte
+function bluete(x, y, r, dreh, a = 1) {
+  for (let i = 0; i < 5; i++) { const wk = dreh + i * 2 * Math.PI / 5; kreis(x + Math.cos(wk) * r * 0.55, y + Math.sin(wk) * r * 0.55, r * 0.5, rgb(255, 196, 214), a); }
+  kreis(x, y, r * 0.3, rgb(255, 222, 90), a);
+}
+// Hagelkoerner: fallen schnell, springen am Boden zweimal auf
+function hagel(x0, br, y0, hoehe, n, periode, g, t) {
+  for (let i = 0; i < n; i++) {
+    const z = zufall(i + 31), per = Math.floor(periode * (0.8 + (z % 100) / 250));
+    const p = ((t + Math.floor(i * per * 0.41)) % per) / per, r = Math.max(1.2, g * 0.028) * (0.8 + ((z >>> 8) % 50) / 100);
+    let x = x0 + br * (i + 0.5) / n, y;
+    if (p < 0.6) y = y0 + hoehe * Math.pow(p / 0.6, 2);
+    else { const q = (p - 0.6) / 0.4, s1 = q < 0.6 ? q / 0.6 : (q - 0.6) / 0.4, hub = q < 0.6 ? g * 0.12 : g * 0.045;
+           y = y0 + hoehe - Math.sin(s1 * Math.PI) * hub; x += (q < 0.6 ? q / 0.6 : 1 + (q - 0.6) / 0.4 * 0.5) * g * 0.05 * (i % 2 ? 1 : -1); }
+    const a = p > 0.9 ? (1 - p) / 0.1 : 1;
+    kreis(x, y, r, rgb(236, 244, 255), a);
+    kreis(x - r * 0.35, y - r * 0.35, r * 0.35, "#fff", a);
+  }
+}
+// Regenbogen: sieben Baender, Mittelpunkt unter dem Bild rechts
+function regenbogen(staerke) {
+  if (staerke <= 0) return;
+  const cx_ = W * 0.7, cy_ = H * 1.25, r0 = cy_ - H * 0.2;
+  const F = [[255, 80, 80], [255, 160, 60], [255, 230, 90], [110, 220, 110], [90, 160, 255], [110, 110, 230], [170, 100, 220]];
+  F.forEach((f, i) => { c.globalAlpha = 0.3 * staerke; c.strokeStyle = rgb(...f); c.lineWidth = 3.2; c.beginPath(); c.arc(cx_, cy_, r0 - i * 3, Math.PI, 2 * Math.PI); c.stroke(); });
+  c.globalAlpha = 1;
+}
+// Feuerwerk (sek = Sekunden seit Mitternacht): Raketen steigen auf und zerplatzen in bunte Funken, die fallen und verglimmen
+const FEUER_FARBEN = [[255, 90, 90], [255, 200, 70], [120, 220, 255], [160, 255, 140], [230, 130, 255], [255, 255, 255]];
+function feuerwerk(sek, jahr) {
+  const ms = sek * 1000, groesse = Math.min(W, H) / 170;
+  for (let k2 = 0; k2 * 650 < 58000; k2++) {
+    const z = zufall(k2 * 7 + 3 + jahr), start = k2 * 650 + z % 400, tau = ms - start;
+    if (tau < 0 || tau > 3200) continue;
+    const x0 = W * (0.15 + 0.7 * (z % 1000) / 1000), gipfel = H * (0.16 + 0.26 * ((z >>> 10) % 1000) / 1000);
+    const f = FEUER_FARBEN[(z >>> 20) % FEUER_FARBEN.length], col = rgb(...f);
+    if (tau < 900) {  // Aufstieg mit Funkenschweif
+      const u = tau / 900, y = H + 5 - (H + 5 - gipfel) * (1 - Math.pow(1 - u, 2));
+      for (let i = 1; i <= 4; i++) kreis(x0 + Math.sin(i * 2 + tau * 0.03) * 0.8, y + i * 4, 1.1, rgb(255, 220, 160), 0.6 * (1 - i / 5));
+      kreis(x0, y, 1.6, rgb(255, 240, 200));
+      continue;
+    }
+    const tb = (tau - 900) / 1000, n = 30, weg = tt => (1 - Math.exp(-tt * 2.2)) / 2.2;
+    if (tb < 0.12) kreis(x0, gipfel, 14 * groesse * (1 - tb / 0.12), rgb(...misch(f, [255, 255, 255], 0.6)), 0.5 * (1 - tb / 0.12));
+    for (let i = 0; i < n; i++) {
+      const zi = zufall(z + i), wk = i * 2 * Math.PI / n + ((zi % 100) / 100 - 0.5) * 0.25, v = (40 + zi % 18) * groesse;
+      const pos = tt => [x0 + Math.cos(wk) * v * weg(tt), gipfel + Math.sin(wk) * v * weg(tt) + 14 * groesse * tt * tt];
+      let a = Math.pow(1 - tb / 2.3, 1.5);
+      if (i % 3 === 0 && tb > 1.2) a *= 0.5 + 0.5 * Math.sin(tau * 0.05 + i);  // Knistern
+      const [x, y] = pos(tb), [xa, ya] = pos(Math.max(0, tb - 0.08));
+      linie(xa, ya, x, y, 1, col, a * 0.5);
+      kreis(x, y, 1.4, rgb(...misch(f, [255, 255, 255], Math.max(0, 0.5 - tb))), a);
     }
   }
 }
@@ -1183,7 +1366,8 @@ function frame() {
   } else if (modus === "wlan") {
     wlanBild(t);
   } else {
-    const b = bildFuerCode(w.code);
+    const b = bildFuerCode(w.code), sv = silvesterZeit();
+    if (sv !== null && sv < 62) { silvesterBild(sv, t); statusLeiste(); lichtAnzeige(t); infoAnzeige(t); return; }
     zeichneHimmel(b, w.tag, t, b === "GEWITTER" && blitzAktiv(t), daemmerung());
     if (wechsel) {
       const p = (t - wechselStart) / WECHSEL_DAUER;
@@ -1191,6 +1375,7 @@ function frame() {
       else { const weg = Math.floor((1 - Math.pow(1 - p, 3)) * W); zeichneSeite(alteSeite, -weg, t); zeichneSeite(seite, W - weg, t); }
     }
     if (!wechsel) zeichneSeite(seite, 0, t);
+    hitzeFlimmern(t);
     statusLeiste();
     seitenPunkte();
     scheibe(b, t);
@@ -1273,6 +1458,7 @@ chips("wetterWahl", DEMOS.map(d => [d.id, d.name]), "echt", v => {
   modus = v; baueWetter(); zeigeQuelle(); seiteSeit = jetzt(); startSeit = jetzt();
 });
 chips("tagWahl", [["echt", "Wie in den Daten"], ["tag", "Tag"], ["abend", "Abendrot"], ["nacht", "Nacht"]], "echt", v => { tagModus = v; baueWetter(); });
+chips("jahrWahl", [["echt", "Wie heute"], ["fruehling", "Frühling"], ["sommer", "Sommer"], ["herbst", "Herbst"], ["winter", "Winter"]], "echt", v => { jahrModus = v; });
 chips("sprachWahl", [["de", "Deutsch"], ["en", "English"]], "de", v => { englisch = v === "en"; });
 // Ausrichtung wie auf der Einstellungsseite (lage 0-3 in main.cpp)
 const LAGEN = {
