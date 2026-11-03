@@ -311,21 +311,21 @@ function himmelEffekte(b, tag, t) {
   const wolken = b === "HEITER" ? 2 : (b === "KLAR" || b === "NEBEL") ? 0 : 4;
   const dunkel = b === "REGEN" || b === "GEWITTER";
   const wf = !tag ? [140, 150, 180] : dunkel ? [150, 160, 185] : [255, 255, 255];
-  const deck = (b === "HEITER" ? 30 : dunkel ? 46 : 40) / 255;
+  const deck = (b === "HEITER" ? 30 : dunkel ? 46 : 40) / 255, wind = windFaktor();
   for (let i = 0; i < wolken; i++) {
-    const bw = 150 + 40 * (i % 3), tempo = 0.0035 + 0.0012 * i;
+    const bw = 150 + 40 * (i % 3), tempo = (0.0035 + 0.0012 * i) * wind;
     const x = ((t * tempo + i * 157) % (W + bw * 1.3)) - bw * 0.65, y = 38 + (i * 47) % (H - 80);
     c.globalAlpha = deck; wolkeForm(x, y, bw, rgb(...wf)); c.globalAlpha = 1;
   }
   if (b === "REGEN" || b === "GEWITTER" || b === "NIESEL") {
-    const n = b === "NIESEL" ? 24 : 48, periode = b === "NIESEL" ? 1700 : 850, l = b === "NIESEL" ? 6 : 13;
+    const n = b === "NIESEL" ? 24 : 48, periode = b === "NIESEL" ? 1700 : 850, l = b === "NIESEL" ? 6 : 13, sch = windSchraeg();
     for (let i = 0; i < n; i++) {
-      const p = ((t + i * 7919) % periode) / periode, x = (i * 53) % (W + 40) - p * 22, y = p * (H + 30) - 20;
-      linie(x, y, x - l * 0.25, y + l, 1, rgb(180, 205, 240), 80 / 255);
+      const p = ((t + i * 7919) % periode) / periode, x = (i * 53) % (W + 60) - p * (H + 30) * sch * 0.6, y = p * (H + 30) - 20;
+      linie(x, y, x - l * sch * 0.6, y + l, 1, rgb(180, 205, 240), 80 / 255);
     }
   } else if (b === "SCHNEE") {
     for (let i = 0; i < 44; i++) {
-      const p = ((t + i * 6151) % 5200) / 5200, x = (i * 67) % W + Math.sin(t * 0.0012 + i) * 12, y = p * (H + 12) - 6;
+      const p = ((t + i * 6151) % 5200) / 5200, x = (i * 67) % W + Math.sin(t * 0.0012 + i) * 12 * wind, y = p * (H + 12) - 6;
       kreis(x, y, 1 + i % 2, "#fff", 170 / 255);
     }
   } else if (b === "NEBEL") {
@@ -335,6 +335,57 @@ function himmelEffekte(b, tag, t) {
       g.addColorStop(0, "rgba(235,238,242,0)"); g.addColorStop(0.5, "rgba(235,238,242,.2)"); g.addColorStop(1, "rgba(235,238,242,0)");
       c.fillStyle = g; c.fillRect(0, y0, W, 24);
     }
+  }
+  // Gewitter: verzweigter Blitz quer ueber den Himmel, solange es blitzt
+  if (b === "GEWITTER" && blitzAktiv(t)) {
+    const z = zufall(Math.floor(t / 4200) + 99);
+    let x = 40 + z % (W - 80), y = -4;
+    const schritt = (H * 0.68) / 7, punkte = [[x, y]];
+    for (let i = 1; i <= 7; i++) { x += ((zufall(z + i) % 29) - 14); y += schritt; punkte.push([x, y]); }
+    const ast = [punkte[3]];
+    for (let i = 1; i <= 3; i++) { const [px_, py_] = ast[ast.length - 1]; ast.push([px_ + 10 + zufall(z + 20 + i) % 9, py_ + schritt * 0.7]); }
+    for (const zug of [punkte, ast]) for (let i = 1; i < zug.length; i++) {
+      linie(zug[i - 1][0], zug[i - 1][1], zug[i][0], zug[i][1], zug === punkte ? 6 : 4, rgb(190, 200, 255), 0.25);
+      linie(zug[i - 1][0], zug[i - 1][1], zug[i][0], zug[i][1], zug === punkte ? 1.8 : 1.2, rgb(255, 255, 255), 1);
+    }
+  }
+  // klare Nacht: ab und zu eine Sternschnuppe
+  if (!tag && (b === "KLAR" || b === "HEITER")) {
+    const k2 = Math.floor(t / 7000), lokal = t % 7000, z = zufall(k2 + 500);
+    if (z % 2 === 0 && lokal < 900) {
+      const u = lokal / 900, sx = 80 + z % (W - 80), sy = 10 + (z >>> 8) % 50, dist = 150 * u;
+      const hx = sx - dist * 0.9, hy = sy + dist * 0.42, lang = 45 * Math.sin(u * Math.PI) + 4, a = Math.min(1, Math.sin(u * Math.PI) * 1.6);
+      for (let i = 0; i < 6; i++) {
+        const f1 = i / 6, f2 = (i + 1) / 6;
+        linie(hx + lang * 0.9 * f1, hy - lang * 0.42 * f1, hx + lang * 0.9 * f2, hy - lang * 0.42 * f2, 2 - f1 * 1.2, "#fff", a * (1 - f1));
+      }
+      kreis(hx, hy, 1.5, "#fff", a);
+    }
+  }
+  // schoenes Wetter am Tag: ab und zu zieht ein kleiner Vogelschwarm vorbei
+  if (tag && (b === "KLAR" || b === "HEITER")) {
+    const k2 = Math.floor(t / 22000), lokal = t % 22000, z = zufall(k2 + 900);
+    if (z % 3 !== 0 && lokal < 9000) {
+      const u = lokal / 9000, rechts = z & 1, x0 = rechts ? -30 + (W + 60) * u : W + 30 - (W + 60) * u;
+      const y0 = 34 + (z >>> 8) % 50 + Math.sin(u * 6) * 4, r_ = rechts ? -1 : 1;
+      [[0, 0], [14, 6], [26, -3]].forEach(([dx, dy], j) => {
+        const x = x0 + dx * r_, y = y0 + dy, schlag = Math.sin(t * 0.014 + j * 1.9), sp = 5.5 - j * 0.5;
+        linie(x, y, x - sp, y - 2.5 * schlag - 1, 1.5, rgb(40, 50, 72), 0.8);
+        linie(x, y, x + sp, y - 2.5 * schlag - 1, 1.5, rgb(40, 50, 72), 0.8);
+      });
+    }
+  }
+}
+
+// Sonnenstrahlen bei "teils bewoelkt": breite, zarte Lichtbahnen von oben rechts (werden vor den Wolken gezeichnet)
+function sonnenstrahlen(t) {
+  const ox_ = W * 0.82, oy = -30;
+  for (let k2 = 0; k2 < 5; k2++) {
+    const wk = 1.95 + k2 * 0.2 + Math.sin(t * 0.00025 + k2) * 0.03, br = 0.045 + 0.02 * (k2 % 2), l = W * 1.4;
+    c.globalAlpha = (0.05 + 0.035 * (0.5 + 0.5 * Math.sin(t * 0.0007 + k2 * 1.4)));
+    c.fillStyle = "rgb(255,246,214)"; c.beginPath(); c.moveTo(ox_, oy);
+    c.lineTo(ox_ + Math.cos(wk - br) * l, oy + Math.sin(wk - br) * l); c.lineTo(ox_ + Math.cos(wk + br) * l, oy + Math.sin(wk + br) * l);
+    c.fill(); c.globalAlpha = 1;
   }
 }
 
@@ -362,6 +413,7 @@ function zeichneHimmel(b, tag, t, blitz, daemmerung = 0) {
       }
     }
   }
+  if (tag && b === "HEITER") sonnenstrahlen(t);
   himmelEffekte(b, tag, t);
 }
 
@@ -370,75 +422,134 @@ function linie(ax, ay, bx, by, wd, f, a = 1) { c.globalAlpha = a; c.strokeStyle 
 function rundRechteck(x, y, w_, h, r, f, a = 1) { c.globalAlpha *= a; c.fillStyle = f; c.beginPath(); c.roundRect(x, y, w_, h, Math.min(r, h / 2, w_ / 2)); c.fill(); c.globalAlpha = 1; }
 function dreieck(ax, ay, bx, by, cx_, cy_, f) { c.fillStyle = f; c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.lineTo(cx_, cy_); c.closePath(); c.fill(); }
 
+// Zufall, der fuer dieselbe Zahl immer gleich ist (wie zufall() in bilder.cpp) - so braucht nichts gespeichert zu werden
+function zufall(n) {
+  let x = (n ^ 61) ^ (n >>> 16); x = Math.imul(x, 9) >>> 0; x ^= x >>> 4;
+  x = Math.imul(x, 0x27d4eb2d) >>> 0; x ^= x >>> 15; return x >>> 0;
+}
+// Wind macht Wolken schneller und Regen schraeger
+const windFaktor = () => Math.min(3, Math.max(0.4, 0.4 + w.wind / 12));
+const windSchraeg = () => Math.min(0.9, 0.15 + w.wind / 50);
+
+// Keil: Linie, die von Radius ar auf br duenner wird (wie drawWedgeLine)
+function keil(ax, ay, bx, by, ar, br, f, a = 1) {
+  const dx = bx - ax, dy = by - ay, l = Math.hypot(dx, dy) || 1, nx = -dy / l, ny = dx / l;
+  c.globalAlpha = a; c.fillStyle = f; c.beginPath();
+  c.moveTo(ax + nx * ar, ay + ny * ar); c.lineTo(bx + nx * br, by + ny * br); c.lineTo(bx - nx * br, by - ny * br); c.lineTo(ax - nx * ar, ay - ny * ar);
+  c.fill(); c.beginPath(); c.arc(ax, ay, ar, 0, 7); c.arc(bx, by, br, 0, 7); c.fill(); c.globalAlpha = 1;
+}
+// Funkeln: kleiner Stern mit vier Zacken
+function funkeln(x, y, l, f, a) {
+  if (l < 0.5 || a <= 0) return;
+  linie(x - l, y, x + l, y, 1.5, f, a); linie(x, y - l, x, y + l, 1.5, f, a);
+  linie(x - l * 0.4, y - l * 0.4, x + l * 0.4, y + l * 0.4, 1, f, a * 0.6); linie(x - l * 0.4, y + l * 0.4, x + l * 0.4, y - l * 0.4, 1, f, a * 0.6);
+  kreis(x, y, Math.max(1, l * 0.18), f, a);
+}
+
 function sonne(cx, cy, g, t) {
   const r = g * 0.2, gelb = rgb(255, 198, 44);
   const puls = 0.5 + 0.5 * Math.sin(t * 0.0025);
-  kreis(cx, cy, r * (2.1 + 0.15 * puls), gelb, (18 + 12 * puls) / 255);
-  kreis(cx, cy, r * (1.55 + 0.12 * puls), gelb, (45 + 25 * puls) / 255);
-  const dreh = t * 0.0004, r1 = r * 1.4;
-  for (let i = 0; i < 8; i++) {
-    const a = dreh + i * Math.PI / 4;
-    const l = g * (0.09 + 0.03 * Math.sin(t * 0.004 + i * 1.3));
-    linie(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1, cx + Math.cos(a) * (r1 + l), cy + Math.sin(a) * (r1 + l), Math.max(2, g * 0.045), gelb);
+  kreis(cx, cy, r * (2.2 + 0.18 * puls), gelb, (16 + 12 * puls) / 255);
+  kreis(cx, cy, r * (1.6 + 0.14 * puls), gelb, (42 + 26 * puls) / 255);
+  // 12 Strahlen als spitze Keile, abwechselnd lang und kurz, drehen sich und atmen
+  const dreh = t * 0.0003, r1 = r * 1.35;
+  for (let i = 0; i < 12; i++) {
+    const a = dreh + i * Math.PI / 6, lang = i % 2 === 0;
+    const l = g * (lang ? 0.13 : 0.08) * (1 + 0.2 * Math.sin(t * 0.004 + i * 1.3));
+    keil(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1, cx + Math.cos(a) * (r1 + l), cy + Math.sin(a) * (r1 + l),
+         Math.max(1.2, r * (lang ? 0.2 : 0.14)), 0.6, lang ? gelb : rgb(255, 214, 96));
   }
   kreis(cx, cy, r, rgb(255, 176, 30));
   kreis(cx - r * 0.08, cy - r * 0.08, r * 0.82, gelb);
   kreis(cx - r * 0.2, cy - r * 0.2, r * 0.55, rgb(255, 220, 100));
   kreis(cx - r * 0.3, cy - r * 0.3, r * 0.25, rgb(255, 244, 190));
+  // alle 3,5 s blitzt oben links ein Glanzstern auf
+  const gp = (t % 3500) / 3500;
+  if (gp < 0.25) { const a = Math.sin(gp / 0.25 * Math.PI); funkeln(cx - r * 0.42, cy - r * 0.42, r * 0.75 * a, rgb(255, 255, 235), a); }
 }
 function mond(cx, cy, g, t) {
   const r = g * 0.21, hell = rgb(238, 234, 210);
   const puls = 0.5 + 0.5 * Math.sin(t * 0.0018);
-  kreis(cx, cy, r * (1.5 + 0.1 * puls), hell, (35 + 20 * puls) / 255);
+  kreis(cx, cy, r * (1.75 + 0.12 * puls), hell, (16 + 10 * puls) / 255);
+  kreis(cx, cy, r * (1.38 + 0.08 * puls), hell, (38 + 22 * puls) / 255);
   kreis(cx, cy, r, hell);
-  const kr = rgb(212, 207, 182);
-  kreis(cx - r * 0.35, cy - r * 0.2, r * 0.22, kr);
-  kreis(cx + r * 0.32, cy + r * 0.3, r * 0.16, kr);
-  kreis(cx + r * 0.12, cy - r * 0.48, r * 0.1, kr);
+  kreis(cx + r * 0.12, cy + r * 0.12, r * 0.86, rgb(226, 221, 194));   // unten rechts etwas dunkler: wirkt rund
+  kreis(cx - r * 0.1, cy - r * 0.1, r * 0.7, hell);
+  // Krater mit dunklem Rand und hellerem Boden
+  for (const [kx, ky, kr] of [[-0.38, -0.2, 0.22], [0.32, 0.3, 0.17], [0.12, -0.5, 0.11], [-0.1, 0.42, 0.12], [0.5, -0.12, 0.08]]) {
+    kreis(cx + kx * r, cy + ky * r, kr * r, rgb(196, 190, 164));
+    kreis(cx + kx * r - kr * r * 0.2, cy + ky * r - kr * r * 0.2, kr * r * 0.7, rgb(218, 213, 188));
+  }
+  // drei Sterne daneben funkeln nacheinander
+  [[1.9, -1.2], [-1.75, -1.45], [1.55, 1.35]].forEach(([sx, sy], k2) => {
+    const a = Math.max(0, Math.sin(t * 0.0026 + k2 * 2.1)) ** 2;
+    funkeln(cx + sx * r, cy + sy * r, r * 0.32 * a + 0.5, rgb(255, 252, 230), a);
+  });
 }
-function wolkeForm(cx, cy, w_, f) {
-  const a = c.globalAlpha;
+// Wolke aus Buckeln; mit t "atmen" die Buckel (werden leicht groesser und kleiner)
+function wolkeForm(cx, cy, w_, f, t) {
+  const a = c.globalAlpha, at = k2 => t === undefined ? 1 : 1 + 0.035 * Math.sin(t * 0.0013 + k2 * 1.7);
   c.fillStyle = f; c.beginPath();
   c.roundRect(cx - w_ * 0.45, cy, w_ * 0.9, w_ * 0.2, w_ * 0.1);
-  c.moveTo(cx - w_ * 0.24 + w_ * 0.18, cy + w_ * 0.02); c.arc(cx - w_ * 0.24, cy + w_ * 0.02, w_ * 0.18, 0, 7);
-  c.moveTo(cx - w_ * 0.01 + w_ * 0.26, cy - w_ * 0.08); c.arc(cx - w_ * 0.01, cy - w_ * 0.08, w_ * 0.26, 0, 7);
-  c.moveTo(cx + w_ * 0.25 + w_ * 0.17, cy + w_ * 0.03); c.arc(cx + w_ * 0.25, cy + w_ * 0.03, w_ * 0.17, 0, 7);
+  for (const [k2, bx, by, br] of [[0, -0.24, 0.02, 0.18], [1, -0.01, -0.08, 0.26], [2, 0.25, 0.03, 0.17]]) {
+    const rr = w_ * br * at(k2);
+    c.moveTo(cx + w_ * bx + rr, cy + w_ * by); c.arc(cx + w_ * bx, cy + w_ * by, rr, 0, 7);
+  }
   c.fill("nonzero"); c.globalAlpha = a;
 }
-function wolke(cx, cy, w_, col) {
-  wolkeForm(cx + w_ * 0.03, cy + w_ * 0.05, w_, rgb(...dunkler(col, 0.72)));
-  wolkeForm(cx, cy, w_, rgb(...col));
+function wolke(cx, cy, w_, col, t) {
+  wolkeForm(cx + w_ * 0.03, cy + w_ * 0.05, w_, rgb(...dunkler(col, 0.72)), t);
+  wolkeForm(cx, cy, w_, rgb(...col), t);
+  // Unterseite etwas dunkler, oben Lichtkanten - so wirkt die Wolke plastisch
+  rundRechteck(cx - w_ * 0.4, cy + w_ * 0.09, w_ * 0.8, w_ * 0.1, w_ * 0.05, rgb(...dunkler(col, 0.9)));
+  const at = k2 => t === undefined ? 1 : 1 + 0.05 * Math.sin(t * 0.0013 + k2 * 1.7);
   const licht = rgb(...misch(col, [255, 255, 255], 0.45));
-  kreis(cx - w_ * 0.05, cy - w_ * 0.15, w_ * 0.15, licht);
-  kreis(cx - w_ * 0.27, cy - w_ * 0.04, w_ * 0.09, licht);
-  kreis(cx + w_ * 0.21, cy - w_ * 0.03, w_ * 0.08, rgb(...misch(col, [255, 255, 255], 0.25)));
+  kreis(cx - w_ * 0.05, cy - w_ * 0.15, w_ * 0.15 * at(1), licht);
+  kreis(cx - w_ * 0.27, cy - w_ * 0.04, w_ * 0.09 * at(0), licht);
+  kreis(cx + w_ * 0.21, cy - w_ * 0.03, w_ * 0.08 * at(2), rgb(...misch(col, [255, 255, 255], 0.25)));
+  kreis(cx - w_ * 0.09, cy - w_ * 0.2, w_ * 0.05, rgb(...misch(col, [255, 255, 255], 0.7)));
 }
 function blitzZeichen(cx, cy, g, f, leuchtet) {
   if (leuchtet) { kreis(cx, cy + g * 0.2, g * 0.3, rgb(255, 240, 160), 40 / 255); kreis(cx, cy + g * 0.2, g * 0.18, rgb(255, 240, 160), 70 / 255); }
   dreieck(cx + g * 0.04, cy, cx - g * 0.09, cy + g * 0.2, cx + g * 0.01, cy + g * 0.2, f);
   dreieck(cx - g * 0.03, cy + g * 0.17, cx + g * 0.08, cy + g * 0.17, cx - g * 0.07, cy + g * 0.4, f);
 }
+// Schneeflocke: sechs Arme, bei groesseren Flocken mit kleinen Zweigen
+function flocke(x, y, r, dreh, f, a, dicke) {
+  for (let k2 = 0; k2 < 6; k2++) {
+    const wk = dreh + k2 * Math.PI / 3, ex = x + Math.cos(wk) * r, ey = y + Math.sin(wk) * r;
+    linie(x, y, ex, ey, dicke, f, a);
+    if (r >= 3.5) {
+      const mx = x + Math.cos(wk) * r * 0.6, my = y + Math.sin(wk) * r * 0.6, z = r * 0.32;
+      linie(mx, my, mx + Math.cos(wk + 0.8) * z, my + Math.sin(wk + 0.8) * z, 1, f, a);
+      linie(mx, my, mx + Math.cos(wk - 0.8) * z, my + Math.sin(wk - 0.8) * z, 1, f, a);
+    }
+  }
+}
+// Fallende Teilchen (Regen oder Schnee): jedes mit eigenem Tempo, Regen schraeg nach Wind, unten Spritzer
 function teilchen(x0, br, y0, hoehe, n, periode, g, schnee, f, t) {
+  const schraeg = schnee ? 0 : windSchraeg();
   for (let i = 0; i < n; i++) {
-    const ph = (t + Math.floor(i * periode * 0.37)) % periode, p = ph / periode;
+    const z = zufall(i + 7), per = Math.floor(periode * (0.75 + (z % 100) / 200));
+    const ph = (t + Math.floor(i * per * 0.37)) % per, p = ph / per;
     let x = x0 + br * (i + 0.5) / n + Math.sin(i * 12.9) * br * 0.04;
     const y = y0 + p * hoehe;
     const a = p > 0.75 ? (1 - p) / 0.25 : 1;
-    if (schnee) {  // sechsstrahliger Stern, dreht sich langsam
+    if (schnee) {
       x += Math.sin(t * 0.002 + i * 2.1) * g * 0.05;
-      const r = Math.max(2, g * 0.045), dreh = t * 0.0015 + i;
-      for (let k2 = 0; k2 < 3; k2++) {
-        const wk = dreh + k2 * Math.PI / 3;
-        linie(x - Math.cos(wk) * r, y - Math.sin(wk) * r, x + Math.cos(wk) * r, y + Math.sin(wk) * r, Math.max(1, g * 0.012), f, a);
-      }
-    } else {  // Tropfen mit rundem Kopf, unten Spritzer
+      const r = Math.max(2, g * 0.045) * (0.8 + ((z >> 8) % 40) / 100);
+      flocke(x, y, r, t * 0.0015 + i, f, a, Math.max(1, g * 0.012));
+    } else {
+      x -= schraeg * p * hoehe * 0.5;
       const l = g * (n > 6 ? 0.11 : 0.07), dicke = Math.max(1.5, g * 0.03);
-      linie(x, y, x - l * 0.3, y + l, dicke * 0.7, f, a);
-      kreis(x - l * 0.3, y + l, dicke * 0.9, f, a);
-      if (p > 0.8) {
-        const sp = (p - 0.8) / 0.2 * g * 0.05, yb = y0 + hoehe + l, as = 150 / 255 * (1 - p) / 0.2;
-        linie(x - sp * 0.3, yb - sp * 0.2, x - sp, yb - sp * 0.8, 1, f, as);
-        linie(x + sp * 0.3, yb - sp * 0.2, x + sp, yb - sp * 0.8, 1, f, as);
+      linie(x, y, x - l * schraeg, y + l, dicke * 0.7, f, a);
+      kreis(x - l * schraeg, y + l, dicke * 0.9, f, a);
+      if (p > 0.8) {  // Aufprall: flacher Ring und zwei hochspringende Troepfchen
+        const q = (p - 0.8) / 0.2, yb = y0 + hoehe + l, xb = x - l * schraeg, rx = g * 0.07 * q;
+        c.globalAlpha = 0.7 * (1 - q); c.strokeStyle = f; c.lineWidth = 1;
+        c.beginPath(); c.ellipse(xb, yb, Math.max(0.5, rx), Math.max(0.5, rx * 0.32), 0, 0, 7); c.stroke(); c.globalAlpha = 1;
+        const hub = Math.sin(q * Math.PI) * g * 0.05;
+        kreis(xb - rx * 0.8, yb - hub, 1, f, 1 - q); kreis(xb + rx * 0.8, yb - hub * 0.8, 1, f, 1 - q);
       }
     }
   }
@@ -449,32 +560,85 @@ function zeichneBild(b, tag, cx, cy, g, t) {
     case "KLAR": tag ? sonne(cx, cy, g, t) : mond(cx, cy, g, t); break;
     case "HEITER":
       tag ? sonne(cx + g * 0.16, cy - g * 0.14, g * 0.78, t) : mond(cx + g * 0.16, cy - g * 0.14, g * 0.8, t);
-      wolke(cx - g * 0.08 + d, cy + g * 0.12, g * 0.74, WS); break;
+      wolke(cx - g * 0.08 + d, cy + g * 0.12, g * 0.74, WS, t); break;
     case "BEDECKT":
-      wolke(cx + g * 0.18 - d, cy - g * 0.04, g * 0.62, [176, 186, 198]);
-      wolke(cx - g * 0.06 + d, cy + g * 0.08, g * 0.8, WS); break;
-    case "NEBEL":
-      wolke(cx + d, cy - g * 0.1, g * 0.66, [205, 210, 216]);
-      for (let k2 = 0; k2 < 3; k2++) {
-        const bw = g * (0.74 - k2 * 0.08), x = cx + Math.sin(t * 0.0009 + k2 * 1.3) * g * 0.07;
-        const y = cy + g * (0.14 + k2 * 0.1), h = Math.max(3, g * 0.05);
-        rundRechteck(x - bw / 2, y, bw, h, h / 2, rgb(220, 224, 228));
+      wolke(cx + g * 0.18 - d, cy - g * 0.04, g * 0.62, [176, 186, 198], t + 900);
+      wolke(cx - g * 0.06 + d, cy + g * 0.08, g * 0.8, WS, t); break;
+    case "NEBEL": {
+      wolke(cx + d, cy - g * 0.1, g * 0.66, [205, 210, 216], t);
+      // weiche Schwaden ziehen gegeneinander und ueberlagern sich
+      for (let k2 = 0; k2 < 4; k2++) {
+        const bw = g * (0.78 - k2 * 0.07), x = cx + Math.sin(t * 0.0008 * (k2 % 2 ? -1 : 1) + k2 * 1.3) * g * 0.12;
+        const y = cy + g * (0.12 + k2 * 0.085), h = Math.max(3, g * 0.06);
+        rundRechteck(x - bw / 2, y, bw, h, h / 2, rgb(226, 230, 234), (150 + 50 * Math.sin(t * 0.0011 + k2)) / 255);
       }
       break;
+    }
     case "NIESEL":
       teilchen(cx - g * 0.3, g * 0.6, cy + g * 0.04, g * 0.34, 5, 1100, g, false, rgb(150, 200, 255), t);
-      wolke(cx + d, cy - g * 0.1, g * 0.8, [214, 220, 228]); break;
+      wolke(cx + d, cy - g * 0.1, g * 0.8, [214, 220, 228], t); break;
     case "REGEN":
       teilchen(cx - g * 0.32, g * 0.64, cy + g * 0.02, g * 0.38, 8, 600, g, false, rgb(120, 180, 255), t);
-      wolke(cx + d, cy - g * 0.12, g * 0.84, [188, 196, 210]); break;
+      wolke(cx + d, cy - g * 0.12, g * 0.84, [188, 196, 210], t); break;
     case "SCHNEE":
       teilchen(cx - g * 0.32, g * 0.64, cy + g * 0.02, g * 0.4, 7, 2400, g, true, WEISS, t);
-      wolke(cx + d, cy - g * 0.12, g * 0.8, [228, 234, 242]); break;
-    case "GEWITTER":
+      wolke(cx + d, cy - g * 0.12, g * 0.8, [228, 234, 242], t); break;
+    case "GEWITTER": {
+      const hell = blitzAktiv(t), auf = col => hell ? misch(col, [236, 236, 255], 0.5) : col;  // Wolke leuchtet beim Blitz von innen
       teilchen(cx - g * 0.32, g * 0.64, cy + g * 0.02, g * 0.38, 5, 520, g, false, rgb(110, 160, 230), t);
-      wolke(cx + g * 0.16 - d, cy - g * 0.2, g * 0.6, [92, 96, 116]);
-      wolke(cx - g * 0.04 + d, cy - g * 0.1, g * 0.84, [140, 146, 166]);
-      blitzZeichen(cx + g * 0.02, cy + g * 0.06, g, blitzAktiv(t) ? rgb(255, 255, 210) : rgb(255, 206, 60), blitzAktiv(t)); break;
+      wolke(cx + g * 0.16 - d, cy - g * 0.2, g * 0.6, auf([92, 96, 116]), t + 700);
+      wolke(cx - g * 0.04 + d, cy - g * 0.1, g * 0.84, auf([140, 146, 166]), t);
+      blitzZeichen(cx + g * 0.02, cy + g * 0.06, g, hell ? rgb(255, 255, 210) : rgb(255, 206, 60), hell); break;
+    }
+  }
+}
+
+// ---------- Scheibe: ab und zu trifft ein Regentropfen oder eine Schneeflocke das Glas (wie scheibe() in bilder.cpp) ----------
+// Wassertropfen auf Glas: Schatten, Wasser, etwas helleres Inneres (Lichtbrechung), Glanzpunkt
+function glasTropfen(x, y, r, a) {
+  kreis(x + 1, y + 1.5, r, "#000", 0.22 * a);
+  kreis(x, y, r, rgb(200, 220, 245), 0.38 * a);
+  kreis(x - r * 0.12, y + r * 0.22, r * 0.62, "#fff", 0.14 * a);
+  kreis(x - r * 0.38, y - r * 0.38, Math.max(1, r * 0.28), "#fff", 0.85 * a);
+}
+// Abrutschen: mal kurz haengen bleiben, dann weiter (u - sin/... steigt nie rueckwaerts), dabei schneller werdend
+function rutschen(u) { const n = 3, f = u - Math.sin(2 * Math.PI * n * u) / (2 * Math.PI * n); return Math.pow(f, 1.35); }
+function rinnsal(x0, y0, y, r, seed, u) {
+  for (let yy = y0; yy < y - r; yy += 2) kreis(x0 + 1.6 * Math.sin((yy - y0) * 0.09 + seed), yy, r * 0.35, rgb(210, 228, 250), 0.22 * (0.4 + 0.6 * (yy - y0) / (y - y0 + 1)));
+  for (let k2 = 0; k2 < 2; k2++) {  // kleine Reste bleiben haengen
+    const yr = y0 + ((zufall(seed + k2) % 1000) / 1000) * (y - y0 - r);
+    if (yr < y - r * 2) glasTropfen(x0 + 1.6 * Math.sin((yr - y0) * 0.09 + seed), yr, 2, 0.8);
+  }
+}
+function scheibe(b, t) {
+  const regen = b === "REGEN" || b === "GEWITTER" || b === "NIESEL";
+  if (!regen && b !== "SCHNEE") return;
+  const P = regen ? 8000 : 13000, bahnen = regen ? 2 : 1;
+  for (let j = 0; j < bahnen; j++) {
+    const tt = t + j * P / 2, k2 = Math.floor(tt / P), lokal = tt % P, z = zufall(k2 * 2 + j + 1);
+    if (z % 4 === 0 || (b === "NIESEL" && z % 2)) continue;  // nicht jedes Mal - "ab und an"
+    const x0 = 20 + z % (W - 40), y0 = 18 + (z >>> 8) % Math.floor(H * 0.5), r = 5 + (z >>> 16) % 4;
+    let start = 1500, melz = 0;
+    if (!regen) {  // Schneeflocke: kleben, schmelzen, dann als Tropfen runter
+      start = 6500;
+      if (lokal < 6500) {
+        const rein = Math.min(1, lokal / 300), m = Math.max(0, Math.min(1, (lokal - 3000) / 3500)), dreh = (z % 100) / 30;
+        const L = 11 * (1.3 - 0.3 * rein) * (1 - m);
+        if (m > 0) glasTropfen(x0, y0, 1 + (r - 1) * m, m);
+        if (L > 0.6) flocke(x0, y0, L, dreh, "#fff", 0.95 * (1 - m * 0.6), 1.3);
+        kreis(x0, y0, 2.2 + m, "#fff", 0.9 * (1 - m));
+        continue;
+      }
+    } else if (lokal < start) {  // Aufprall: Ring breitet sich aus, Tropfen waechst hinein
+      const q = Math.min(1, lokal / 200);
+      if (q < 1) { c.globalAlpha = 0.5 * (1 - q); c.strokeStyle = "#fff"; c.lineWidth = 1; c.beginPath(); c.arc(x0, y0, r * (1 + 2 * q), 0, 7); c.stroke(); c.globalAlpha = 1; }
+      glasTropfen(x0, y0 + Math.sin(lokal * 0.02) * 0.4 * (1 - q), r * (0.6 + 0.4 * q), 1);
+      continue;
+    }
+    const u = Math.min(1, (lokal - start) / (P - start - 200));
+    const y = y0 + (H + 15 - y0) * rutschen(u), x = x0 + 1.6 * Math.sin((y - y0) * 0.09 + z % 7);
+    rinnsal(x0, y0, y, r, z % 7, u);
+    glasTropfen(x, y, r * (1 + 0.15 * Math.min(1, u * 3)), 1);
   }
 }
 
@@ -528,11 +692,17 @@ function titel(ox, text, t) {
   } else schreibe(kuerzen(text, platz), ox + 8, y, WEISS, "l");
 }
 
+// Temperatur zaehlt nach dem Umblaettern auf "Jetzt" kurz von 0 hoch (wie hochzaehlen in main.cpp)
+function hochzaehlen(wert, t) {
+  if (seite !== 0) return wert;
+  const p = Math.min(1, (t - seiteSeit) / 900);
+  return wert * (1 - Math.pow(1 - p, 3));
+}
 // hochkant: Bild oben, darunter gross die Temperatur (wie seiteJetztHoch)
 function seiteJetztHoch(ox, t) {
   const mx = ox + W / 2;
   zeichneBild(bildFuerCode(w.code), w.tag, mx, 112, 104, t);
-  schrift("b24"); schreibeTemp(w.temp, mx + 6, 222, WEISS, "m");
+  schrift("b24"); schreibeTemp(hochzaehlen(w.temp, t), mx + 6, 222, WEISS, "m");
   const text = textFuerCode(w.code, w.tag);
   schrift("s12"); if (breite(text) > W - 12) schrift("s9"); if (breite(text) > W - 12) schrift("f2");
   schreibe(text, mx, 250, WEISS, "m");
@@ -553,7 +723,7 @@ function seiteJetzt(ox, t) {
   titel(ox, "Cottbus", t);
   if (hoch()) return seiteJetztHoch(ox, t);
   zeichneBild(bildFuerCode(w.code), w.tag, ox + 80, 98, 128, t);
-  schrift("b24"); schreibeTemp(w.temp, ox + 164, 82, WEISS, "l");
+  schrift("b24"); schreibeTemp(hochzaehlen(w.temp, t), ox + 164, 82, WEISS, "l");
   const text = textFuerCode(w.code, w.tag);
   schrift("s12"); if (breite(text) > 150) schrift("s9"); if (breite(text) > 150) schrift("f2");
   schreibe(text, ox + 164, 110, WEISS, "l");
@@ -1023,6 +1193,7 @@ function frame() {
     if (!wechsel) zeichneSeite(seite, 0, t);
     statusLeiste();
     seitenPunkte();
+    scheibe(b, t);
     if (!wechsel && t - seiteSeit > AUTO_WEITER && t - letzterTastendruck > 30000) naechsteSeite(t);
   }
   lichtAnzeige(t);
