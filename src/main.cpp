@@ -14,6 +14,7 @@
 #include <WiFi.h>
 #include <ArduinoOTA.h>
 #include <time.h>
+#include <sys/time.h>
 #include "wetter.h"
 #include "ersatz.h"
 #include "bilder.h"
@@ -726,6 +727,115 @@ void seiteOrte(int ox, uint32_t t) {
   }
 }
 
+// ------------------------------------------------------------
+// Silvester: Countdown ab 23:50, Jahreswechsel, eine Minute Feuerwerk
+// ------------------------------------------------------------
+bool silvesterJetzt = false;
+
+// Sekunden relativ zu Mitternacht (Ortszeit): -600..0 Countdown, 0..62 neues Jahr; false sonst
+bool silvesterZeit(float &rel, int &neuesJahr) {
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+  if (tv.tv_sec < 1700000000) return false;
+  struct tm z;
+  time_t s = tv.tv_sec;
+  localtime_r(&s, &z);
+  float frac = tv.tv_usec / 1e6f;
+  if (z.tm_mon == 11 && z.tm_mday == 31 && z.tm_hour == 23 && z.tm_min >= 50) {
+    rel = (z.tm_min * 60 + z.tm_sec + frac) - 3600;
+    neuesJahr = z.tm_year + 1901;
+    return true;
+  }
+  if (z.tm_mon == 0 && z.tm_mday == 1 && z.tm_hour == 0 && z.tm_min <= 1) {
+    rel = z.tm_min * 60 + z.tm_sec + frac;
+    neuesJahr = z.tm_year + 1900;
+    return rel < 62;
+  }
+  return false;
+}
+
+// Text ohne Schatten in einer halb durchsichtigen Farbe (fuer die rollenden Ziffern)
+static void textBlass(const char *txt, int x, int y, uint16_t f, float a) {
+  if (a <= 0.02f) return;
+  bild.setTextDatum(L_BASELINE);
+  bild.setTextColor(a >= 0.98f ? f : bild.alphaBlend(a * 255, f, hintergrund(x + 10, y - 20)));
+  bild.drawString(txt, x, y);
+}
+
+void silvesterBild(float rel, int neu, uint32_t t) {
+  const uint16_t GOLD = farbe(255, 210, 90);
+  const bool hk = hoch();
+  const int MX = B / 2, YJ = hk ? 170 : 104;
+  zeichneHimmel(bild, KLAR, false, t, false);
+  if (rel >= 0) feuerwerk(bild, rel, neu);
+  char z[16];
+
+  if (rel < 0) {
+    int rest = min(599, (int)ceilf(-rel));
+    schrift(bild, S_MF);
+    schreibe(bild, TX("Silvester", "New Year's Eve"), 8, hk ? HOCH_TITEL_Y : 18, GOLD, LINKS);
+    schrift(bild, S_RIESIG);
+    if (rest <= 10) {
+      // letzte 10 Sekunden: grosse Zahl, ein Ring laeuft in jeder Sekunde ab (TFT_eSPI: 0 Grad = unten, im Uhrzeigersinn)
+      float anteil = rest + rel;
+      int ende = 180 + 360 * anteil;
+      uint16_t hg = hintergrund(MX, YJ - 69);
+      if (ende <= 360) {
+        if (ende > 181) bild.drawSmoothArc(MX, YJ - 23, 46, 42, 180, ende, GOLD, hg, true);
+      } else {
+        bild.drawSmoothArc(MX, YJ - 23, 46, 42, 180, 360, GOLD, hg, true);
+        if (ende - 360 > 1) bild.drawSmoothArc(MX, YJ - 23, 46, 42, 0, ende - 360, GOLD, hg, true);
+      }
+      snprintf(z, sizeof(z), "%d", rest);
+    } else {
+      snprintf(z, sizeof(z), "%d:%02d", rest / 60, rest % 60);
+    }
+    schreibe(bild, z, MX, YJ, WEISS, MITTE);
+    schrift(bild, S_M);
+    snprintf(z, sizeof(z), TX("bis %d", "until %d"), neu);
+    schreibe(bild, z, MX, YJ + 34, HELL, MITTE);
+    // Fortschritt der letzten 10 Minuten
+    int bx = B * 0.15f, bb = B * 0.7f, by = H - 14;
+    bild.fillSmoothRoundRect(bx, by, bb, 4, 2, bild.alphaBlend(50, WEISS, hintergrund(MX, by)));
+    int voll = bb * (1 - rest / 600.0f);
+    if (voll > 4) bild.fillSmoothRoundRect(bx, by, voll, 4, 2, GOLD);
+    return;
+  }
+
+  // altes Jahr wird zum neuen: geaenderte Ziffern rollen nach oben weg, die neuen kommen von unten
+  schrift(bild, S_RIESIG);
+  char as[8], ns[8];
+  snprintf(as, sizeof(as), "%d", neu - 1);
+  snprintf(ns, sizeof(ns), "%d", neu);
+  int x0 = MX - breite(bild, ns) / 2;
+  float u = min(1.0f, rel / 1.6f), e = 1 - powf(1 - u, 3);
+  for (int i = 0; ns[i]; i++) {
+    char vor[8];
+    strlcpy(vor, ns, i + 1);
+    int x = x0 + (i ? breite(bild, vor) : 0);
+    char alt[2] = {as[i], 0}, neuZ[2] = {ns[i], 0};
+    if (as[i] == ns[i]) {
+      schreibe(bild, neuZ, x, YJ, WEISS, LINKS);
+      continue;
+    }
+    textBlass(alt, x, YJ - 40 * e, WEISS, 1 - e);
+    textBlass(neuZ, x, YJ + 40 * (1 - e), GOLD, e);
+    if (e >= 0.98f) schreibe(bild, neuZ, x, YJ, GOLD, LINKS);
+  }
+  if (rel > 1.8f) {
+    float a = min(1.0f, (rel - 1.8f) / 0.8f);
+    schrift(bild, hk ? S_MF : S_GF);
+    const char *gruss = TX("Frohes neues Jahr!", "Happy New Year!");
+    if (a < 0.98f) {
+      bild.setTextDatum(L_BASELINE);
+      bild.setTextColor(bild.alphaBlend(a * 255, GOLD, hintergrund(MX, YJ + 32)));
+      bild.drawString(gruss, MX - breite(bild, gruss) / 2, YJ + 40);
+    } else {
+      schreibe(bild, gruss, MX, YJ + 40, GOLD, MITTE);
+    }
+  }
+}
+
 void zeichneSeite(int s, int ox, uint32_t t) {
   if (ox <= -B || ox >= B) return;
   switch (s) {
@@ -1151,7 +1261,7 @@ void lichtSetzen(uint32_t t) {
     nacht = istNacht();
     geprueft = t;
   }
-  int soll = nacht && t - letzterTastendruck > 20000 ? HELLIGKEIT_NACHT : HELLIGKEIT[einst.licht];
+  int soll = nacht && !silvesterJetzt && t - letzterTastendruck > 20000 ? HELLIGKEIT_NACHT : HELLIGKEIT[einst.licht];
   if (soll != zuletzt) {
     lichtStufe(soll);
     zuletzt = soll;
@@ -1292,27 +1402,50 @@ void loop() {
   } else {
     if (!seiteAn(seite) && !wechsel) naechsteSeite(t);  // Seite wurde gerade abgeschaltet
     Bild b = bildFuerCode(w.code);
-    himmelWind(w.wind);
-    zeichneHimmel(bild, b, w.tag, t, b == GEWITTER && blitzAktiv(t), daemmerung());
 
-    if (wechsel) {
-      float p = (t - wechselStart) / float(WECHSEL_DAUER);
-      if (p >= 1) {
-        wechsel = false;
-      } else {
-        int weg = (1 - powf(1 - p, 3)) * B;
-        zeichneSeite(alteSeite, -weg, t);
-        zeichneSeite(seite, B - weg, t);
+    // Lage fuer den Himmel: Wind, Temperatur, Monat, Hagel, Regenbogen nach dem Schauer
+    static uint32_t regenZuletzt = 0;  // millis() beim letzten Regen (0 = noch keiner gesehen)
+    if (b == REGEN || b == NIESEL || b == GEWITTER) regenZuletzt = t | 1;
+    HimmelLage hl;
+    hl.wind = w.wind, hl.temp = w.temp, hl.hagel = w.code == 96 || w.code == 99;
+    struct tm jetzt;
+    if (ortszeit(jetzt)) hl.monat = jetzt.tm_mon;
+    const uint32_t BOGEN_DAUER = 30 * 60000UL;
+    uint32_t seitRegen = t - regenZuletzt;
+    if (regenZuletzt && w.tag && (b == KLAR || b == HEITER) && seitRegen < BOGEN_DAUER)
+      hl.regenbogen = min(1.0f, seitRegen / 20000.0f) * min(1.0f, (BOGEN_DAUER - seitRegen) / 300000.0f);
+    himmelLage(hl);
+
+    // Silvester: ab 23:50 Countdown, um Mitternacht neues Jahr und eine Minute Feuerwerk - dann wieder Wetter
+    float silvester;
+    int neuesJahr;
+    silvesterJetzt = silvesterZeit(silvester, neuesJahr);
+    if (silvesterJetzt) {
+      silvesterBild(silvester, neuesJahr, t);
+      statusLeiste();
+    } else {
+      zeichneHimmel(bild, b, w.tag, t, b == GEWITTER && blitzAktiv(t), daemmerung());
+
+      if (wechsel) {
+        float p = (t - wechselStart) / float(WECHSEL_DAUER);
+        if (p >= 1) {
+          wechsel = false;
+        } else {
+          int weg = (1 - powf(1 - p, 3)) * B;
+          zeichneSeite(alteSeite, -weg, t);
+          zeichneSeite(seite, B - weg, t);
+        }
       }
+      if (!wechsel) zeichneSeite(seite, 0, t);
+      hitzeFlimmern(bild, t);  // ab 30 Grad flimmert unten die Luft
+
+      statusLeiste();
+      seitenPunkte();
+      scheibe(bild, b, t);  // Regentropfen / Schneeflocke an der Scheibe - ueber allem
+
+      if (einst.wechsel && !wechsel && t - seiteSeit > einst.wechsel * 1000UL && t - letzterTastendruck > 30000)
+        naechsteSeite(t);
     }
-    if (!wechsel) zeichneSeite(seite, 0, t);
-
-    statusLeiste();
-    seitenPunkte();
-    scheibe(bild, b, t);  // Regentropfen / Schneeflocke an der Scheibe - ueber allem
-
-    if (einst.wechsel && !wechsel && t - seiteSeit > einst.wechsel * 1000UL && t - letzterTastendruck > 30000)
-      naechsteSeite(t);
   }
   lichtAnzeige(t);
   infoAnzeige(t);
