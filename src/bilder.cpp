@@ -102,11 +102,12 @@ static uint32_t zufall(uint32_t n) {
   return x;
 }
 
-// Wind (km/h): macht die Wolken schneller und den Regen schraeger
-static float windKmh = 10;
-void himmelWind(float kmh) { windKmh = kmh; }
-static float windFaktor() { return constrain(0.4f + windKmh / 12, 0.4f, 3.0f); }
-static float windSchraeg() { return min(0.9f, 0.15f + windKmh / 50); }
+// Lage (Wind, Temperatur, Monat, Hagel, Regenbogen) - Wind macht die Wolken schneller (bei Sturm jagen sie)
+// und den Regen schraeger
+static HimmelLage lage;
+void himmelLage(const HimmelLage &l) { lage = l; }
+static float windFaktor() { return constrain(0.4f + lage.wind / 12, 0.4f, 5.0f); }
+static float windSchraeg() { return min(0.9f, 0.15f + lage.wind / 50); }
 
 // Pixel unter (x, y), auch am Rand
 static uint16_t unter(TFT_eSprite &s, float x, float y) {
@@ -132,6 +133,45 @@ static void funkeln(TFT_eSprite &s, float x, float y, float l, uint16_t f, float
   linieA(s, x - l * 0.4f, y - l * 0.4f, x + l * 0.4f, y + l * 0.4f, 1, f, a * 0.6f);
   linieA(s, x - l * 0.4f, y + l * 0.4f, x + l * 0.4f, y - l * 0.4f, 1, f, a * 0.6f);
   kreisA(s, x, y, max(1.0f, l * 0.18f), f, a);
+}
+
+// Blatt: zwei Keile (spitz - breit - spitz) mit Stiel, wk = Drehung
+static void blatt(TFT_eSprite &s, float x, float y, float l, float wk, uint16_t f, float a = 1) {
+  float dx = cosf(wk) * l / 2, dy = sinf(wk) * l / 2;
+  uint16_t c = a >= 0.99f ? f : s.alphaBlend(a * 255, f, unter(s, x, y));
+  s.drawWedgeLine(x - dx, y - dy, x, y, 0.4f, l * 0.28f, c);
+  s.drawWedgeLine(x, y, x + dx, y + dy, l * 0.28f, 0.4f, c);
+  s.drawWideLine(x - dx, y - dy, x - dx * 1.35f, y - dy * 1.35f, 1, c);
+}
+
+// Bluete: fuenf Blaetter um eine gelbe Mitte
+static void bluete(TFT_eSprite &s, float x, float y, float r, float dreh) {
+  for (int i = 0; i < 5; i++) {
+    float wk = dreh + i * 2 * PI / 5;
+    kreisA(s, x + cosf(wk) * r * 0.55f, y + sinf(wk) * r * 0.55f, r * 0.5f, farbe(255, 196, 214), 1);
+  }
+  kreisA(s, x, y, r * 0.3f, farbe(255, 222, 90), 1);
+}
+
+// Hagelkoerner: fallen schnell, springen am Boden zweimal auf
+static void hagel(TFT_eSprite &s, float x0, float br, float y0, float hoehe, int n, uint32_t periode, float g, uint32_t t) {
+  for (int i = 0; i < n; i++) {
+    uint32_t z = zufall(i + 31);
+    uint32_t per = periode * (0.8f + (z % 100) / 250.0f);
+    float p = ((t + uint32_t(i * per * 0.41f)) % per) / float(per);
+    float r = max(1.2f, g * 0.028f) * (0.8f + ((z >> 8) % 50) / 100.0f);
+    float x = x0 + br * (i + 0.5f) / n, y;
+    if (p < 0.6f) {
+      y = y0 + hoehe * (p / 0.6f) * (p / 0.6f);
+    } else {
+      float q = (p - 0.6f) / 0.4f, s1 = q < 0.6f ? q / 0.6f : (q - 0.6f) / 0.4f, hub = q < 0.6f ? g * 0.12f : g * 0.045f;
+      y = y0 + hoehe - sinf(s1 * PI) * hub;
+      x += (q < 0.6f ? q / 0.6f : 1 + (q - 0.6f) / 0.4f * 0.5f) * g * 0.05f * (i % 2 ? 1 : -1);
+    }
+    float a = p > 0.9f ? (1 - p) / 0.1f : 1;
+    kreisA(s, x, y, r, farbe(236, 244, 255), a);
+    kreisA(s, x - r * 0.35f, y - r * 0.35f, r * 0.35f, TFT_WHITE, a);
+  }
 }
 
 // Hinter dem Inhalt: grosse Wolken ziehen vorbei (schneller bei Wind), Regen/Schnee/Nebel ueber den ganzen Himmel,
@@ -214,6 +254,57 @@ static void himmelEffekte(TFT_eSprite &s, Bild b, bool tag, uint32_t t) {
     }
   }
 
+  // Hagel: Koerner prasseln ueber den ganzen Himmel und springen unten auf
+  if (b == GEWITTER && lage.hagel) hagel(s, 0, w, -10, h - 4, 22, 900, 60, t);
+
+  // Sturm: Blaetter wirbeln quer durchs Bild (Herbst/Winter bunt, sonst gruen)
+  int m = lage.monat;
+  bool herbst = m >= 8 && m <= 10;
+  static const RGB BUNT[4] = {{230, 120, 40}, {200, 70, 40}, {230, 180, 50}, {150, 90, 40}};
+  static const RGB GRUEN[4] = {{90, 170, 70}, {120, 190, 80}, {70, 140, 60}, {150, 200, 90}};
+  const RGB *blattF = herbst || m == 11 || (m >= 0 && m <= 1) ? BUNT : GRUEN;
+  if (lage.wind >= 40) {
+    for (int i = 0; i < 8; i++) {
+      uint32_t z = zufall(i + 300), per = 2200 + z % 1600;
+      float p = ((t + i * 977u) % per) / float(per);
+      float x = -20 + (w + 40) * p, y = 20 + (z >> 8) % (h - 40) + sinf(p * 9 + i) * 14;
+      blatt(s, x, y, 9 + z % 4, t * 0.012f * (i % 2 ? 1 : -1) + i, farbe(blattF[i % 4]), 0.95f);
+    }
+  }
+  bool ruhig = b == KLAR || b == HEITER || b == BEDECKT;
+  // Herbst: ab und zu segelt ein Blatt herunter
+  if (herbst && ruhig && lage.wind < 40) {
+    uint32_t lokal = t % 12000, z = zufall(t / 12000 + 1200);
+    if (z % 3 != 0 && lokal < 8000) {
+      float u = lokal / 8000.0f, x = 30 + z % (w - 60) + sinf(u * 7) * 26, y = -10 + (h + 20) * u;
+      blatt(s, x, y, 15, sinf(u * 7) * 0.9f + 0.6f, farbe(blattF[z % 4]));
+    }
+  }
+  // Fruehling am Tag: Blueten treiben schraeg durchs Bild
+  if (m >= 2 && m <= 4 && tag && ruhig) {
+    for (int j = 0; j < 2; j++) {
+      uint32_t tt = t + j * 4500, lokal = tt % 9000, z = zufall((tt / 9000) * 2 + j + 1500);
+      if (z % 4 == 0 || lokal > 7500) continue;
+      float u = lokal / 7500.0f, x = w + 10 - (w + 40) * u;
+      float y = 10 + (z >> 8) % (h / 2) + u * h * 0.5f + sinf(u * 8) * 8;
+      bluete(s, x, y, 6, u * 6);
+    }
+  }
+  // warme Sommernacht: Gluehwuermchen schweben und leuchten auf
+  if (m >= 5 && m <= 7 && !tag && ruhig && lage.temp >= 15) {
+    for (int i = 0; i < 9; i++) {
+      uint32_t z = zufall(i + 700);
+      float x = w * (0.1f + 0.8f * (z % 100) / 100.0f) + sinf(t * 0.0005f + i * 2) * 24;
+      float y = h * (0.45f + 0.45f * ((z >> 8) % 100) / 100.0f) + sinf(t * 0.0007f + i) * 12;
+      float g2 = max(0.0f, sinf(t * 0.0021f + i * 1.7f));
+      g2 = g2 * g2 * g2;
+      uint16_t gelbgruen = farbe(220, 255, 120);
+      kreisA(s, x, y, 8, gelbgruen, 0.2f * g2);
+      kreisA(s, x, y, 4, gelbgruen, 0.3f * g2);
+      kreisA(s, x, y, 1.8f, farbe(240, 255, 170), 0.3f + 0.7f * g2);
+    }
+  }
+
   // schoenes Wetter am Tag: ab und zu zieht ein kleiner Vogelschwarm vorbei
   if (tag && (b == KLAR || b == HEITER)) {
     uint32_t lokal = t % 22000, z = zufall(t / 22000 + 900);
@@ -245,6 +336,29 @@ void zeichneHimmel(TFT_eSprite &s, Bild b, bool tag, uint32_t t, bool blitz, flo
   }
   int w = s.width(), h = s.height();
 
+  // sanfter Wetterwechsel: aendert sich Wetter oder Tag/Nacht, blendet der Himmel in 4 s ueber
+  static bool hwStart = false, hwTag;
+  static Bild hwB;
+  static uint32_t hwAb;
+  static RGB vonO, vonU, jetztO, jetztU;
+  if (!hwStart) {
+    hwStart = true, hwB = b, hwTag = tag, hwAb = t - 10000, vonO = oben, vonU = unten;
+  } else if (hwB != b || hwTag != tag) {
+    hwB = b, hwTag = tag, hwAb = t, vonO = jetztO, vonU = jetztU;
+  }
+  float fw = min(1.0f, (t - hwAb) / 4000.0f);
+  if (fw < 1) {
+    float fs = fw * fw * (3 - 2 * fw);
+    oben = misch(vonO, oben, fs);
+    unten = misch(vonU, unten, fs);
+  }
+  jetztO = oben, jetztU = unten;
+
+  // Regenbogen nach dem Schauer: sieben Baender, Mittelpunkt unter dem Bild rechts (zeilenweise wie die Strahlen)
+  const float bogen = tag && (b == KLAR || b == HEITER) ? lage.regenbogen : 0;
+  static const RGB BOGEN[7] = {{255, 80, 80}, {255, 160, 60}, {255, 230, 90}, {110, 220, 110}, {90, 160, 255}, {110, 110, 230}, {170, 100, 220}};
+  const float bcx = w * 0.7f, bcy = h * 1.25f, br0 = bcy - h * 0.2f;
+
   // Sonnenstrahlen bei "teils bewoelkt": breite, zarte Lichtbahnen von oben rechts, zeilenweise in den Verlauf gemischt
   const bool strahlen = tag && b == HEITER;
   const int STRAHLEN = 5;
@@ -264,6 +378,18 @@ void zeichneHimmel(TFT_eSprite &s, Bild b, bool tag, uint32_t t, bool blitz, flo
     uint16_t c = mische(oben, unten, y / float(h - 1));
     if (blitz) c = s.alphaBlend(110, TFT_WHITE, c);
     s.drawFastHLine(0, y, w, c);
+    if (bogen > 0) {
+      float dy = y - bcy;
+      for (int i = 0; i < 7; i++) {
+        float ra = br0 - i * 3 + 1.6f, ri = br0 - i * 3 - 1.6f;
+        if (fabsf(dy) >= ra) continue;
+        float xo = sqrtf(ra * ra - dy * dy), xi = fabsf(dy) < ri ? sqrtf(ri * ri - dy * dy) : 0;
+        uint16_t f = s.alphaBlend(0.3f * bogen * 255, farbe(BOGEN[i]), c);
+        int l1 = bcx - xo, l2 = bcx - xi, r1 = bcx + xi, r2 = bcx + xo;
+        if (l2 > l1) s.drawFastHLine(l1, y, l2 - l1, f);
+        if (r2 > r1) s.drawFastHLine(r1, y, r2 - r1, f);
+      }
+    }
     if (!strahlen) continue;
     for (int k = 0; k < STRAHLEN; k++) {
       float xa = sx + strCos[k][0] * (y - sy), xb = sx + strCos[k][1] * (y - sy);
@@ -516,11 +642,69 @@ void zeichneBild(TFT_eSprite &s, Bild b, bool tag, int cx, int cy, int groesse, 
       bool hell = blitzAktiv(t);
       // beim Blitz leuchtet die Wolke von innen
       auto auf = [&](RGB c) { return hell ? misch(c, {236, 236, 255}, 0.5f) : c; };
-      teilchen(s, cx - g * 0.32f, g * 0.64f, cy + g * 0.02f, g * 0.38f, 5, 520, g, false, farbe(110, 160, 230), t);
+      if (lage.hagel) hagel(s, cx - g * 0.32f, g * 0.64f, cy + g * 0.06f, g * 0.36f, 6, 800, g, t);
+      else teilchen(s, cx - g * 0.32f, g * 0.64f, cy + g * 0.02f, g * 0.38f, 5, 520, g, false, farbe(110, 160, 230), t);
       wolke(s, cx + g * 0.16f - d, cy - g * 0.2f, g * 0.6f, auf({92, 96, 116}), t + 700);
       wolke(s, cx - g * 0.04f + d, cy - g * 0.1f, g * 0.84f, auf({140, 146, 166}), t);
       blitzZeichen(s, cx + g * 0.02f, cy + g * 0.06f, g, hell ? farbe(255, 255, 210) : farbe(255, 206, 60), hell);
       break;
+    }
+  }
+}
+
+// ------------------------------------------------------------
+// Hitze und Feuerwerk
+// ------------------------------------------------------------
+
+// Hitze ab 30 Grad: die unteren 34 Zeilen verschieben sich um ein Pixel hin und her (direkt im Bildspeicher)
+void hitzeFlimmern(TFT_eSprite &s, uint32_t t) {
+  if (lage.temp < 30) return;
+  uint8_t *pix = (uint8_t *)s.getPointer();
+  if (!pix) return;
+  int w = s.width(), h = s.height(), bpp = s.getColorDepth() / 8, band = 34;
+  if (bpp < 1) return;
+  for (int y = h - band; y < h; y++) {
+    float st = (y - (h - band)) / float(band);
+    int d = lroundf(sinf(t * 0.006f + y * 0.55f) * 1.4f * st);
+    if (!d) continue;
+    uint8_t *z = pix + (size_t)y * w * bpp;
+    if (d > 0) memmove(z + d * bpp, z, (size_t)(w - d) * bpp);
+    else memmove(z, z - d * bpp, (size_t)(w + d) * bpp);
+  }
+}
+
+// Feuerwerk: Raketen steigen auf und zerplatzen in bunte Funken, die fallen, knistern und verglimmen
+void feuerwerk(TFT_eSprite &s, float sek, uint32_t jahr) {
+  static const RGB FARBEN[6] = {{255, 90, 90}, {255, 200, 70}, {120, 220, 255}, {160, 255, 140}, {230, 130, 255}, {255, 255, 255}};
+  int W = s.width(), H = s.height();
+  float ms = sek * 1000, groesse = min(W, H) / 170.0f;
+  for (int k = 0; k * 650 < 58000; k++) {
+    uint32_t z = zufall(k * 7 + 3 + jahr);
+    float tau = ms - (k * 650 + z % 400);
+    if (tau < 0 || tau > 3200) continue;
+    float x0 = W * (0.15f + 0.7f * (z % 1000) / 1000.0f), gipfel = H * (0.16f + 0.26f * ((z >> 10) % 1000) / 1000.0f);
+    RGB f = FARBEN[(z >> 20) % 6];
+    if (tau < 900) {  // Aufstieg mit Funkenschweif
+      float u = tau / 900, y = H + 5 - (H + 5 - gipfel) * (1 - (1 - u) * (1 - u));
+      for (int i = 1; i <= 4; i++) kreisA(s, x0 + sinf(i * 2 + tau * 0.03f) * 0.8f, y + i * 4, 1.1f, farbe(255, 220, 160), 0.6f * (1 - i / 5.0f));
+      kreisA(s, x0, y, 1.6f, farbe(255, 240, 200), 1);
+      continue;
+    }
+    float tb = (tau - 900) / 1000;
+    auto weg = [](float tt) { return (1 - expf(-tt * 2.2f)) / 2.2f; };
+    if (tb < 0.12f) kreisA(s, x0, gipfel, 14 * groesse * (1 - tb / 0.12f), farbe(misch(f, {255, 255, 255}, 0.6f)), 0.5f * (1 - tb / 0.12f));
+    const int n = 30;
+    uint16_t col = farbe(f), kern = farbe(misch(f, {255, 255, 255}, max(0.0f, 0.5f - tb)));
+    for (int i = 0; i < n; i++) {
+      uint32_t zi = zufall(z + i);
+      float wk = i * 2 * PI / n + ((zi % 100) / 100.0f - 0.5f) * 0.25f, v = (40 + zi % 18) * groesse;
+      float a = powf(max(0.0f, 1 - tb / 2.3f), 1.5f);
+      if (i % 3 == 0 && tb > 1.2f) a *= 0.5f + 0.5f * sinf(tau * 0.05f + i);  // Knistern
+      float ta = max(0.0f, tb - 0.08f);
+      float x = x0 + cosf(wk) * v * weg(tb), y = gipfel + sinf(wk) * v * weg(tb) + 14 * groesse * tb * tb;
+      float xa = x0 + cosf(wk) * v * weg(ta), ya = gipfel + sinf(wk) * v * weg(ta) + 14 * groesse * ta * ta;
+      linieA(s, xa, ya, x, y, 1, col, a * 0.5f);
+      kreisA(s, x, y, 1.4f, kern, a);
     }
   }
 }

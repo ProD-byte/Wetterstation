@@ -16,8 +16,19 @@ const char *textFuerCode(int code, bool tag);
 // blitz = kurz aufhellen, daemmerung 0..1 = Morgen-/Abendrot rund um Sonnenauf- und -untergang
 void zeichneHimmel(TFT_eSprite &s, Bild b, bool tag, uint32_t t, bool blitz, float daemmerung = 0);
 bool blitzAktiv(uint32_t t);
-// Windstaerke in km/h: Wolken ziehen schneller, Regen faellt schraeger
-void himmelWind(float kmh);
+// Lage fuer Himmel und Wetterbilder, jedes Bild vor zeichneHimmel setzen
+struct HimmelLage {
+  float wind = 10;         // km/h: Wolken ziehen schneller, Regen faellt schraeger, ab 40 wirbeln Blaetter
+  float temp = 15;         // Grad: ab 30 flimmert die Luft, Gluehwuermchen erst ab 15
+  int monat = -1;          // 0 = Januar ... 11 = Dezember (Jahreszeiten), -1 = unbekannt
+  bool hagel = false;      // Gewitter mit Hagel (Wettercode 96/99)
+  float regenbogen = 0;    // 0..1, Regenbogen nach einem Schauer
+};
+void himmelLage(const HimmelLage &l);
+// Hitze ab 30 Grad: die unteren Zeilen flimmern - nach dem Seiteninhalt aufrufen
+void hitzeFlimmern(TFT_eSprite &s, uint32_t t);
+// Feuerwerk, sek = Sekunden seit Mitternacht (0..60), jahr = neues Jahr (aendert die Raketen)
+void feuerwerk(TFT_eSprite &s, float sek, uint32_t jahr);
 // Ueber allem: ab und zu trifft ein Regentropfen oder eine Schneeflocke die Scheibe und laeuft herunter
 void scheibe(TFT_eSprite &s, Bild b, uint32_t t);
 
