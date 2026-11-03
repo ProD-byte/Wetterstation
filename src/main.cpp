@@ -165,12 +165,19 @@ void titel(int ox, const char *text, uint32_t t) {
 // ------------------------------------------------------------
 // Seite 1: Jetzt
 // ------------------------------------------------------------
+// Temperatur zaehlt nach dem Umblaettern auf "Jetzt" kurz von 0 hoch
+float hochzaehlen(float wert, uint32_t t) {
+  if (seite != 0) return wert;
+  float p = min(1.0f, (t - seiteSeit) / 900.0f);
+  return wert * (1 - powf(1 - p, 3));
+}
+
 // hochkant: Bild oben, darunter gross die Temperatur, dann Text, gefuehlt und Wind/Regen
 void seiteJetztHoch(int ox, uint32_t t) {
   int mx = ox + B / 2;
   zeichneBild(bild, bildFuerCode(w.code), w.tag, mx, 112, 104, t);
   schrift(bild, S_RIESIG);
-  schreibeTemp(bild, w.temp, mx + 6, 222, WEISS, MITTE);
+  schreibeTemp(bild, hochzaehlen(w.temp, t), mx + 6, 222, WEISS, MITTE);
 
   const char *text = textFuerCode(w.code, w.tag);
   schrift(bild, S_G);
@@ -205,7 +212,7 @@ void seiteJetzt(int ox, uint32_t t) {
   zeichneBild(bild, bildFuerCode(w.code), w.tag, ox + 80, 98, 128, t);
 
   schrift(bild, S_RIESIG);
-  schreibeTemp(bild, w.temp, ox + 164, 82, WEISS, LINKS);
+  schreibeTemp(bild, hochzaehlen(w.temp, t), ox + 164, 82, WEISS, LINKS);
 
   const char *text = textFuerCode(w.code, w.tag);
   schrift(bild, S_G);
@@ -1285,6 +1292,7 @@ void loop() {
   } else {
     if (!seiteAn(seite) && !wechsel) naechsteSeite(t);  // Seite wurde gerade abgeschaltet
     Bild b = bildFuerCode(w.code);
+    himmelWind(w.wind);
     zeichneHimmel(bild, b, w.tag, t, b == GEWITTER && blitzAktiv(t), daemmerung());
 
     if (wechsel) {
@@ -1301,6 +1309,7 @@ void loop() {
 
     statusLeiste();
     seitenPunkte();
+    scheibe(bild, b, t);  // Regentropfen / Schneeflocke an der Scheibe - ueber allem
 
     if (einst.wechsel && !wechsel && t - seiteSeit > einst.wechsel * 1000UL && t - letzterTastendruck > 30000)
       naechsteSeite(t);

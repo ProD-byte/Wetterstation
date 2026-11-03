@@ -90,12 +90,56 @@ static RGB misch(RGB a, RGB b, float f) {
   return {uint8_t(a.r + (b.r - a.r) * f), uint8_t(a.g + (b.g - a.g) * f), uint8_t(a.b + (b.b - a.b) * f)};
 }
 
-static void wolkeForm(TFT_eSprite &s, float cx, float cy, float w, uint16_t c);
+static void wolkeForm(TFT_eSprite &s, float cx, float cy, float w, uint16_t c, uint32_t t = 0, bool atmen = false);
 
-// Hinter dem Inhalt: grosse Wolken ziehen langsam vorbei, Regen/Schnee/Nebel ueber den ganzen Himmel
+// Zufall, der fuer dieselbe Zahl immer gleich ist - so muss fuer Voegel, Sternschnuppen und Tropfen nichts gespeichert werden
+static uint32_t zufall(uint32_t n) {
+  uint32_t x = (n ^ 61) ^ (n >> 16);
+  x *= 9;
+  x ^= x >> 4;
+  x *= 0x27d4eb2d;
+  x ^= x >> 15;
+  return x;
+}
+
+// Wind (km/h): macht die Wolken schneller und den Regen schraeger
+static float windKmh = 10;
+void himmelWind(float kmh) { windKmh = kmh; }
+static float windFaktor() { return constrain(0.4f + windKmh / 12, 0.4f, 3.0f); }
+static float windSchraeg() { return min(0.9f, 0.15f + windKmh / 50); }
+
+// Pixel unter (x, y), auch am Rand
+static uint16_t unter(TFT_eSprite &s, float x, float y) {
+  return s.readPixel(constrain((int)x, 0, s.width() - 1), constrain((int)y, 0, s.height() - 1));
+}
+// Kreis und Linie, halb durchsichtig (a = 0..1)
+static void kreisA(TFT_eSprite &s, float x, float y, float r, uint16_t f, float a) {
+  if (a <= 0.01f || r <= 0) return;
+  if (x + r < 0 || y + r < 0 || x - r >= s.width() || y - r >= s.height()) return;
+  uint16_t c = a >= 0.99f ? f : s.alphaBlend(a * 255, f, unter(s, x, y));
+  if (r < 3) s.drawSpot(x, y, r, c);
+  else s.fillSmoothCircle(x, y, r, c);
+}
+static void linieA(TFT_eSprite &s, float ax, float ay, float bx, float by, float d, uint16_t f, float a) {
+  if (a <= 0.01f) return;
+  s.drawWideLine(ax, ay, bx, by, d, a >= 0.99f ? f : s.alphaBlend(a * 255, f, unter(s, (ax + bx) / 2, (ay + by) / 2)));
+}
+// kleiner Stern mit vier Zacken, der aufblitzt
+static void funkeln(TFT_eSprite &s, float x, float y, float l, uint16_t f, float a) {
+  if (l < 0.5f || a <= 0.01f) return;
+  linieA(s, x - l, y, x + l, y, 1.5f, f, a);
+  linieA(s, x, y - l, x, y + l, 1.5f, f, a);
+  linieA(s, x - l * 0.4f, y - l * 0.4f, x + l * 0.4f, y + l * 0.4f, 1, f, a * 0.6f);
+  linieA(s, x - l * 0.4f, y + l * 0.4f, x + l * 0.4f, y - l * 0.4f, 1, f, a * 0.6f);
+  kreisA(s, x, y, max(1.0f, l * 0.18f), f, a);
+}
+
+// Hinter dem Inhalt: grosse Wolken ziehen vorbei (schneller bei Wind), Regen/Schnee/Nebel ueber den ganzen Himmel,
+// Gewitterblitz, nachts Sternschnuppen, am Tag ab und zu Voegel
 static void himmelEffekte(TFT_eSprite &s, Bild b, bool tag, uint32_t t) {
   int w = s.width(), h = s.height();
-  auto bei = [&](float x, float y) { return s.readPixel(constrain((int)x, 0, w - 1), constrain((int)y, 0, h - 1)); };
+  auto bei = [&](float x, float y) { return unter(s, x, y); };
+  const float wind = windFaktor();
 
   int wolken = b == HEITER ? 2 : b == KLAR ? 0 : b == NEBEL ? 0 : 4;
   bool dunkel = b == REGEN || b == GEWITTER;
@@ -103,7 +147,7 @@ static void himmelEffekte(TFT_eSprite &s, Bild b, bool tag, uint32_t t) {
   uint8_t deck = b == HEITER ? 30 : dunkel ? 46 : 40;
   for (int i = 0; i < wolken; i++) {
     float bw = 150 + 40 * (i % 3);
-    float tempo = 0.0035f + 0.0012f * i;  // Pixel pro Millisekunde
+    float tempo = (0.0035f + 0.0012f * i) * wind;  // Pixel pro Millisekunde
     float x = fmodf(t * tempo + i * 157.0f, w + bw * 1.3f) - bw * 0.65f;
     float y = 38 + (i * 47) % (h - 80);
     wolkeForm(s, x, y, bw, s.alphaBlend(deck, farbe(wf.r, wf.g, wf.b), bei(x, y)));
@@ -112,17 +156,17 @@ static void himmelEffekte(TFT_eSprite &s, Bild b, bool tag, uint32_t t) {
   if (b == REGEN || b == GEWITTER || b == NIESEL) {
     int n = b == NIESEL ? 24 : 48;
     uint32_t periode = b == NIESEL ? 1700 : 850;
-    float l = b == NIESEL ? 6 : 13;
+    float l = b == NIESEL ? 6 : 13, sch = windSchraeg();
     for (int i = 0; i < n; i++) {
       float p = ((t + i * 7919u) % periode) / float(periode);
-      float x = (i * 53) % (w + 40) - p * 22;
+      float x = (i * 53) % (w + 60) - p * (h + 30) * sch * 0.6f;
       float y = p * (h + 30) - 20;
-      s.drawWideLine(x, y, x - l * 0.25f, y + l, 1, s.alphaBlend(80, farbe(180, 205, 240), bei(x, y)));
+      s.drawWideLine(x, y, x - l * sch * 0.6f, y + l, 1, s.alphaBlend(80, farbe(180, 205, 240), bei(x, y)));
     }
   } else if (b == SCHNEE) {
     for (int i = 0; i < 44; i++) {
       float p = ((t + i * 6151u) % 5200u) / 5200.0f;
-      float x = (i * 67) % w + sinf(t * 0.0012f + i) * 12;
+      float x = (i * 67) % w + sinf(t * 0.0012f + i) * 12 * wind;
       float y = p * (h + 12) - 6;
       s.fillSmoothCircle(x, y, 1 + i % 2, s.alphaBlend(170, TFT_WHITE, bei(x, y)));
     }
@@ -134,6 +178,57 @@ static void himmelEffekte(TFT_eSprite &s, Bild b, bool tag, uint32_t t) {
       for (int y = y0; y < y0 + 24 && y < h; y++) {
         uint8_t a = 50 * sinf(PI * (y - y0) / 24.0f);
         s.drawFastHLine(x0, y, w + 120, s.alphaBlend(a, farbe(235, 238, 242), bei(10, y)));
+      }
+    }
+  }
+
+  // Gewitter: verzweigter Blitz quer ueber den Himmel, solange es blitzt
+  if (b == GEWITTER && blitzAktiv(t)) {
+    uint32_t z = zufall(t / 4200 + 99);
+    float schritt = h * 0.68f / 7;
+    float px[8], py[8], ax[4], ay[4];
+    px[0] = 40 + z % (w - 80), py[0] = -4;
+    for (int i = 1; i <= 7; i++) px[i] = px[i - 1] + (int)(zufall(z + i) % 29) - 14, py[i] = py[i - 1] + schritt;
+    ax[0] = px[3], ay[0] = py[3];
+    for (int i = 1; i <= 3; i++) ax[i] = ax[i - 1] + 10 + zufall(z + 20 + i) % 9, ay[i] = ay[i - 1] + schritt * 0.7f;
+    uint16_t schein = farbe(190, 200, 255);
+    for (int i = 1; i <= 7; i++) linieA(s, px[i - 1], py[i - 1], px[i], py[i], 6, schein, 0.25f);
+    for (int i = 1; i <= 3; i++) linieA(s, ax[i - 1], ay[i - 1], ax[i], ay[i], 4, schein, 0.25f);
+    for (int i = 1; i <= 7; i++) s.drawWideLine(px[i - 1], py[i - 1], px[i], py[i], 1.8f, TFT_WHITE);
+    for (int i = 1; i <= 3; i++) s.drawWideLine(ax[i - 1], ay[i - 1], ax[i], ay[i], 1.2f, TFT_WHITE);
+  }
+
+  // klare Nacht: ab und zu eine Sternschnuppe
+  if (!tag && (b == KLAR || b == HEITER)) {
+    uint32_t lokal = t % 7000, z = zufall(t / 7000 + 500);
+    if (z % 2 == 0 && lokal < 900) {
+      float u = lokal / 900.0f, sx = 80 + z % (w - 80), sy = 10 + (z >> 8) % 50, dist = 150 * u;
+      float hx = sx - dist * 0.9f, hy = sy + dist * 0.42f, lang = 45 * sinf(u * PI) + 4;
+      float a = min(1.0f, sinf(u * PI) * 1.6f);
+      for (int i = 0; i < 6; i++) {
+        float f1 = i / 6.0f, f2 = (i + 1) / 6.0f;
+        linieA(s, hx + lang * 0.9f * f1, hy - lang * 0.42f * f1, hx + lang * 0.9f * f2, hy - lang * 0.42f * f2,
+               2 - f1 * 1.2f, TFT_WHITE, a * (1 - f1));
+      }
+      kreisA(s, hx, hy, 1.5f, TFT_WHITE, a);
+    }
+  }
+
+  // schoenes Wetter am Tag: ab und zu zieht ein kleiner Vogelschwarm vorbei
+  if (tag && (b == KLAR || b == HEITER)) {
+    uint32_t lokal = t % 22000, z = zufall(t / 22000 + 900);
+    if (z % 3 != 0 && lokal < 9000) {
+      float u = lokal / 9000.0f;
+      bool rechts = z & 1;
+      float x0 = rechts ? -30 + (w + 60) * u : w + 30 - (w + 60) * u;
+      float y0 = 34 + (z >> 8) % 50 + sinf(u * 6) * 4, r = rechts ? -1 : 1;
+      static const int8_t SCHWARM[3][2] = {{0, 0}, {14, 6}, {26, -3}};
+      uint16_t f = farbe(40, 50, 72);
+      for (int j = 0; j < 3; j++) {
+        float x = x0 + SCHWARM[j][0] * r, y = y0 + SCHWARM[j][1];
+        float schlag = sinf(t * 0.014f + j * 1.9f), sp = 5.5f - j * 0.5f;
+        linieA(s, x, y, x - sp, y - 2.5f * schlag - 1, 1.5f, f, 0.8f);
+        linieA(s, x, y, x + sp, y - 2.5f * schlag - 1, 1.5f, f, 0.8f);
       }
     }
   }
@@ -149,10 +244,33 @@ void zeichneHimmel(TFT_eSprite &s, Bild b, bool tag, uint32_t t, bool blitz, flo
     unten = misch(unten, {255, 146, 92}, d * 0.8f);
   }
   int w = s.width(), h = s.height();
+
+  // Sonnenstrahlen bei "teils bewoelkt": breite, zarte Lichtbahnen von oben rechts, zeilenweise in den Verlauf gemischt
+  const bool strahlen = tag && b == HEITER;
+  const int STRAHLEN = 5;
+  float strCos[STRAHLEN][2], strA[STRAHLEN];
+  const float sx = w * 0.82f, sy = -30;
+  if (strahlen) {
+    for (int k = 0; k < STRAHLEN; k++) {
+      float wk = 1.95f + k * 0.2f + sinf(t * 0.00025f + k) * 0.03f, br = 0.045f + 0.02f * (k % 2);
+      strCos[k][0] = cosf(wk - br) / sinf(wk - br);  // x-Versatz je Zeile fuer beide Kanten
+      strCos[k][1] = cosf(wk + br) / sinf(wk + br);
+      strA[k] = 0.05f + 0.035f * (0.5f + 0.5f * sinf(t * 0.0007f + k * 1.4f));
+    }
+  }
+  const uint16_t STRAHL = farbe(255, 246, 214);
+
   for (int y = 0; y < h; y++) {
     uint16_t c = mische(oben, unten, y / float(h - 1));
     if (blitz) c = s.alphaBlend(110, TFT_WHITE, c);
     s.drawFastHLine(0, y, w, c);
+    if (!strahlen) continue;
+    for (int k = 0; k < STRAHLEN; k++) {
+      float xa = sx + strCos[k][0] * (y - sy), xb = sx + strCos[k][1] * (y - sy);
+      if (xa > xb) std::swap(xa, xb);
+      int a = max(0, (int)xa), e = min(w - 1, (int)xb);
+      if (e >= a) s.drawFastHLine(a, y, e - a + 1, s.alphaBlend(strA[k] * 255, STRAHL, c));
+    }
   }
 
   // Sterne, die funkeln (nur nachts und wenn nicht zu bewoelkt)
@@ -203,29 +321,35 @@ uint16_t grundFarbe(TFT_eSprite &s, int x, int y) {
 
 static void sonne(TFT_eSprite &s, float cx, float cy, float g, uint32_t t) {
   float r = g * 0.2f;
-  uint16_t gelb = farbe(255, 198, 44);
+  uint16_t gelb = farbe(255, 198, 44), gelbHell = farbe(255, 214, 96);
   uint16_t hg = grundFarbe(s, cx, cy);
   float puls = 0.5f + 0.5f * sinf(t * 0.0025f);
 
   // Schein in zwei Stufen (aussen ganz zart)
-  uint16_t schein = s.alphaBlend(18 + 12 * puls, gelb, hg);
-  s.fillSmoothCircle(cx, cy, r * (2.1f + 0.15f * puls), schein);
-  s.fillSmoothCircle(cx, cy, r * (1.55f + 0.12f * puls), s.alphaBlend(45 + 25 * puls, gelb, schein));
+  uint16_t schein = s.alphaBlend(16 + 12 * puls, gelb, hg);
+  s.fillSmoothCircle(cx, cy, r * (2.2f + 0.18f * puls), schein);
+  s.fillSmoothCircle(cx, cy, r * (1.6f + 0.14f * puls), s.alphaBlend(42 + 26 * puls, gelb, schein));
 
-  // Strahlen drehen sich langsam und werden mal laenger, mal kuerzer
-  float dreh = t * 0.0004f;
-  float r1 = r * 1.4f;
-  for (int i = 0; i < 8; i++) {
-    float a = dreh + i * PI / 4;
-    float l = g * (0.09f + 0.03f * sinf(t * 0.004f + i * 1.3f));
-    s.drawWideLine(cx + cosf(a) * r1, cy + sinf(a) * r1, cx + cosf(a) * (r1 + l), cy + sinf(a) * (r1 + l),
-                   max(2.0f, g * 0.045f), gelb);
+  // 12 Strahlen als spitze Keile, abwechselnd lang und kurz, drehen sich langsam und atmen
+  float dreh = t * 0.0003f, r1 = r * 1.35f;
+  for (int i = 0; i < 12; i++) {
+    float a = dreh + i * PI / 6;
+    bool lang = i % 2 == 0;
+    float l = g * (lang ? 0.13f : 0.08f) * (1 + 0.2f * sinf(t * 0.004f + i * 1.3f));
+    s.drawWedgeLine(cx + cosf(a) * r1, cy + sinf(a) * r1, cx + cosf(a) * (r1 + l), cy + sinf(a) * (r1 + l),
+                    max(1.2f, r * (lang ? 0.2f : 0.14f)), 0.6f, lang ? gelb : gelbHell);
   }
   // Kern mit weichem Verlauf zur hellen Mitte
   s.fillSmoothCircle(cx, cy, r, farbe(255, 176, 30));
   s.fillSmoothCircle(cx - r * 0.08f, cy - r * 0.08f, r * 0.82f, gelb);
   s.fillSmoothCircle(cx - r * 0.2f, cy - r * 0.2f, r * 0.55f, farbe(255, 220, 100));
   s.fillSmoothCircle(cx - r * 0.3f, cy - r * 0.3f, r * 0.25f, farbe(255, 244, 190));
+  // alle 3,5 s blitzt oben links ein Glanzstern auf
+  float gp = (t % 3500) / 3500.0f;
+  if (gp < 0.25f) {
+    float a = sinf(gp / 0.25f * PI);
+    funkeln(s, cx - r * 0.42f, cy - r * 0.42f, r * 0.75f * a, farbe(255, 255, 235), a);
+  }
 }
 
 static void mond(TFT_eSprite &s, float cx, float cy, float g, uint32_t t) {
@@ -233,30 +357,49 @@ static void mond(TFT_eSprite &s, float cx, float cy, float g, uint32_t t) {
   uint16_t hell = farbe(238, 234, 210);
   uint16_t hg = grundFarbe(s, cx, cy);
   float puls = 0.5f + 0.5f * sinf(t * 0.0018f);
-  s.fillSmoothCircle(cx, cy, r * (1.5f + 0.1f * puls), s.alphaBlend(35 + 20 * puls, hell, hg));
+  uint16_t schein = s.alphaBlend(16 + 10 * puls, hell, hg);
+  s.fillSmoothCircle(cx, cy, r * (1.75f + 0.12f * puls), schein);
+  s.fillSmoothCircle(cx, cy, r * (1.38f + 0.08f * puls), s.alphaBlend(38 + 22 * puls, hell, schein));
   s.fillSmoothCircle(cx, cy, r, hell);
-  uint16_t krater = farbe(212, 207, 182);
-  s.fillSmoothCircle(cx - r * 0.35f, cy - r * 0.2f, r * 0.22f, krater);
-  s.fillSmoothCircle(cx + r * 0.32f, cy + r * 0.3f, r * 0.16f, krater);
-  s.fillSmoothCircle(cx + r * 0.12f, cy - r * 0.48f, r * 0.1f, krater);
+  s.fillSmoothCircle(cx + r * 0.12f, cy + r * 0.12f, r * 0.86f, farbe(226, 221, 194));  // unten rechts dunkler: wirkt rund
+  s.fillSmoothCircle(cx - r * 0.1f, cy - r * 0.1f, r * 0.7f, hell);
+  // Krater mit dunklem Rand und hellerem Boden
+  static const float KRATER[5][3] = {{-0.38f, -0.2f, 0.22f}, {0.32f, 0.3f, 0.17f}, {0.12f, -0.5f, 0.11f},
+                                     {-0.1f, 0.42f, 0.12f}, {0.5f, -0.12f, 0.08f}};
+  for (auto &k : KRATER) {
+    float kx = cx + k[0] * r, ky = cy + k[1] * r, kr = k[2] * r;
+    kreisA(s, kx, ky, kr, farbe(196, 190, 164), 1);
+    kreisA(s, kx - kr * 0.2f, ky - kr * 0.2f, kr * 0.7f, farbe(218, 213, 188), 1);
+  }
+  // drei Sterne daneben funkeln nacheinander
+  static const float STERNE[3][2] = {{1.9f, -1.2f}, {-1.75f, -1.45f}, {1.55f, 1.35f}};
+  for (int k = 0; k < 3; k++) {
+    float a = max(0.0f, sinf(t * 0.0026f + k * 2.1f));
+    a *= a;
+    funkeln(s, cx + STERNE[k][0] * r, cy + STERNE[k][1] * r, r * 0.32f * a + 0.5f, farbe(255, 252, 230), a);
+  }
 }
 
-// Wolke: cy ist die Oberkante des flachen Unterteils
-static void wolkeForm(TFT_eSprite &s, float cx, float cy, float w, uint16_t c) {
+// Wolke: cy ist die Oberkante des flachen Unterteils. Mit atmen werden die Buckel leicht groesser und kleiner.
+static void wolkeForm(TFT_eSprite &s, float cx, float cy, float w, uint16_t c, uint32_t t, bool atmen) {
+  auto at = [&](int k) { return atmen ? 1 + 0.035f * sinf(t * 0.0013f + k * 1.7f) : 1.0f; };
   s.fillSmoothRoundRect(cx - w * 0.45f, cy, w * 0.9f, w * 0.2f, w * 0.1f, c);
-  s.fillSmoothCircle(cx - w * 0.24f, cy + w * 0.02f, w * 0.18f, c);
-  s.fillSmoothCircle(cx - w * 0.01f, cy - w * 0.08f, w * 0.26f, c);
-  s.fillSmoothCircle(cx + w * 0.25f, cy + w * 0.03f, w * 0.17f, c);
+  s.fillSmoothCircle(cx - w * 0.24f, cy + w * 0.02f, w * 0.18f * at(0), c);
+  s.fillSmoothCircle(cx - w * 0.01f, cy - w * 0.08f, w * 0.26f * at(1), c);
+  s.fillSmoothCircle(cx + w * 0.25f, cy + w * 0.03f, w * 0.17f * at(2), c);
 }
 
-static void wolke(TFT_eSprite &s, float cx, float cy, float w, RGB c) {
-  wolkeForm(s, cx + w * 0.03f, cy + w * 0.05f, w, farbe(dunkler(c, 0.72f)));  // Schatten unten
-  wolkeForm(s, cx, cy, w, farbe(c));
-  // Lichtkanten oben links auf den Wolkenbuckeln - so wirkt die Wolke rund
+static void wolke(TFT_eSprite &s, float cx, float cy, float w, RGB c, uint32_t t) {
+  wolkeForm(s, cx + w * 0.03f, cy + w * 0.05f, w, farbe(dunkler(c, 0.72f)), t, true);  // Schatten unten
+  wolkeForm(s, cx, cy, w, farbe(c), t, true);
+  // Unterseite etwas dunkler, oben Lichtkanten - so wirkt die Wolke plastisch
+  s.fillSmoothRoundRect(cx - w * 0.4f, cy + w * 0.09f, w * 0.8f, w * 0.1f, w * 0.05f, farbe(dunkler(c, 0.9f)));
+  auto at = [&](int k) { return 1 + 0.05f * sinf(t * 0.0013f + k * 1.7f); };
   uint16_t licht = farbe(misch(c, {255, 255, 255}, 0.45f));
-  s.fillSmoothCircle(cx - w * 0.05f, cy - w * 0.15f, w * 0.15f, licht);
-  s.fillSmoothCircle(cx - w * 0.27f, cy - w * 0.04f, w * 0.09f, licht);
-  s.fillSmoothCircle(cx + w * 0.21f, cy - w * 0.03f, w * 0.08f, farbe(misch(c, {255, 255, 255}, 0.25f)));
+  s.fillSmoothCircle(cx - w * 0.05f, cy - w * 0.15f, w * 0.15f * at(1), licht);
+  s.fillSmoothCircle(cx - w * 0.27f, cy - w * 0.04f, w * 0.09f * at(0), licht);
+  s.fillSmoothCircle(cx + w * 0.21f, cy - w * 0.03f, w * 0.08f * at(2), farbe(misch(c, {255, 255, 255}, 0.25f)));
+  kreisA(s, cx - w * 0.09f, cy - w * 0.2f, w * 0.05f, farbe(misch(c, {255, 255, 255}, 0.7f)), 1);
 }
 
 static void blitzZeichen(TFT_eSprite &s, float cx, float cy, float g, uint16_t c, bool leuchtet) {
@@ -270,35 +413,46 @@ static void blitzZeichen(TFT_eSprite &s, float cx, float cy, float g, uint16_t c
   s.fillTriangle(cx - g * 0.03f, cy + g * 0.17f, cx + g * 0.08f, cy + g * 0.17f, cx - g * 0.07f, cy + g * 0.4f, c);
 }
 
-// Fallende Teilchen (Regen oder Schnee), blenden am Ende aus
+// Schneeflocke: sechs Arme, bei groesseren Flocken mit kleinen Zweigen
+static void flocke(TFT_eSprite &s, float x, float y, float r, float dreh, uint16_t f, float a, float dicke) {
+  for (int k = 0; k < 6; k++) {
+    float wk = dreh + k * PI / 3, cw = cosf(wk), sw = sinf(wk);
+    linieA(s, x, y, x + cw * r, y + sw * r, dicke, f, a);
+    if (r >= 3.5f) {
+      float mx = x + cw * r * 0.6f, my = y + sw * r * 0.6f, z = r * 0.32f;
+      linieA(s, mx, my, mx + cosf(wk + 0.8f) * z, my + sinf(wk + 0.8f) * z, 1, f, a);
+      linieA(s, mx, my, mx + cosf(wk - 0.8f) * z, my + sinf(wk - 0.8f) * z, 1, f, a);
+    }
+  }
+}
+
+// Fallende Teilchen (Regen oder Schnee): jedes mit eigenem Tempo, Regen schraeg nach Wind, unten Spritzer
 static void teilchen(TFT_eSprite &s, float x0, float breite, float y0, float hoehe, int n, uint32_t periode,
                      float g, bool schnee, uint16_t c, uint32_t t) {
+  float schraeg = schnee ? 0 : windSchraeg();
   for (int i = 0; i < n; i++) {
-    uint32_t ph = (t + uint32_t(i * periode * 0.37f)) % periode;
-    float p = ph / float(periode);
+    uint32_t z = zufall(i + 7);
+    uint32_t per = periode * (0.75f + (z % 100) / 200.0f);
+    uint32_t ph = (t + uint32_t(i * per * 0.37f)) % per;
+    float p = ph / float(per);
     float x = x0 + breite * (i + 0.5f) / n + sinf(i * 12.9f) * breite * 0.04f;
     float y = y0 + p * hoehe;
-    uint8_t a = p > 0.75f ? (1 - p) / 0.25f * 255 : 255;
+    float a = p > 0.75f ? (1 - p) / 0.25f : 1;
     if (schnee) {
-      // Schneeflocke als sechsstrahliger Stern, der sich langsam dreht
       x += sinf(t * 0.002f + i * 2.1f) * g * 0.05f;
-      float r = max(2.0f, g * 0.045f), dreh = t * 0.0015f + i;
-      uint16_t f = s.alphaBlend(a, c, s.readPixel(x, y));
-      for (int k = 0; k < 3; k++) {
-        float wk = dreh + k * PI / 3;
-        s.drawWideLine(x - cosf(wk) * r, y - sinf(wk) * r, x + cosf(wk) * r, y + sinf(wk) * r, max(1.0f, g * 0.012f), f);
-      }
+      float r = max(2.0f, g * 0.045f) * (0.8f + ((z >> 8) % 40) / 100.0f);
+      flocke(s, x, y, r, t * 0.0015f + i, c, a, max(1.0f, g * 0.012f));
     } else {
-      // Tropfen: Spur mit rundem Kopf, unten kleine Spritzer
+      x -= schraeg * p * hoehe * 0.5f;
       float l = g * (n > 6 ? 0.11f : 0.07f), dicke = max(1.5f, g * 0.03f);
-      uint16_t f = s.alphaBlend(a, c, s.readPixel(x, y));
-      s.drawWideLine(x, y, x - l * 0.3f, y + l, dicke * 0.7f, f);
-      s.fillSmoothCircle(x - l * 0.3f, y + l, dicke * 0.9f, f);
-      if (p > 0.8f) {
-        float sp = (p - 0.8f) / 0.2f * g * 0.05f, yb = y0 + hoehe + l;
-        uint16_t fs = s.alphaBlend(150 * (1 - p) / 0.2f, c, s.readPixel(x, yb));
-        s.drawWideLine(x - sp * 0.3f, yb - sp * 0.2f, x - sp, yb - sp * 0.8f, 1, fs);
-        s.drawWideLine(x + sp * 0.3f, yb - sp * 0.2f, x + sp, yb - sp * 0.8f, 1, fs);
+      linieA(s, x, y, x - l * schraeg, y + l, dicke * 0.7f, c, a);
+      kreisA(s, x - l * schraeg, y + l, dicke * 0.9f, c, a);
+      if (p > 0.8f) {  // Aufprall: flacher Ring und zwei hochspringende Troepfchen
+        float q = (p - 0.8f) / 0.2f, yb = y0 + hoehe + l, xb = x - l * schraeg, rx = g * 0.07f * q;
+        if (rx >= 1) s.drawEllipse(xb, yb, rx, max(1.0f, rx * 0.32f), s.alphaBlend(180 * (1 - q), c, unter(s, xb, yb)));
+        float hub = sinf(q * PI) * g * 0.05f;
+        kreisA(s, xb - rx * 0.8f, yb - hub, 1, c, 1 - q);
+        kreisA(s, xb + rx * 0.8f, yb - hub * 0.8f, 1, c, 1 - q);
       }
     }
   }
@@ -322,48 +476,119 @@ void zeichneBild(TFT_eSprite &s, Bild b, bool tag, int cx, int cy, int groesse, 
     case HEITER:
       if (tag) sonne(s, cx + g * 0.16f, cy - g * 0.14f, g * 0.78f, t);
       else mond(s, cx + g * 0.16f, cy - g * 0.14f, g * 0.8f, t);
-      wolke(s, cx - g * 0.08f + d, cy + g * 0.12f, g * 0.74f, WEISS);
+      wolke(s, cx - g * 0.08f + d, cy + g * 0.12f, g * 0.74f, WEISS, t);
       break;
 
     case BEDECKT:
-      wolke(s, cx + g * 0.18f - d, cy - g * 0.04f, g * 0.62f, {176, 186, 198});
-      wolke(s, cx - g * 0.06f + d, cy + g * 0.08f, g * 0.8f, WEISS);
+      wolke(s, cx + g * 0.18f - d, cy - g * 0.04f, g * 0.62f, {176, 186, 198}, t + 900);
+      wolke(s, cx - g * 0.06f + d, cy + g * 0.08f, g * 0.8f, WEISS, t);
       break;
 
     case NEBEL:
-      wolke(s, cx + d, cy - g * 0.1f, g * 0.66f, {205, 210, 216});
-      for (int k = 0; k < 3; k++) {
-        float bw = g * (0.74f - k * 0.08f);
-        float x = cx + sinf(t * 0.0009f + k * 1.3f) * g * 0.07f;
-        float y = cy + g * (0.14f + k * 0.1f);
-        float h = max(3.0f, g * 0.05f);
-        s.fillSmoothRoundRect(x - bw / 2, y, bw, h, h / 2, farbe(220, 224, 228));
+      wolke(s, cx + d, cy - g * 0.1f, g * 0.66f, {205, 210, 216}, t);
+      // weiche Schwaden ziehen gegeneinander und werden mal dichter, mal duenner
+      for (int k = 0; k < 4; k++) {
+        float bw = g * (0.78f - k * 0.07f);
+        float x = cx + sinf(t * 0.0008f * (k % 2 ? -1 : 1) + k * 1.3f) * g * 0.12f;
+        float y = cy + g * (0.12f + k * 0.085f);
+        float h = max(3.0f, g * 0.06f);
+        uint8_t a = 150 + 50 * sinf(t * 0.0011f + k);
+        s.fillSmoothRoundRect(x - bw / 2, y, bw, h, h / 2, s.alphaBlend(a, farbe(226, 230, 234), unter(s, x, y + h / 2)));
       }
       break;
 
     case NIESEL:
       teilchen(s, cx - g * 0.3f, g * 0.6f, cy + g * 0.04f, g * 0.34f, 5, 1100, g, false, farbe(150, 200, 255), t);
-      wolke(s, cx + d, cy - g * 0.1f, g * 0.8f, {214, 220, 228});
+      wolke(s, cx + d, cy - g * 0.1f, g * 0.8f, {214, 220, 228}, t);
       break;
 
     case REGEN:
       teilchen(s, cx - g * 0.32f, g * 0.64f, cy + g * 0.02f, g * 0.38f, 8, 600, g, false, farbe(120, 180, 255), t);
-      wolke(s, cx + d, cy - g * 0.12f, g * 0.84f, {188, 196, 210});
+      wolke(s, cx + d, cy - g * 0.12f, g * 0.84f, {188, 196, 210}, t);
       break;
 
     case SCHNEE:
       teilchen(s, cx - g * 0.32f, g * 0.64f, cy + g * 0.02f, g * 0.4f, 7, 2400, g, true, TFT_WHITE, t);
-      wolke(s, cx + d, cy - g * 0.12f, g * 0.8f, {228, 234, 242});
+      wolke(s, cx + d, cy - g * 0.12f, g * 0.8f, {228, 234, 242}, t);
       break;
 
     case GEWITTER: {
       bool hell = blitzAktiv(t);
+      // beim Blitz leuchtet die Wolke von innen
+      auto auf = [&](RGB c) { return hell ? misch(c, {236, 236, 255}, 0.5f) : c; };
       teilchen(s, cx - g * 0.32f, g * 0.64f, cy + g * 0.02f, g * 0.38f, 5, 520, g, false, farbe(110, 160, 230), t);
-      wolke(s, cx + g * 0.16f - d, cy - g * 0.2f, g * 0.6f, {92, 96, 116});
-      wolke(s, cx - g * 0.04f + d, cy - g * 0.1f, g * 0.84f, {140, 146, 166});
+      wolke(s, cx + g * 0.16f - d, cy - g * 0.2f, g * 0.6f, auf({92, 96, 116}), t + 700);
+      wolke(s, cx - g * 0.04f + d, cy - g * 0.1f, g * 0.84f, auf({140, 146, 166}), t);
       blitzZeichen(s, cx + g * 0.02f, cy + g * 0.06f, g, hell ? farbe(255, 255, 210) : farbe(255, 206, 60), hell);
       break;
     }
+  }
+}
+
+// ------------------------------------------------------------
+// Scheibe: ab und zu trifft ein Regentropfen oder eine Schneeflocke das Glas
+// ------------------------------------------------------------
+
+// Wassertropfen auf Glas: Schatten, Wasser, etwas helleres Inneres (Lichtbrechung), Glanzpunkt
+static void glasTropfen(TFT_eSprite &s, float x, float y, float r, float a) {
+  kreisA(s, x + 1, y + 1.5f, r, TFT_BLACK, 0.22f * a);
+  kreisA(s, x, y, r, farbe(200, 220, 245), 0.38f * a);
+  kreisA(s, x - r * 0.12f, y + r * 0.22f, r * 0.62f, TFT_WHITE, 0.14f * a);
+  kreisA(s, x - r * 0.38f, y - r * 0.38f, max(1.0f, r * 0.28f), TFT_WHITE, 0.85f * a);
+}
+
+// Abrutschen: mal kurz haengen bleiben, dann weiter (steigt nie rueckwaerts), dabei schneller werdend
+static float rutschen(float u) {
+  const int n = 3;
+  float f = u - sinf(2 * PI * n * u) / (2 * PI * n);
+  return powf(max(0.0f, f), 1.35f);
+}
+
+// Wasserspur hinter dem Tropfen, ein paar kleine Reste bleiben haengen
+static void rinnsal(TFT_eSprite &s, float x0, float y0, float y, float r, uint32_t seed) {
+  uint16_t spur = farbe(210, 228, 250);
+  for (float yy = y0; yy < y - r; yy += 2)
+    kreisA(s, x0 + 1.6f * sinf((yy - y0) * 0.09f + seed), yy, r * 0.35f, spur, 0.22f * (0.4f + 0.6f * (yy - y0) / (y - y0 + 1)));
+  for (int k = 0; k < 2; k++) {
+    float yr = y0 + (zufall(seed + k) % 1000) / 1000.0f * (y - y0 - r);
+    if (yr < y - r * 2) glasTropfen(s, x0 + 1.6f * sinf((yr - y0) * 0.09f + seed), yr, 2, 0.8f);
+  }
+}
+
+void scheibe(TFT_eSprite &s, Bild b, uint32_t t) {
+  bool regen = b == REGEN || b == GEWITTER || b == NIESEL;
+  if (!regen && b != SCHNEE) return;
+  int W = s.width(), H = s.height();
+  uint32_t P = regen ? 8000 : 13000;
+  int bahnen = regen ? 2 : 1;
+  for (int j = 0; j < bahnen; j++) {
+    uint32_t tt = t + j * P / 2, lokal = tt % P;
+    uint32_t z = zufall((tt / P) * 2 + j + 1);
+    if (z % 4 == 0 || (b == NIESEL && z % 2)) continue;  // nicht jedes Mal - "ab und an"
+    float x0 = 20 + z % (W - 40), y0 = 18 + (z >> 8) % (int)(H * 0.5f), r = 5 + (z >> 16) % 4;
+    uint32_t start = 1500;
+    if (!regen) {
+      // Schneeflocke: bleibt kleben, schmilzt langsam zu einem Tropfen, der dann herunterlaeuft
+      start = 6500;
+      if (lokal < start) {
+        float rein = min(1.0f, lokal / 300.0f), m = constrain((lokal - 3000.0f) / 3500.0f, 0.0f, 1.0f);
+        float L = 11 * (1.3f - 0.3f * rein) * (1 - m), dreh = (z % 100) / 30.0f;
+        if (m > 0) glasTropfen(s, x0, y0, 1 + (r - 1) * m, m);
+        if (L > 0.6f) flocke(s, x0, y0, L, dreh, TFT_WHITE, 0.95f * (1 - m * 0.6f), 1.3f);
+        kreisA(s, x0, y0, 2.2f + m, TFT_WHITE, 0.9f * (1 - m));
+        continue;
+      }
+    } else if (lokal < start) {
+      // Aufprall: ein Ring breitet sich aus, der Tropfen waechst hinein und zittert kurz
+      float q = min(1.0f, lokal / 200.0f);
+      if (q < 1) s.drawSmoothCircle(x0, y0, r * (1 + 2 * q), s.alphaBlend(128 * (1 - q), TFT_WHITE, unter(s, x0, y0 - r * (1 + 2 * q))), unter(s, x0, y0 - r * (1 + 2 * q)));
+      glasTropfen(s, x0, y0 + sinf(lokal * 0.02f) * 0.4f * (1 - q), r * (0.6f + 0.4f * q), 1);
+      continue;
+    }
+    float u = min(1.0f, (lokal - start) / float(P - start - 200));
+    float y = y0 + (H + 15 - y0) * rutschen(u), x = x0 + 1.6f * sinf((y - y0) * 0.09f + z % 7);
+    rinnsal(s, x0, y0, y, r, z % 7);
+    glasTropfen(s, x, y, r * (1 + 0.15f * min(1.0f, u * 3)), 1);
   }
 }
 

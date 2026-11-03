@@ -16,6 +16,10 @@ const char *textFuerCode(int code, bool tag);
 // blitz = kurz aufhellen, daemmerung 0..1 = Morgen-/Abendrot rund um Sonnenauf- und -untergang
 void zeichneHimmel(TFT_eSprite &s, Bild b, bool tag, uint32_t t, bool blitz, float daemmerung = 0);
 bool blitzAktiv(uint32_t t);
+// Windstaerke in km/h: Wolken ziehen schneller, Regen faellt schraeger
+void himmelWind(float kmh);
+// Ueber allem: ab und zu trifft ein Regentropfen oder eine Schneeflocke die Scheibe und laeuft herunter
+void scheibe(TFT_eSprite &s, Bild b, uint32_t t);
 
 // Farbe hinter (x, y) zum Mischen - Median aus 5 Punkten im X-Muster, damit ein einzelner Regenstreifen
 // oder eine Schneeflocke nicht die Farbe eines ganzen Kastens umspringen laesst (sonst zuckt es)
