@@ -9,7 +9,7 @@
 //   1. Bei https://daveslab.de/wp-admin/ anmelden
 //   2. F12 -> Reiter "Console" -> diese ganze Datei hineinkopieren -> Enter
 //      (fragt Chrome nach "allow pasting": einmal  allow pasting  eintippen, Enter, nochmal einfuegen)
-//   3. Nach den beiden YouTube-Links gefragt werden -> einfuegen (z. B. https://youtu.be/...).
+//   3. Nach den beiden YouTube-Links gefragt werden -> die eingetragenen Links mit Enter uebernehmen.
 //      Gibt es das Update-Video noch nicht: Feld leer lassen, dann kommt nur der Trailer auf die Seite.
 //   4. Rueckfrage "Speichern?" -> OK. Danach https://daveslab.de/basteln/ neu laden.
 //   Nochmal ausfuehren ersetzt die Videos (z. B. um das Update-Video nachzutragen).
@@ -17,6 +17,9 @@
 
 var VIDEO_BILDER = 'https://prod-byte.github.io/Wetterstation/video';
 var VIDEO_KANAL = 'https://www.youtube.com/@Daveslab-byte';
+// Vorschlaege fuer die Abfrage (einfach mit Enter uebernehmen)
+var LINK_TRAILER = 'https://youtu.be/l8NVJyQLpJs';
+var LINK_UPDATE = 'https://youtu.be/fHbe5BCfev0';
 
 // YouTube-Link -> Video-ID (youtu.be/ID, watch?v=ID, shorts/ID, embed/ID oder nur die ID)
 function videoId(link) {
@@ -79,7 +82,11 @@ function videosEinbauen(raw, trailer, update) {
   } else {
     // Block unter die Simulation
     ersetze('simulation', /<iframe id="dl-wetter-sim"[^>]*><\/iframe>\s*<\/div>/, m => m + '\n      ' + neu);
-    for (const s of ['en', 'es', 'fr']) ersetze(s + ' texte', VIDEO_ANKER[s], VIDEO_ANKER[s] + ',\n' + VIDEO_TEXTE[s].join(',\n'));
+    // Uebersetzungen: Englisch muss da sein, Spanisch/Franzoesisch nur, wenn die Seite sie (noch) hat
+    for (const s of ['en', 'es', 'fr']) {
+      if (s !== 'en' && !out.includes(VIDEO_ANKER[s])) continue;
+      ersetze(s + ' texte', VIDEO_ANKER[s], VIDEO_ANKER[s] + ',\n' + VIDEO_TEXTE[s].join(',\n'));
+    }
     // Klick-Skript hinter das Skript der Wetterstation (holt die Build-Nummer)
     ersetze('skript', /fetch\('https:\/\/prod-byte\.github\.io\/Wetterstation\/version\.json'[^\n]*\n/, m => m + VIDEO_SKRIPT + '\n');
   }
@@ -89,9 +96,9 @@ function videosEinbauen(raw, trailer, update) {
 // ---------- Ausfuehren: Links abfragen, Seite holen, einbauen, nach Rueckfrage speichern ----------
 (async function videosSpeichern() {
   if (!location.hostname.endsWith('daveslab.de')) { alert('Bitte auf daveslab.de/wp-admin ausfuehren.'); return; }
-  const trailer = videoId(prompt('YouTube-Link zum TRAILER:', ''));
+  const trailer = videoId(prompt('YouTube-Link zum TRAILER:', LINK_TRAILER));
   if (!trailer) { alert('Das ist kein YouTube-Link - nichts geaendert.'); return; }
-  const eingabe = prompt('YouTube-Link zum UPDATE-VIDEO (leer lassen, wenn es noch nicht online ist):', '');
+  const eingabe = prompt('YouTube-Link zum UPDATE-VIDEO (leer lassen, wenn es noch nicht online ist):', LINK_UPDATE);
   const update = eingabe && eingabe.trim() ? videoId(eingabe) : null;
   if (eingabe && eingabe.trim() && !update) { alert('Der Update-Link ist kein YouTube-Link - nichts geaendert.'); return; }
 
