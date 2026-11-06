@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8">
+<title>Wetterstation – Update-Video</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; background: #000; }
+  #video { display: block; width: 100vw; height: auto; aspect-ratio: 16 / 9; }
+  #sim { position: absolute; left: -4000px; top: 0; width: 1000px; height: 900px; border: 0; }
+  #info { position: fixed; left: 8px; bottom: 8px; font: 12px monospace; color: #8a8; }
+</style></head><body>
+<canvas id="video" width="1920" height="1080"></canvas>
+<iframe id="sim" src="sim.html"></iframe>
+<div id="info"></div>
+<script>
+// Update-Video (Build 30): zeigt die neuen Animationen. Steuert wie trailer.html die echte Simulation
+// (sim.html = simulation/wetterstation.html) Bild fuer Bild. Zeitachse in Sekunden, Takt = 2,4 s
+// (Musik: python musik.py musik.wav update) - Szenenwechsel liegen auf Taktgrenzen.
+// Vorschau: http://127.0.0.1:8795/update.html?t=20   Rendern: update.html?render (server.py muss laufen)
+const V = document.getElementById("video");
+let x = V.getContext("2d");
+const BW = 1920, BH = 1080, FPS = 30, DAUER = 62.4, TAKT = 2.4;
+const ORANGE = "#f0a04b";
+const img = s => { const i = new Image(); i.src = s; return i; };
+const QUER = img("board_quer.webp");
+
+// ---------- Hilfen ----------
+const klemm = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const glatt = v => { v = klemm(v); return v * v * (3 - 2 * v); };
+const raus = v => 1 - Math.pow(1 - klemm(v), 3);
+const fenster = (t, a, b, ein = 0.5, aus = 0.4) => klemm((t - a) / ein) * klemm((b - t) / aus);  // ein-/ausblenden
+
+// ---------- Simulation steuern ----------
+let S = null, simCv = null;
+function simBereit() {
+  const fw = document.getElementById("sim").contentWindow;
+  // Zeit der Simulation = Videozeit + Versatz (Sprung zum naechsten Vogel, Tropfen ... - nur vorwaerts),
+  // Uhr steht anfangs auf 14:41 (Berlin), zu Silvester auf kurz vor Mitternacht
+  fw.eval(`
+    var __simT = 0, __versatz = 0; const __t0 = t0; performance.now = () => __t0 + __simT + __versatz;
+    const __RD = Date; var __basis = __RD.UTC(2026, 10, 1, 13, 41, 0);
+    window.Date = class extends __RD { constructor(...a) { if (a.length) super(...a); else super(__basis + __simT); } static now() { return __basis + __simT; } };
+    window.__ctl = {
+      zeit(ms) { __simT = ms; },
+      klick(id) { document.getElementById(id).click(); },
+      seite0() { wechsel = false; seite = 0; seiteSeit = jetzt(); },
+      // naechstes Ereignis mit Periode P (Bedingung auf zufall(k * mal + plus)) nach "verzoegerung" ms zeigen
+      springe(P, mal, plus, bed, verzoegerung) {
+        const t = jetzt(); let k = Math.ceil((t + verzoegerung) / P);
+        while (!bed(zufall(k * mal + plus))) k++;
+        __versatz += k * P - verzoegerung - t;
+      },
+      vor(ms) { __versatz += ms; },  // Zeit springen lassen, damit Ueberblendungen der vorigen Szene fertig sind
+      uhr(jahr, monat, tag, std, min, sek, ms) { __basis = __RD.UTC(jahr, monat, tag, std, min, sek, ms) - __simT; },
+      tun(code) { return eval(code); },
+      zeichnen() { letzterTastendruck = jetzt(); frame(); }
+    };
+    __ctl.klick("pixelWahl-glatt");
+  `);
+  S = fw.__ctl;
+  simCv = fw.document.getElementById("lcd");
+}
+
+// Szene: Wetter, Tageszeit, Jahreszeit waehlen und Seite "Jetzt" zeigen
+const szene = (wetter, tag, jahr) => () => {
+  S.vor(6000);
+  S.klick("wetterWahl-" + wetter); S.klick("tagWahl-" + tag); S.klick("jahrWahl-" + jahr); S.seite0();
+};
+
+// ---------- Ablauf (Zeit in s -> Aktion) ----------
+const T = n => n * TAKT;
+const EREIGNISSE = [
+  [0,      szene(0, "tag", "winter")],
+  [T(2),   () => { szene(0, "tag", "winter")(); S.springe(22000, 1, 900, z => z % 3 !== 0, 900); }],         // Voegel
+  [T(4),   () => { szene(2, "tag", "winter")(); }],                   // Sonnenstrahlen
+  [T(5),   () => { szene(0, "nacht", "winter")(); S.springe(7000, 1, 500, z => z % 2 === 0, 700); }],        // Sternschnuppe
+  [T(6),   () => { szene(63, "tag", "winter")(); S.springe(8000, 2, 1, z => z % 4 !== 0, 500); }],           // Tropfen an der Scheibe
+  [T(8),   () => { szene(73, "tag", "winter")(); S.springe(13000, 2, 1, z => z % 4 !== 0, 200); }],          // Flocke schmilzt
+  [T(11),  () => { szene(95, "tag", "winter")(); S.springe(4200, 1, 0, () => true, 900); }],                 // Blitz
+  [T(12),  () => { szene(99, "tag", "winter")(); S.springe(4200, 1, 0, () => true, 1300); }],                // Hagel
+  [T(13),  () => { szene("sturm", "tag", "herbst")(); }],             // Sturm
+  [T(14),  () => { szene(63, "tag", "winter")(); }],                  // Regen ...
+  [T(14) + 1.2, () => { S.klick("wetterWahl-bogen"); }],                                                       // ... weich zum Regenbogen
+  [T(16),  () => { szene("hitze", "tag", "sommer")(); }],             // Hitze
+  [T(17),  () => { szene(0, "tag", "herbst")(); S.springe(12000, 1, 1200, z => z % 3 !== 0, 0); }],         // Herbstblatt
+  [T(18),  () => { szene(2, "tag", "fruehling")(); S.springe(9000, 2, 1500, z => z % 4 !== 0, 0); }],       // Blueten
+  [T(19),  () => { szene(0, "nacht", "sommer")(); S.tun("w.temp = 18"); }],  // Gluehwuermchen
+  [T(20),  () => {                                                                                             // Silvester
+    S.vor(6000); S.klick("wetterWahl-silvester"); S.klick("tagWahl-echt"); S.klick("jahrWahl-winter");
+    S.tun("startSeit = jetzt() - 11500");          // Countdown steht bei 3,5 s
+    S.uhr(2026, 11, 31, 22, 59, 56, 500);          // 23:59:56 Berliner Zeit
+  }],
+];
+let naechstes = 0;
+
+// ---------- Zeichnen ----------
+function hintergrund(t) {
+  const g = x.createLinearGradient(0, 0, 0, BH);
+  g.addColorStop(0, "#0d1222"); g.addColorStop(1, "#06080f");
+  x.fillStyle = g; x.fillRect(0, 0, BW, BH);
+  const lichter = [[0.25 + 0.06 * Math.sin(t * 0.21), 0.3, 700, "rgba(240,160,75,0.13)"],
+                   [0.78 + 0.05 * Math.cos(t * 0.17), 0.7, 800, "rgba(70,120,255,0.12)"]];
+  for (const [fx, fy, r, f] of lichter) {
+    const rg = x.createRadialGradient(fx * BW, fy * BH, 0, fx * BW, fy * BH, r);
+    rg.addColorStop(0, f); rg.addColorStop(1, "rgba(0,0,0,0)");
+    x.fillStyle = rg; x.fillRect(0, 0, BW, BH);
+  }
+}
+
+// Board (quer) mit dem Bild der Simulation auf dem Display
+// Erst voll deckend auf eine Zwischenflaeche, dann als Ganzes einblenden - sonst scheint beim Einblenden
+// das Displaybild aus dem Board-Foto durch
+const BRETT = document.createElement("canvas"); BRETT.width = BW; BRETT.height = BH;
+function board(cx, cy, bw, alpha) {
+  if (alpha <= 0) return;
+  if (alpha < 1) {
+    const ziel = x;
+    x = BRETT.getContext("2d"); x.clearRect(0, 0, BW, BH);
+    board(cx, cy, bw, 1);
+    x = ziel;
+    x.save(); x.globalAlpha = alpha; x.drawImage(BRETT, 0, 0); x.restore();
+    return;
+  }
+  const bh = bw * 311 / 730;
+  x.save(); x.globalAlpha = alpha; x.translate(cx, cy);
+  x.shadowColor = "rgba(0,0,0,0.55)"; x.shadowBlur = 70; x.shadowOffsetY = 30;
+  x.drawImage(QUER, -bw / 2, -bh / 2, bw, bh);
+  x.shadowColor = "transparent";
+  const sx = -bw / 2 + 0.084 * bw, sy = -bh / 2 + 0.037 * bh, sw = 0.724 * bw, sh = sw * 170 / 320;
+  x.fillStyle = "#050607"; x.fillRect(sx, sy, sw, sh);
+  x.imageSmoothingQuality = "high";
+  x.drawImage(simCv, sx, sy, sw, sh);
+  x.globalAlpha = alpha * 0.9;
+  const sp = x.createLinearGradient(sx, sy, sx + sw * 0.6, sy + sh);
+  sp.addColorStop(0, "rgba(255,255,255,0.07)"); sp.addColorStop(0.45, "rgba(255,255,255,0)");
+  x.fillStyle = sp; x.fillRect(sx, sy, sw, sh);
+  x.restore();
+}
+
+function text(s, px, py, groesse, gewicht, farbe, alpha, ausr = "center", abstand = 0) {
+  if (alpha <= 0) return;
+  x.save(); x.globalAlpha = alpha;
+  x.font = `${gewicht} ${groesse}px Inter, sans-serif`;
+  x.fillStyle = farbe; x.textAlign = ausr; x.textBaseline = "alphabetic";
+  if (abstand) x.letterSpacing = abstand + "px";
+  x.fillText(s, px, py);
+  x.restore();
+}
+
+// Bildunterschrift: grosse Zeile + kleine Zeile, blendet mit kleiner Bewegung ein
+function unterschrift(t, a, b, gross, klein, px = BW / 2, py = 880) {
+  const f = fenster(t, a, b, 0.45, 0.3);
+  if (f <= 0) return;
+  const hub = (1 - raus((t - a) / 0.6)) * 24;
+  text(gross, px, py + hub, 64, 800, "#ffffff", f, "center", -1);
+  if (klein) text(klein, px, py + 52 + hub, 30, 500, "#aab4c8", f, "center");
+  const lw = 90 * raus((t - a - 0.15) / 0.5);
+  x.save(); x.globalAlpha = f; x.fillStyle = ORANGE;
+  x.fillRect(px - lw / 2, py - 86 + hub, lw, 4); x.restore();
+}
+
+// kleines Schild "NEU" oben links neben dem Board
+function neuSchild(t, a, b) {
+  const f = fenster(t, a, b, 0.4, 0.3);
+  if (f <= 0) return;
+  x.save(); x.globalAlpha = f;
+  x.fillStyle = ORANGE; x.beginPath(); x.roundRect(BW / 2 - 550, 196, 96, 40, 20); x.fill(); x.restore();
+  text("NEU", BW / 2 - 502, 225, 24, 800, "#10131a", f, "center", 2);
+}
+
+// ---------- ein Videobild ----------
+function zeichne(t) {
+  while (naechstes < EREIGNISSE.length && EREIGNISSE[naechstes][0] <= t) EREIGNISSE[naechstes++][1]();
+  S.zeit(100000 + t * 1000);
+  S.zeichnen();
+
+  hintergrund(t);
+
+  // --- Intro (Takt 0-1) ---
+  text("DAVESLAB", BW / 2, 400, 30, 700, ORANGE, fenster(t, 0.3, T(2) - 0.2, 0.6, 0.5), "center", 14);
+  text("Wetterstation", BW / 2, 540 + (1 - raus((t - 0.8) / 1)) * 30, 140, 800, "#fff", fenster(t, 0.8, T(2) - 0.2, 0.8, 0.5), "center", -4);
+  text("Das große Grafik-Update", BW / 2, 630, 40, 600, "#ffffff", fenster(t, 1.6, T(2) - 0.2, 0.7, 0.5));
+  text("Mehr Leben auf dem Display – Wetter, Jahreszeiten und Silvester", BW / 2, 690, 30, 500, "#aab4c8", fenster(t, 2.2, T(2) - 0.2, 0.7, 0.5));
+
+  // --- Board ---
+  const schluss = T(24);
+  let cx = BW / 2, cy = 470, breite = 1100, alpha = raus((t - T(2)) / 0.8);
+  cy += (1 - raus((t - T(2)) / 0.9)) * 80;
+  if (t >= schluss) {  // Schluss: klein und oben, das Feuerwerk laeuft weiter
+    const e = raus((t - schluss) / 0.9);
+    breite = 1100 - 460 * e; cy = 470 - 110 * e; alpha *= klemm((DAUER - 0.3 - t) / 1.2);
+  }
+  board(cx, cy, breite, alpha);
+
+  // --- Bildunterschriften ---
+  unterschrift(t, T(2) + 0.5, T(4) - 0.1, "Die Sonne lebt.", "Strahlen drehen sich und funkeln – und ab und zu ziehen Vögel vorbei.");
+  unterschrift(t, T(4) + 0.2, T(5) - 0.05, "Sonnenstrahlen", "Bei „teils bewölkt“ fällt Licht durch die Wolken.");
+  unterschrift(t, T(5) + 0.2, T(6) - 0.05, "Klare Nächte", "Mond mit Kratern, funkelnde Sterne – und Sternschnuppen.");
+  unterschrift(t, T(6) + 0.2, T(8) - 0.1, "Regen an der Scheibe", "Ab und an trifft ein Tropfen das Glas und perlt herunter.");
+  unterschrift(t, T(8) + 0.2, T(11) - 0.1, "Schnee, der schmilzt", "Flocken bleiben kleben, schmelzen und laufen als Tropfen herunter.");
+  unterschrift(t, T(11) + 0.2, T(12) - 0.05, "Gewitter", "Der Blitz zuckt über den ganzen Himmel.");
+  unterschrift(t, T(12) + 0.2, T(13) - 0.05, "Hagel", "Eiskörner prasseln und springen auf.");
+  unterschrift(t, T(13) + 0.2, T(14) - 0.05, "Sturm", "Ab 40 km/h wirbeln Blätter durchs Bild, die Wolken jagen.");
+  unterschrift(t, T(14) + 0.2, T(16) - 0.1, "Regenbogen nach dem Schauer", "Und jeder Wetterwechsel blendet jetzt weich über.");
+  unterschrift(t, T(16) + 0.2, T(17) - 0.05, "Hitze", "Ab 30 °C flimmert unten die Luft.");
+  unterschrift(t, T(17) + 0.2, T(18) - 0.05, "Herbst", "Ab und zu segelt ein Blatt herunter.");
+  unterschrift(t, T(18) + 0.2, T(19) - 0.05, "Frühling", "Blüten treiben durchs Bild.");
+  unterschrift(t, T(19) + 0.2, T(20) - 0.05, "Sommernacht", "Glühwürmchen leuchten in warmen Nächten.");
+  unterschrift(t, T(20) + 0.2, T(24) - 0.1, "Silvester", "Ab 23:50 Uhr läuft der Countdown – um Mitternacht eine Minute Feuerwerk.");
+  neuSchild(t, T(2) + 0.5, T(24) - 0.1);
+
+  // --- Schlusskarte ---
+  if (t >= schluss) {
+    text("Jetzt als Update", BW / 2, 720, 88, 800, "#fff", fenster(t, schluss + 0.3, DAUER, 0.6, 1.4), "center", -3);
+    text("Kommt von selbst auf jede Station mit Auto-Update – oder per Online-Flasher.", BW / 2, 780, 30, 500, "#aab4c8", fenster(t, schluss + 0.6, DAUER, 0.6, 1.4));
+    text("github.com/ProD-byte/Wetterstation", BW / 2, 870, 34, 700, ORANGE, fenster(t, schluss + 0.9, DAUER, 0.6, 1.4));
+    text("daveslab.de/basteln", BW / 2, 918, 30, 500, "#ffffff", fenster(t, schluss + 1.1, DAUER, 0.6, 1.4));
+  }
+  const schwarz = Math.max(klemm(1 - t / 0.4), klemm((t - (DAUER - 0.6)) / 0.6));
+  if (schwarz > 0) { x.fillStyle = `rgba(0,0,0,${schwarz})`; x.fillRect(0, 0, BW, BH); }
+}
+
+// ---------- Vorschau (?t=Sekunden) und Rendern (?render) ----------
+async function start() {
+  await new Promise(r => document.readyState === "complete" ? r() : addEventListener("load", r, { once: true }));
+  const geladen = i => new Promise(r => i.complete ? r() : i.addEventListener("load", r, { once: true }));
+  await Promise.all([geladen(QUER), document.fonts.load("800 64px Inter"), document.fonts.load("500 30px Inter")]);
+  simBereit();
+  await document.getElementById("sim").contentWindow.document.fonts.ready;
+  const q = new URLSearchParams(location.search);
+  if (q.has("render")) return rendern(+(q.get("ab") || 0));
+  if (q.has("stand")) { window.__bereit = true; return; }
+  const ab = +(q.get("t") || 0);
+  for (let i = 0; i < ab * FPS; i++) zeichne(i / FPS);  // Zustand bis "ab" herstellen (Spruenge nur vorwaerts)
+  const t0 = performance.now();
+  const lauf = () => { const t = ab + (performance.now() - t0) / 1000; if (t > DAUER) return; zeichne(t); requestAnimationFrame(lauf); };
+  lauf();
+}
+window.__bild = t => { zeichne(t); };
+
+async function rendern(ab) {
+  const n = Math.round(DAUER * FPS);
+  for (let i = 0; i < n; i++) {
+    const t = i / FPS;
+    zeichne(t);
+    if (i < ab) continue;
+    const daten = V.toDataURL("image/jpeg", 0.95);
+    for (let versuch = 0; ; versuch++) {
+      try { await fetch(`/bild?n=${i}`, { method: "POST", body: daten }); break; }
+      catch (e) { if (versuch > 5) throw e; await new Promise(r => setTimeout(r, 500)); }
+    }
+    document.getElementById("info").textContent = `${i + 1} / ${n}`;
+    window.__fortschritt = i + 1;
+  }
+  await fetch("/fertig", { method: "POST" });
+  window.__fertig = true;
+}
+start();
+</script>
+</body></html>
