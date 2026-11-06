@@ -1,6 +1,6 @@
 <!doctype html>
-<html lang="de"><head><meta charset="utf-8">
-<title>Wetterstation – Update-Video</title>
+<html lang="en"><head><meta charset="utf-8">
+<title>Weather Station – Update Video</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
 <style>
   html, body { margin: 0; background: #000; }
@@ -12,7 +12,7 @@
 <iframe id="sim" src="sim.html"></iframe>
 <div id="info"></div>
 <script>
-// Update-Video (Build 30): zeigt die neuen Animationen. Steuert wie trailer.html die echte Simulation
+// Update-Video (Build 30, englisch wie der Trailer): zeigt die neuen Animationen. Steuert wie trailer.html die echte Simulation
 // (sim.html = simulation/wetterstation.html) Bild fuer Bild. Zeitachse in Sekunden, Takt = 2,4 s
 // (Musik: python musik.py musik.wav update) - Szenenwechsel liegen auf Taktgrenzen.
 // Vorschau: http://127.0.0.1:8795/update.html?t=20   Rendern: update.html?render (server.py muss laufen)
@@ -55,6 +55,7 @@ function simBereit() {
       zeichnen() { letzterTastendruck = jetzt(); frame(); }
     };
     __ctl.klick("pixelWahl-glatt");
+    englisch = true;
   `);
   S = fw.__ctl;
   simCv = fw.document.getElementById("lcd");
@@ -164,7 +165,7 @@ function neuSchild(t, a, b) {
   if (f <= 0) return;
   x.save(); x.globalAlpha = f;
   x.fillStyle = ORANGE; x.beginPath(); x.roundRect(BW / 2 - 550, 196, 96, 40, 20); x.fill(); x.restore();
-  text("NEU", BW / 2 - 502, 225, 24, 800, "#10131a", f, "center", 2);
+  text("NEW", BW / 2 - 502, 225, 24, 800, "#10131a", f, "center", 2);
 }
 
 // ---------- ein Videobild ----------
@@ -177,9 +178,9 @@ function zeichne(t) {
 
   // --- Intro (Takt 0-1) ---
   text("DAVESLAB", BW / 2, 400, 30, 700, ORANGE, fenster(t, 0.3, T(2) - 0.2, 0.6, 0.5), "center", 14);
-  text("Wetterstation", BW / 2, 540 + (1 - raus((t - 0.8) / 1)) * 30, 140, 800, "#fff", fenster(t, 0.8, T(2) - 0.2, 0.8, 0.5), "center", -4);
-  text("Das große Grafik-Update", BW / 2, 630, 40, 600, "#ffffff", fenster(t, 1.6, T(2) - 0.2, 0.7, 0.5));
-  text("Mehr Leben auf dem Display – Wetter, Jahreszeiten und Silvester", BW / 2, 690, 30, 500, "#aab4c8", fenster(t, 2.2, T(2) - 0.2, 0.7, 0.5));
+  text("Weather Station", BW / 2, 540 + (1 - raus((t - 0.8) / 1)) * 30, 140, 800, "#fff", fenster(t, 0.8, T(2) - 0.2, 0.8, 0.5), "center", -4);
+  text("The big graphics update", BW / 2, 630, 40, 600, "#ffffff", fenster(t, 1.6, T(2) - 0.2, 0.7, 0.5));
+  text("More life on the display – weather, seasons and New Year's Eve", BW / 2, 690, 30, 500, "#aab4c8", fenster(t, 2.2, T(2) - 0.2, 0.7, 0.5));
 
   // --- Board ---
   const schluss = T(24);
@@ -192,26 +193,26 @@ function zeichne(t) {
   board(cx, cy, breite, alpha);
 
   // --- Bildunterschriften ---
-  unterschrift(t, T(2) + 0.5, T(4) - 0.1, "Die Sonne lebt.", "Strahlen drehen sich und funkeln – und ab und zu ziehen Vögel vorbei.");
-  unterschrift(t, T(4) + 0.2, T(5) - 0.05, "Sonnenstrahlen", "Bei „teils bewölkt“ fällt Licht durch die Wolken.");
-  unterschrift(t, T(5) + 0.2, T(6) - 0.05, "Klare Nächte", "Mond mit Kratern, funkelnde Sterne – und Sternschnuppen.");
-  unterschrift(t, T(6) + 0.2, T(8) - 0.1, "Regen an der Scheibe", "Ab und an trifft ein Tropfen das Glas und perlt herunter.");
-  unterschrift(t, T(8) + 0.2, T(11) - 0.1, "Schnee, der schmilzt", "Flocken bleiben kleben, schmelzen und laufen als Tropfen herunter.");
-  unterschrift(t, T(11) + 0.2, T(12) - 0.05, "Gewitter", "Der Blitz zuckt über den ganzen Himmel.");
-  unterschrift(t, T(12) + 0.2, T(13) - 0.05, "Hagel", "Eiskörner prasseln und springen auf.");
-  unterschrift(t, T(13) + 0.2, T(14) - 0.05, "Sturm", "Ab 40 km/h wirbeln Blätter durchs Bild, die Wolken jagen.");
-  unterschrift(t, T(14) + 0.2, T(16) - 0.1, "Regenbogen nach dem Schauer", "Und jeder Wetterwechsel blendet jetzt weich über.");
-  unterschrift(t, T(16) + 0.2, T(17) - 0.05, "Hitze", "Ab 30 °C flimmert unten die Luft.");
-  unterschrift(t, T(17) + 0.2, T(18) - 0.05, "Herbst", "Ab und zu segelt ein Blatt herunter.");
-  unterschrift(t, T(18) + 0.2, T(19) - 0.05, "Frühling", "Blüten treiben durchs Bild.");
-  unterschrift(t, T(19) + 0.2, T(20) - 0.05, "Sommernacht", "Glühwürmchen leuchten in warmen Nächten.");
-  unterschrift(t, T(20) + 0.2, T(24) - 0.1, "Silvester", "Ab 23:50 Uhr läuft der Countdown – um Mitternacht eine Minute Feuerwerk.");
+  unterschrift(t, T(2) + 0.5, T(4) - 0.1, "The sun comes alive.", "Rays turn and sparkle – and now and then birds fly by.");
+  unterschrift(t, T(4) + 0.2, T(5) - 0.05, "Sunbeams", "On partly cloudy days, light breaks through the clouds.");
+  unterschrift(t, T(5) + 0.2, T(6) - 0.05, "Clear nights", "A cratered moon, twinkling stars – and shooting stars.");
+  unterschrift(t, T(6) + 0.2, T(8) - 0.1, "Rain on the glass", "Now and then a drop hits the screen and trickles down.");
+  unterschrift(t, T(8) + 0.2, T(11) - 0.1, "Melting snow", "Flakes stick to the glass, melt and run down as drops.");
+  unterschrift(t, T(11) + 0.2, T(12) - 0.05, "Thunderstorms", "Lightning forks across the whole sky.");
+  unterschrift(t, T(12) + 0.2, T(13) - 0.05, "Hail", "Hailstones pelt down and bounce.");
+  unterschrift(t, T(13) + 0.2, T(14) - 0.05, "Storms", "From 40 km/h, leaves whirl across and the clouds race.");
+  unterschrift(t, T(14) + 0.2, T(16) - 0.1, "A rainbow after the shower", "And every change in the weather now fades in smoothly.");
+  unterschrift(t, T(16) + 0.2, T(17) - 0.05, "Heat", "From 30 °C, the air shimmers.");
+  unterschrift(t, T(17) + 0.2, T(18) - 0.05, "Autumn", "Now and then a leaf drifts down.");
+  unterschrift(t, T(18) + 0.2, T(19) - 0.05, "Spring", "Blossoms float across the screen.");
+  unterschrift(t, T(19) + 0.2, T(20) - 0.05, "Summer nights", "Fireflies glow on warm nights.");
+  unterschrift(t, T(20) + 0.2, T(24) - 0.1, "New Year's Eve", "A countdown from 11:50 pm – then a minute of fireworks at midnight.");
   neuSchild(t, T(2) + 0.5, T(24) - 0.1);
 
   // --- Schlusskarte ---
   if (t >= schluss) {
-    text("Jetzt als Update", BW / 2, 720, 88, 800, "#fff", fenster(t, schluss + 0.3, DAUER, 0.6, 1.4), "center", -3);
-    text("Kommt von selbst auf jede Station mit Auto-Update – oder per Online-Flasher.", BW / 2, 780, 30, 500, "#aab4c8", fenster(t, schluss + 0.6, DAUER, 0.6, 1.4));
+    text("Out now as an update", BW / 2, 720, 88, 800, "#fff", fenster(t, schluss + 0.3, DAUER, 0.6, 1.4), "center", -3);
+    text("Arrives by itself on every station with auto-update – or use the online flasher.", BW / 2, 780, 30, 500, "#aab4c8", fenster(t, schluss + 0.6, DAUER, 0.6, 1.4));
     text("github.com/ProD-byte/Wetterstation", BW / 2, 870, 34, 700, ORANGE, fenster(t, schluss + 0.9, DAUER, 0.6, 1.4));
     text("daveslab.de/basteln", BW / 2, 918, 30, 500, "#ffffff", fenster(t, schluss + 1.1, DAUER, 0.6, 1.4));
   }
