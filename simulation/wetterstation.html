@@ -41,6 +41,16 @@ header h1 {
   line-height: 1; margin: 0; letter-spacing: 0.01em; text-wrap: balance;
 }
 header p { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
+/* Kopf: Titel links, Sprachschalter DE/EN rechts (eingebettet ausgeblendet - da gilt die Sprache der Seite drumherum) */
+header { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; align-items: start; }
+header p { grid-column: 1 / -1; }
+.seitensprache { display: flex; gap: 4px; }
+.seitensprache button {
+  font: 600 13px/1 var(--body); color: var(--fg); background: var(--chip);
+  border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; cursor: pointer;
+}
+.seitensprache button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.seitensprache button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Das Geraet */
 .stage { display: grid; place-items: center; padding-block: 8px; }
@@ -132,8 +142,12 @@ html.einbetten .wrap { padding-block: 4px 8px; gap: 16px; }
 
 <div class="wrap">
   <header>
-    <h1>Wetterstation Cottbus</h1>
-    <p>So sieht die Firmware auf dem LILYGO T-Display-S3 aus: 1,9 Zoll, 320 × 170 Pixel, quer. Die beiden Taster am Board rechts kannst du anklicken – sie funktionieren wie die echten (oben IO14, unten IO0). Den Ort wählst du bei der Einrichtung, hier zeigen wir Cottbus.</p>
+    <h1 data-en="Weather Station Cottbus">Wetterstation Cottbus</h1>
+    <div class="seitensprache" role="group" aria-label="Sprache / Language">
+      <button type="button" id="seiteDe" lang="de" aria-pressed="true" title="Deutsch">DE</button>
+      <button type="button" id="seiteEn" lang="en" aria-pressed="false" title="English">EN</button>
+    </div>
+    <p data-en="This is how the firmware looks on the LILYGO T-Display-S3: 1.9 inch, 320 × 170 pixels, landscape. You can click the two buttons on the right of the board – they work like the real ones (top IO14, bottom IO0). You choose the location during setup; here we show Cottbus.">So sieht die Firmware auf dem LILYGO T-Display-S3 aus: 1,9 Zoll, 320 × 170 Pixel, quer. Die beiden Taster am Board rechts kannst du anklicken – sie funktionieren wie die echten (oben IO14, unten IO0). Den Ort wählst du bei der Einrichtung, hier zeigen wir Cottbus.</p>
   </header>
 
   <div class="stage">
@@ -146,29 +160,29 @@ html.einbetten .wrap { padding-block: 4px 8px; gap: 16px; }
   <div class="legende" id="legende"><span><b>IO14</b> oben: Licht · 3 s = WLAN</span><span><b>IO0</b> unten: Seite · 2 s = DE/EN</span></div>
 
   <section class="controls" aria-label="Simulation steuern">
-    <div class="row"><span>Wetter</span><div class="chips" id="wetterWahl"></div></div>
-    <div class="row"><span>Tageszeit</span><div class="chips" id="tagWahl"></div></div>
-    <div class="row"><span>Jahreszeit</span><div class="chips" id="jahrWahl"></div></div>
-    <div class="row"><span>Sprache</span><div class="chips" id="sprachWahl"></div></div>
-    <div class="row"><span>Ausrichtung</span><div class="chips" id="lageWahl"></div></div>
-    <div class="row"><span>Akku</span><div class="chips" id="akkuWahl"></div></div>
-    <div class="row"><span>Darstellung</span><div class="chips" id="pixelWahl"></div></div>
+    <div class="row"><span data-en="Weather">Wetter</span><div class="chips" id="wetterWahl"></div></div>
+    <div class="row"><span data-en="Time of day">Tageszeit</span><div class="chips" id="tagWahl"></div></div>
+    <div class="row"><span data-en="Season">Jahreszeit</span><div class="chips" id="jahrWahl"></div></div>
+    <div class="row"><span data-en="Display language">Display-Sprache</span><div class="chips" id="sprachWahl"></div></div>
+    <div class="row"><span data-en="Orientation">Ausrichtung</span><div class="chips" id="lageWahl"></div></div>
+    <div class="row"><span data-en="Battery">Akku</span><div class="chips" id="akkuWahl"></div></div>
+    <div class="row"><span data-en="Rendering">Darstellung</span><div class="chips" id="pixelWahl"></div></div>
     <p class="note" id="quelle"></p>
   </section>
 
   <section class="explain">
-    <div><span class="tag">Seite 1</span><h2>Jetzt</h2><p>Animiertes Wetterbild, Temperatur, gefühlte Temperatur, Wind und Luftfeuchte. Der Himmel färbt sich passend zum Wetter, nachts mit funkelnden Sternen.</p></div>
-    <div><span class="tag">Seite 2</span><h2>Nächste 24 Stunden</h2><p>Temperaturkurve, die sich beim Umblättern aufbaut. Darunter blaue Balken für die Regenwahrscheinlichkeit.</p></div>
-    <div><span class="tag">Seite 3</span><h2>Die nächsten Tage</h2><p>Heute, morgen und übermorgen mit kleinem animiertem Bild, Höchst- und Tiefstwert und Regenrisiko.</p></div>
-    <div><span class="tag">Seite 4</span><h2>Sonne &amp; Mond</h2><p>Die Sonne wandert über ihren Tagesbogen von Aufgang bis Untergang. Dazu Tageslänge, UV-Index und die aktuelle Mondphase.</p></div>
-    <div><span class="tag">Seite 5</span><h2>Luft &amp; Pollen</h2><p>Europäischer Luftqualitätsindex als Ring und fünf Pollenarten in drei Stufen. Wählst du „Sonnig“, siehst du Pollen.</p></div>
-    <div><span class="tag">Seite 6</span><h2>Regenradar</h2><p>Echte Radarbilder der letzten Stunde (RainViewer) auf einer dunklen Karte deiner Gegend, als Animation. Hier mit erfundenem Beispiel-Regen. Das Gerät zeigt den echten Regen (Ausschnitt nah, mittel oder weit, einstellbar unter wetterstation.local), und wenn es nirgends regnet, steht „Kein Regen in der Nähe“ auf der Karte.</p></div>
-    <div><span class="tag">Seite 7</span><h2>Letzte 7 Tage</h2><p>Temperatur, Luftdruck und Regen der vergangenen Woche – auch als Diagramm auf der Einstellungsseite.</p></div>
-    <div><span class="tag">Seite 8</span><h2>Orte im Vergleich</h2><p>Bis zu drei weitere Orte, die du auf der Einstellungsseite einträgst, neben deinem eigenen.</p></div>
-    <div><span class="tag">Immer</span><h2>Warnungen &amp; Regen</h2><p>DWD-Unwetterwarnungen blinken oben im Wechsel mit dem Titel. Beginnt oder endet Regen in den nächsten zwei Stunden, steht die Uhrzeit auf Seite 1. Probier „Gewitter“.</p></div>
+    <div><span class="tag" data-en="Page 1">Seite 1</span><h2 data-en="Now">Jetzt</h2><p data-en="Animated weather picture, temperature, feels-like temperature, wind and humidity. The sky changes colour with the weather, at night with twinkling stars.">Animiertes Wetterbild, Temperatur, gefühlte Temperatur, Wind und Luftfeuchte. Der Himmel färbt sich passend zum Wetter, nachts mit funkelnden Sternen.</p></div>
+    <div><span class="tag" data-en="Page 2">Seite 2</span><h2 data-en="Next 24 hours">Nächste 24 Stunden</h2><p data-en="Temperature curve that builds up as you turn the page. Below it, blue bars for the chance of rain.">Temperaturkurve, die sich beim Umblättern aufbaut. Darunter blaue Balken für die Regenwahrscheinlichkeit.</p></div>
+    <div><span class="tag" data-en="Page 3">Seite 3</span><h2 data-en="Next days">Die nächsten Tage</h2><p data-en="Today, tomorrow and the day after with a small animated picture, high and low and the chance of rain.">Heute, morgen und übermorgen mit kleinem animiertem Bild, Höchst- und Tiefstwert und Regenrisiko.</p></div>
+    <div><span class="tag" data-en="Page 4">Seite 4</span><h2 data-en="Sun &amp; Moon">Sonne &amp; Mond</h2><p data-en="The sun travels along its daily arc from sunrise to sunset. Plus day length, UV index and the current moon phase.">Die Sonne wandert über ihren Tagesbogen von Aufgang bis Untergang. Dazu Tageslänge, UV-Index und die aktuelle Mondphase.</p></div>
+    <div><span class="tag" data-en="Page 5">Seite 5</span><h2 data-en="Air &amp; Pollen">Luft &amp; Pollen</h2><p data-en="European Air Quality Index as a ring and five kinds of pollen in three levels. Pick “Sunny” to see pollen.">Europäischer Luftqualitätsindex als Ring und fünf Pollenarten in drei Stufen. Wählst du „Sonnig“, siehst du Pollen.</p></div>
+    <div><span class="tag" data-en="Page 6">Seite 6</span><h2 data-en="Rain radar">Regenradar</h2><p data-en="Real radar images from the last hour (RainViewer) on a dark map of your area, as an animation. Here with made-up example rain. The device shows the real rain (near, medium or far view, set at wetterstation.local), and if it is not raining anywhere, the map says “No rain nearby”.">Echte Radarbilder der letzten Stunde (RainViewer) auf einer dunklen Karte deiner Gegend, als Animation. Hier mit erfundenem Beispiel-Regen. Das Gerät zeigt den echten Regen (Ausschnitt nah, mittel oder weit, einstellbar unter wetterstation.local), und wenn es nirgends regnet, steht „Kein Regen in der Nähe“ auf der Karte.</p></div>
+    <div><span class="tag" data-en="Page 7">Seite 7</span><h2 data-en="Last 7 days">Letzte 7 Tage</h2><p data-en="Temperature, air pressure and rain over the past week – also as a chart on the settings page.">Temperatur, Luftdruck und Regen der vergangenen Woche – auch als Diagramm auf der Einstellungsseite.</p></div>
+    <div><span class="tag" data-en="Page 8">Seite 8</span><h2 data-en="Places">Orte im Vergleich</h2><p data-en="Up to three more places that you enter on the settings page, next to your own.">Bis zu drei weitere Orte, die du auf der Einstellungsseite einträgst, neben deinem eigenen.</p></div>
+    <div><span class="tag" data-en="Always">Immer</span><h2 data-en="Warnings &amp; rain">Warnungen &amp; Regen</h2><p data-en="Severe weather warnings from the DWD (Germany) flash at the top, alternating with the title. If rain starts or stops within the next two hours, the time appears on page 1. Try “Thunderstorm”.">DWD-Unwetterwarnungen blinken oben im Wechsel mit dem Titel. Beginnt oder endet Regen in den nächsten zwei Stunden, steht die Uhrzeit auf Seite 1. Probier „Gewitter“.</p></div>
   </section>
 
-  <footer>Die Seiten blättern alle 12 s von allein weiter, nach einem Tastendruck erst wieder nach 30 s. Welche Seiten, wie schnell, Nachtmodus und Ort stellst du im Browser unter wetterstation.local ein. Auf dem echten Display sehen Schrift und Kantenglättung etwas anders aus, Aufbau, Farben und Bewegungen sind gleich. Firmware: <code>src/bilder.cpp</code> und <code>src/main.cpp</code>.</footer>
+  <footer data-en="The pages turn by themselves every 12 s, after a button press only after 30 s. Which pages, how fast, night mode and location are set in the browser at wetterstation.local. On the real display, font and anti-aliasing look slightly different; layout, colours and motion are the same. Firmware: &lt;code&gt;src/bilder.cpp&lt;/code&gt; and &lt;code&gt;src/main.cpp&lt;/code&gt;.">Die Seiten blättern alle 12 s von allein weiter, nach einem Tastendruck erst wieder nach 30 s. Welche Seiten, wie schnell, Nachtmodus und Ort stellst du im Browser unter wetterstation.local ein. Auf dem echten Display sehen Schrift und Kantenglättung etwas anders aus, Aufbau, Farben und Bewegungen sind gleich. Firmware: <code>src/bilder.cpp</code> und <code>src/main.cpp</code>.</footer>
 </div>
 
 <script>
@@ -213,14 +227,14 @@ function wetterAus(j) {
 }
 
 const DEMOS = [
-  { id: "echt", name: "Echte Daten" },
-  { id: "wlan", name: "WLAN einrichten" },
-  { id: "start", name: "Startbild" },
-  { id: "pause", name: "Wetterdienst-Pause" },
-  { id: 0, name: "Sonnig" }, { id: 2, name: "Teils bewölkt" }, { id: 3, name: "Bedeckt" },
-  { id: 45, name: "Nebel" }, { id: 53, name: "Niesel" }, { id: 63, name: "Regen" },
-  { id: 73, name: "Schnee" }, { id: 95, name: "Gewitter" }, { id: 99, name: "Hagel" },
-  { id: "bogen", name: "Regenbogen" }, { id: "sturm", name: "Sturm" }, { id: "hitze", name: "Hitze" }, { id: "silvester", name: "Silvester" }
+  { id: "echt", name: "Echte Daten", en: "Real data" },
+  { id: "wlan", name: "WLAN einrichten", en: "Wi-Fi setup" },
+  { id: "start", name: "Startbild", en: "Start screen" },
+  { id: "pause", name: "Wetterdienst-Pause", en: "Weather service pause" },
+  { id: 0, name: "Sonnig", en: "Sunny" }, { id: 2, name: "Teils bewölkt", en: "Partly cloudy" }, { id: 3, name: "Bedeckt", en: "Overcast" },
+  { id: 45, name: "Nebel", en: "Fog" }, { id: 53, name: "Niesel", en: "Drizzle" }, { id: 63, name: "Regen", en: "Rain" },
+  { id: 73, name: "Schnee", en: "Snow" }, { id: 95, name: "Gewitter", en: "Thunderstorm" }, { id: 99, name: "Hagel", en: "Hail" },
+  { id: "bogen", name: "Regenbogen", en: "Rainbow" }, { id: "sturm", name: "Sturm", en: "Storm" }, { id: "hitze", name: "Hitze", en: "Heat" }, { id: "silvester", name: "Silvester", en: "New Year's Eve" }
 ];
 // Jahreszeit fuer Blaetter, Blueten und Gluehwuermchen ("echt" = heutiger Monat)
 let jahrModus = "echt";
@@ -1427,11 +1441,17 @@ document.getElementById("keyLicht").addEventListener("click", () => {
   if (still) frame();
 });
 
+// Sprache der Seite (Knoepfe, Erklaerungen) - getrennt von "englisch" (Sprache auf dem Display).
+// Wechselt die Seite die Sprache, stellt sie das Display mit um.
+let seiteEn = false;
+const S = (de, en) => seiteEn ? en : de;
+
 function chips(id, liste, aktiv, beiWahl) {
   const box = document.getElementById(id);
-  liste.forEach(([wert, name]) => {
+  liste.forEach(([wert, name, en]) => {
     const b = document.createElement("button");
     b.type = "button"; b.textContent = name; b.id = `${id}-${wert}`;
+    b.dataset.de = name; b.dataset.en = en || name;
     b.setAttribute("aria-pressed", String(wert === aktiv));
     b.addEventListener("click", () => {
       box.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", "false"));
@@ -1445,44 +1465,114 @@ function chips(id, liste, aktiv, beiWahl) {
 const quelle = document.getElementById("quelle");
 function zeigeQuelle() {
   quelle.textContent = modus === "echt"
-    ? "Echte Werte für 03046 Cottbus von open-meteo.com, abgerufen am 1. November 2026 um 07:30 Uhr. Das Gerät holt sie alle 15 Minuten neu."
+    ? S("Echte Werte für 03046 Cottbus von open-meteo.com, abgerufen am 1. November 2026 um 07:30 Uhr. Das Gerät holt sie alle 15 Minuten neu.",
+        "Real values for 03046 Cottbus from open-meteo.com, fetched on 1 November 2026 at 07:30. The device refreshes them every 15 minutes.")
     : modus === "start"
-      ? "So sieht das Display aus, bis die ersten Daten da sind. Unten steht der Name deines WLANs."
+      ? S("So sieht das Display aus, bis die ersten Daten da sind. Unten steht der Name deines WLANs.",
+          "This is how the display looks until the first data arrives. At the bottom is the name of your Wi-Fi.")
     : modus === "pause"
-      ? "Ist der Wetterdienst überlastet oder nicht erreichbar, schläft die Wolke, bis der nächste Versuch klappt. Daten bis 2 Stunden alt zeigt die Station weiter an, dann mit „Stand 14:30“ oben rechts."
+      ? S("Ist der Wetterdienst überlastet oder nicht erreichbar, schläft die Wolke, bis der nächste Versuch klappt. Daten bis 2 Stunden alt zeigt die Station weiter an, dann mit „Stand 14:30“ oben rechts.",
+          "If the weather service is overloaded or unreachable, the cloud sleeps until the next attempt works. The station keeps showing data up to 2 hours old, marked “as of 14:30” at the top right.")
       : modus === "wlan"
-        ? "Beim ersten Start (oder Taste IO14 drei Sekunden halten) öffnet die Wetterstation das WLAN „Wetterstation-Setup“. Darin wählst du am Handy erst dein WLAN, dann den Ort fürs Wetter. Ohne Auswahl findet sie ihn ungefähr über den Internetanschluss."
-        : "Vorführ-Wetter, damit du alle Animationen sehen kannst. Temperaturen und Regen sind teilweise angepasst.";
+        ? S("Beim ersten Start (oder Taste IO14 drei Sekunden halten) öffnet die Wetterstation das WLAN „Wetterstation-Setup“. Darin wählst du am Handy erst dein WLAN, dann den Ort fürs Wetter. Ohne Auswahl findet sie ihn ungefähr über den Internetanschluss.",
+            "On first start (or when you hold button IO14 for three seconds) the weather station opens the Wi-Fi “Wetterstation-Setup”. Join it with your phone, pick your Wi-Fi, then the location for the weather. Without a choice it finds the location roughly via your internet connection.")
+        : S("Vorführ-Wetter, damit du alle Animationen sehen kannst. Temperaturen und Regen sind teilweise angepasst.",
+            "Demo weather so you can see all the animations. Temperatures and rain are partly adjusted.");
 }
-chips("wetterWahl", DEMOS.map(d => [d.id, d.name]), "echt", v => {
+chips("wetterWahl", DEMOS.map(d => [d.id, d.name, d.en]), "echt", v => {
   modus = v; baueWetter(); zeigeQuelle(); seiteSeit = jetzt(); startSeit = jetzt();
 });
-chips("tagWahl", [["echt", "Wie in den Daten"], ["tag", "Tag"], ["abend", "Abendrot"], ["nacht", "Nacht"]], "echt", v => { tagModus = v; baueWetter(); });
-chips("jahrWahl", [["echt", "Wie heute"], ["fruehling", "Frühling"], ["sommer", "Sommer"], ["herbst", "Herbst"], ["winter", "Winter"]], "echt", v => { jahrModus = v; });
+chips("tagWahl", [["echt", "Wie in den Daten", "As in the data"], ["tag", "Tag", "Day"], ["abend", "Abendrot", "Sunset glow"], ["nacht", "Nacht", "Night"]], "echt", v => { tagModus = v; baueWetter(); });
+chips("jahrWahl", [["echt", "Wie heute", "As today"], ["fruehling", "Frühling", "Spring"], ["sommer", "Sommer", "Summer"], ["herbst", "Herbst", "Autumn"], ["winter", "Winter", "Winter"]], "echt", v => { jahrModus = v; });
 chips("sprachWahl", [["de", "Deutsch"], ["en", "English"]], "de", v => { englisch = v === "en"; });
 // Ausrichtung wie auf der Einstellungsseite (lage 0-3 in main.cpp)
 const LAGEN = {
-  quer:      { hoch: false, gedreht: false, io14: "rechts oben", io0: "rechts unten" },
-  querLinks: { hoch: false, gedreht: true,  io14: "links unten", io0: "links oben" },
-  hoch:      { hoch: true,  gedreht: false, io14: "unten rechts", io0: "unten links" },
-  hochOben:  { hoch: true,  gedreht: true,  io14: "oben links",  io0: "oben rechts" }
+  quer:      { hoch: false, gedreht: false, io14: ["rechts oben", "top right"],   io0: ["rechts unten", "bottom right"] },
+  querLinks: { hoch: false, gedreht: true,  io14: ["links unten", "bottom left"], io0: ["links oben", "top left"] },
+  hoch:      { hoch: true,  gedreht: false, io14: ["unten rechts", "bottom right"], io0: ["unten links", "bottom left"] },
+  hochOben:  { hoch: true,  gedreht: true,  io14: ["oben links", "top left"],     io0: ["oben rechts", "top right"] }
 };
-chips("lageWahl", [["quer", "Quer, USB rechts"], ["querLinks", "Quer, USB links"], ["hoch", "Hochkant, USB unten"], ["hochOben", "Hochkant, USB oben"]], "quer",
+let lage = "quer";
+function zeigeLegende() {
+  const l = LAGEN[lage];
+  document.getElementById("legende").innerHTML = seiteEn
+    ? `<span><b>IO14</b> ${l.io14[1]}: light · 3 s = Wi-Fi</span><span><b>IO0</b> ${l.io0[1]}: page · 2 s = DE/EN</span>`
+    : `<span><b>IO14</b> ${l.io14[0]}: Licht · 3 s = WLAN</span><span><b>IO0</b> ${l.io0[0]}: Seite · 2 s = DE/EN</span>`;
+}
+chips("lageWahl", [["quer", "Quer, USB rechts", "Landscape, USB right"], ["querLinks", "Quer, USB links", "Landscape, USB left"], ["hoch", "Hochkant, USB unten", "Portrait, USB at bottom"], ["hochOben", "Hochkant, USB oben", "Portrait, USB at top"]], "quer",
   v => {
     const l = LAGEN[v], board = document.querySelector(".board");
+    lage = v;
     board.classList.toggle("hoch", l.hoch);
     board.classList.toggle("gedreht", l.gedreht);
     if (l.hoch !== hoch()) { [W, H] = [H, W]; setPixel(echtePixel); wechsel = false; if (still) frame(); }
-    document.getElementById("legende").innerHTML =
-      `<span><b>IO14</b> ${l.io14}: Licht · 3 s = WLAN</span><span><b>IO0</b> ${l.io0}: Seite · 2 s = DE/EN</span>`;
+    zeigeLegende();
   });
-chips("akkuWahl", [["usb", "Am USB"], ["voll", "Akku 85 %"], ["leer", "Akku 15 %"]], "usb", v => { akkuModus = v; });
-chips("pixelWahl", [["pixel", "Echte Pixel"], ["glatt", "Geglättet"]], "pixel", v => setPixel(v === "pixel"));
+chips("akkuWahl", [["usb", "Am USB", "On USB"], ["voll", "Akku 85 %", "Battery 85 %"], ["leer", "Akku 15 %", "Battery 15 %"]], "usb", v => { akkuModus = v; });
+chips("pixelWahl", [["pixel", "Echte Pixel", "Real pixels"], ["glatt", "Geglättet", "Smoothed"]], "pixel", v => setPixel(v === "pixel"));
+
+// Ganze Seite auf Deutsch oder Englisch stellen (Display wechselt mit)
+function setzeSeitenSprache(en) {
+  seiteEn = en;
+  document.documentElement.lang = en ? "en" : "de";
+  document.title = en ? "Weather Station – Simulation" : "Wetterstation – Simulation";
+  document.querySelectorAll("[data-en]").forEach(e => {
+    if (e.dataset.de === undefined) e.dataset.de = e.innerHTML;
+    e.innerHTML = en ? e.dataset.en : e.dataset.de;
+  });
+  const tasten = {
+    keyLicht: ["IO14: Helligkeit (3 s = WLAN)", "Taster GPIO 14: Helligkeit",
+               "IO14: brightness (3 s = Wi-Fi)", "Button GPIO 14: brightness"],
+    keySeite: ["IO0: nächste Seite (2 s halten = Deutsch/Englisch)", "Taster GPIO 0: kurz nächste Seite, 2 Sekunden halten wechselt die Sprache (Tastatur: Umschalt+Enter)",
+               "IO0: next page (hold 2 s = German/English)", "Button GPIO 0: press for next page, hold 2 seconds to switch the language (keyboard: Shift+Enter)"]
+  };
+  for (const [id, t] of Object.entries(tasten)) {
+    const k = document.getElementById(id);
+    k.title = en ? t[2] : t[0]; k.setAttribute("aria-label", en ? t[3] : t[1]);
+  }
+  cv.setAttribute("aria-label", S("Simuliertes Display der Wetterstation", "Simulated display of the weather station"));
+  document.querySelector(".controls").setAttribute("aria-label", S("Simulation steuern", "Control the simulation"));
+  document.getElementById("seiteDe").setAttribute("aria-pressed", String(!en));
+  document.getElementById("seiteEn").setAttribute("aria-pressed", String(en));
+  zeigeLegende();
+  zeigeQuelle();
+  document.getElementById(en ? "sprachWahl-en" : "sprachWahl-de").click();
+}
+// Schalter DE/EN oben rechts: Seite umstellen und ?lang= in die Adresse schreiben (Link teilen, neu laden)
+for (const [id, en] of [["seiteDe", false], ["seiteEn", true]]) {
+  document.getElementById(id).addEventListener("click", () => {
+    setzeSeitenSprache(en);
+    try {
+      const u = new URL(location.href);
+      u.searchParams.delete("en");
+      u.searchParams.set("lang", en ? "en" : "de");
+      history.replaceState(null, "", u);
+    } catch (e) {}
+    if (still) frame();
+  });
+}
 
 setPixel(true);
 baueWetter();
-zeigeQuelle();
-if (/[?&]en\b/.test(location.search)) document.getElementById("sprachWahl-en").click();  // englische Flasher-Seite
+// Sprache (nur Deutsch und Englisch): ?en oder ?lang=en (englische Flasher-Seite, daveslab.de),
+// sonst wie der Browser (alles ausser Deutsch -> Englisch).
+// Eingebettet zaehlt nur, was die Seite drumherum sagt (Standard Deutsch); sie meldet Wechsel per postMessage.
+{
+  const q = new URLSearchParams(location.search), lang = q.get("lang");
+  const en = q.has("en") || (lang ? !/^de/i.test(lang) : !q.has("einbetten") && !/^de/i.test(navigator.language || "de"));
+  setzeSeitenSprache(en);
+}
+// Eingebettet: die Seite drumherum meldet ihre Sprache (jede Sekunde wieder). Nur ein echter Wechsel stellt um -
+// so bleibt es dabei, wenn jemand in der Simulation selbst die Display-Sprache umstellt.
+let gemeldet = null;
+addEventListener("message", e => {
+  const l = e.data && e.data.wetterstationSprache;
+  if (typeof l !== "string") return;
+  const en = !/^de/i.test(l);
+  if (en === gemeldet) return;
+  gemeldet = en;
+  if (en !== seiteEn) { setzeSeitenSprache(en); if (still) frame(); }
+});
 schleife();
 document.fonts && document.fonts.ready.then(() => { if (still) frame(); });
 </script>

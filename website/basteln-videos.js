@@ -57,13 +57,10 @@ var VIDEO_SKRIPT = `document.addEventListener('click',function(e){var b=e.target
 var VIDEO_TEXTE = {
   en: [`wet_vid1:'Trailer: the weather station in one minute'`, `wet_vid2:'Update: rainbows, storms, snow &amp; New Year’s fireworks'`,
        `wet_vid_hin:'The video is only loaded from YouTube when you press play (youtube-nocookie.com) – data is then sent to YouTube.'`, `wet_vid_kanal:'▶ More on YouTube'`],
-  es: [`wet_vid1:'Tráiler: la estación meteorológica en un minuto'`, `wet_vid2:'Actualización: arcoíris, tormentas, nieve y fuegos artificiales de Nochevieja'`,
-       `wet_vid_hin:'El vídeo solo se carga desde YouTube al pulsar reproducir (youtube-nocookie.com); entonces se envían datos a YouTube.'`, `wet_vid_kanal:'▶ Más en YouTube'`],
-  fr: [`wet_vid1:'Bande-annonce : la station météo en une minute'`, `wet_vid2:'Mise à jour : arcs-en-ciel, tempêtes, neige et feu d’artifice du Nouvel An'`,
-       `wet_vid_hin:'La vidéo n’est chargée depuis YouTube qu’au moment de la lecture (youtube-nocookie.com) – des données sont alors envoyées à YouTube.'`, `wet_vid_kanal:'▶ Plus sur YouTube'`],
 };
-// Anker in den Uebersetzungen: der letzte Text der Simulations-Box (aus basteln-wetter.js)
-var VIDEO_ANKER = {en: "wet_auto_btn:'Open simulation →'", es: "wet_auto_btn:'Abrir simulación →'", fr: "wet_auto_btn:'Ouvrir la simulation →'"};
+// Anker in den Uebersetzungen: der letzte Text der Simulations-Box (aus basteln-wetter.js).
+// Die Seite gibt es nur auf Deutsch und Englisch.
+var VIDEO_ANKER = {en: "wet_auto_btn:'Open simulation →'"};
 
 function videosEinbauen(raw, trailer, update) {
   const fehler = [];
@@ -82,11 +79,8 @@ function videosEinbauen(raw, trailer, update) {
   } else {
     // Block unter die Simulation
     ersetze('simulation', /<iframe id="dl-wetter-sim"[^>]*><\/iframe>\s*<\/div>/, m => m + '\n      ' + neu);
-    // Uebersetzungen: Englisch muss da sein, Spanisch/Franzoesisch nur, wenn die Seite sie (noch) hat
-    for (const s of ['en', 'es', 'fr']) {
-      if (s !== 'en' && !out.includes(VIDEO_ANKER[s])) continue;
-      ersetze(s + ' texte', VIDEO_ANKER[s], VIDEO_ANKER[s] + ',\n' + VIDEO_TEXTE[s].join(',\n'));
-    }
+    // englische Uebersetzungen
+    ersetze('en texte', VIDEO_ANKER.en, VIDEO_ANKER.en + ',\n' + VIDEO_TEXTE.en.join(',\n'));
     // Klick-Skript hinter das Skript der Wetterstation (holt die Build-Nummer)
     ersetze('skript', /fetch\('https:\/\/prod-byte\.github\.io\/Wetterstation\/version\.json'[^\n]*\n/, m => m + VIDEO_SKRIPT + '\n');
   }
