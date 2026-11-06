@@ -126,5 +126,3 @@ jobs:
 
       - id: deploy
         uses: actions/deploy-pages@v4
-        with:
-          timeout: 1200000   # 20 min statt 10 - am 06.11. brach es nach 10 min mit 'Timeout reached' ab
