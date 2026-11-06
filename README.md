@@ -99,6 +99,7 @@ Bei jedem Hochladen baut GitHub die Firmware automatisch (`.github/workflows/bui
 | `simulation/wetterstation.html` | Simulation (zeichnet wie die Firmware) |
 | `docs/` | Online-Flasher (GitHub Pages) |
 | `website/basteln-wetter.js` | baut den Abschnitt in daveslab.de/basteln ein |
+| `website/basteln-videos.js` | baut Trailer und Update-Video in den Abschnitt ein (Zwei-Klick-Lösung, Vorschaubilder in `docs/video/`) |
 | `INFO.md` | Spickzettel zum Board: Pins, Strom, Akku, Macken |
 
 ## 🔒 Gut zu wissen
