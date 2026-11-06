@@ -4,7 +4,11 @@ Komplett synthetisch erzeugt (keine Samples) - darf frei im Video verwendet werd
 Akkorde Am - F - C - G, Schluss als Kadenz F - G - C. Die Taktgrenzen sind die Szenenwechsel im Video:
 Takt 0-1 Intro, 2-13 Teaser (kraeftig), 14 Uebergang, 15-56 Tutorial (ruhiger), 57-58 Ausklang, 59-60 Schlussakkord.
 
-Aufruf: python musik.py ausgabe.wav
+Kurzfassung fuer das Update-Video (26 Takte = 62,4 s): Takt 0-1 Intro, 2-5 Strophe, 6-13 Refrain, 14 Pause,
+15-21 Refrain, 22-23 Ausklang, 24-25 Schlussakkord.
+
+Aufruf: python musik.py ausgabe.wav            (Trailer + Tutorial)
+        python musik.py ausgabe.wav update     (Update-Video)
 """
 import sys
 import wave
@@ -14,9 +18,10 @@ SR = 44100
 BPM = 100
 BEAT = 60 / BPM          # 0,6 s
 BAR = 4 * BEAT           # 2,4 s
-TAKTE = 61
-AUSKLANG = 57  # ab hier Abspann: ruhige Kadenz F - G
-SCHLUSS = 59  # Takt mit dem Schlussakkord (klingt natuerlich aus)
+KURZ = len(sys.argv) > 2 and sys.argv[2] == "update"  # Kurzfassung fuers Update-Video
+TAKTE = 26 if KURZ else 61
+AUSKLANG = 22 if KURZ else 57  # ab hier Abspann: ruhige Kadenz F - G
+SCHLUSS = 24 if KURZ else 59  # Takt mit dem Schlussakkord (klingt natuerlich aus)
 LAENGE = TAKTE * BAR
 N = int(LAENGE * SR) + SR
 rng = np.random.default_rng(7)
@@ -83,7 +88,7 @@ def abschnitt(b):
     if b < 6: return "strophe"
     if b < 14: return "refrain"
     if b < 15: return "pause"
-    if b < AUSKLANG: return "tutorial"
+    if b < AUSKLANG: return "refrain" if KURZ else "tutorial"
     if b < SCHLUSS: return "ausklang"
     return "schluss"
 
