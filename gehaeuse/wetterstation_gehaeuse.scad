@@ -288,6 +288,10 @@ if (teil == "alles") {
 } else if (teil == "deckel") {
     // Aussenseite nach unten
     translate([0, 0, tiefe]) rotate([180, 0, 0]) deckel();
+} else if (teil == "deckel_eingebaut") {
+    deckel();
+} else if (teil == "taste") {
+    taste();
 } else if (teil == "tasten") {
     for (i = [0, 1]) translate([i*8, 0, 0.4]) taste();
 } else if (teil == "staender") {

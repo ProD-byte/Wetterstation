@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Weather Station – Case Video</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; background: #000; }
+  #video { display: block; width: 100vw; height: auto; aspect-ratio: 16 / 9; }
+  #sim { position: absolute; left: -4000px; top: 0; width: 1000px; height: 900px; border: 0; }
+  #info { position: fixed; left: 8px; bottom: 8px; font: 12px monospace; color: #8a8; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head><body>
+<canvas id="video" width="1920" height="1080"></canvas>
+<iframe id="sim" src="sim.html"></iframe>
+<div id="info"></div>
+<script type="module">
+// Gehaeuse-Video (englisch, wie Trailer und Update-Video): das 3D-Druck-Gehaeuse aus ../gehaeuse/ als echte
+// 3D-Animation (three.js), auf dem Display laeuft die Simulation (sim.html) Bild fuer Bild mit.
+// Modelle vorher erzeugen: python gehaeuse_modelle.py   Musik: python musik.py musik.wav update (62,4 s)
+// Vorschau: http://127.0.0.1:8795/gehaeuse.html?t=20   Rendern: gehaeuse.html?render (server.py muss laufen,
+// Bilder landen in %TEMP%/wetterstation-video/gehaeuse/)
+import * as THREE from "three";
+import { STLLoader } from "three/addons/loaders/STLLoader.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
+
+const V = document.getElementById("video");
+let x = V.getContext("2d");
+const BW = 1920, BH = 1080, FPS = 30, DAUER = 62.4, TAKT = 2.4;
+const ORANGE = "#f0a04b";
+const T = n => n * TAKT;
+
+// ---------- Hilfen ----------
+const klemm = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const glatt = v => { v = klemm(v); return v * v * (3 - 2 * v); };
+const raus = v => 1 - Math.pow(1 - klemm(v), 3);
+const rein = v => Math.pow(klemm(v), 3);
+const fenster = (t, a, b, ein = 0.5, aus = 0.4) => klemm((t - a) / ein) * klemm((b - t) / aus);
+const mix = (a, b, f) => a + (b - a) * f;
+const RAD = Math.PI / 180;
+
+// ---------- Simulation steuern (wie update.html) ----------
+let S = null, simCv = null;
+function simBereit() {
+  const fw = document.getElementById("sim").contentWindow;
+  fw.eval(`
+    var __simT = 0, __versatz = 0; const __t0 = t0; performance.now = () => __t0 + __simT + __versatz;
+    const __RD = Date; var __basis = __RD.UTC(2026, 10, 1, 13, 41, 0);
+    window.Date = class extends __RD { constructor(...a) { if (a.length) super(...a); else super(__basis + __simT); } static now() { return __basis + __simT; } };
+    window.__ctl = {
+      zeit(ms) { __simT = ms; },
+      klick(id) { document.getElementById(id).click(); },
+      seite0() { wechsel = false; seite = 0; seiteSeit = jetzt(); },
+      vor(ms) { __versatz += ms; },
+      tun(code) { return eval(code); },
+      zeichnen() { letzterTastendruck = jetzt(); frame(); }
+    };
+    __ctl.klick("pixelWahl-glatt");
+    englisch = true;
+  `);
+  S = fw.__ctl;
+  simCv = fw.document.getElementById("lcd");
+}
+const szene = (wetter, tag, jahr) => () => {
+  S.vor(6000);
+  S.klick("wetterWahl-" + wetter); S.klick("tagWahl-" + tag); S.klick("jahrWahl-" + jahr); S.seite0();
+};
+const TASTE_DRUCK = T(14) + 0.7;   // IO0 wird gedrueckt -> naechste Seite
+const EREIGNISSE = [
+  [0,           szene(0, "tag", "sommer")],
+  [TASTE_DRUCK, () => S.tun("naechsteSeite(jetzt()); letzterTastendruck = jetzt();")],
+  [T(19),       szene(63, "tag", "herbst")],     // Regen
+  [T(20),       szene(0, "nacht", "sommer")],    // klare Nacht
+  [T(21),       szene(73, "tag", "winter")],     // Schnee
+  [T(22),       szene(0, "tag", "sommer")],
+];
+let naechstes = 0;
+
+// ---------- 3D ----------
+const R3 = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+R3.setPixelRatio(1); R3.setSize(BW, BH, false);
+R3.outputColorSpace = THREE.SRGBColorSpace;
+R3.toneMapping = THREE.ACESFilmicToneMapping; R3.toneMappingExposure = 1.0;
+R3.shadowMap.enabled = true; R3.shadowMap.type = THREE.PCFSoftShadowMap;
+R3.localClippingEnabled = true;
+const SZ = new THREE.Scene();
+SZ.environment = new THREE.PMREMGenerator(R3).fromScene(new RoomEnvironment(), 0.04).texture;
+const CAM = new THREE.PerspectiveCamera(30, BW / BH, 5, 3000);
+
+const licht = new THREE.DirectionalLight(0xffffff, 2.2);
+licht.position.set(-90, 160, 140); licht.castShadow = true;
+licht.shadow.mapSize.set(2048, 2048); licht.shadow.radius = 6; licht.shadow.bias = -0.0004;
+Object.assign(licht.shadow.camera, { left: -130, right: 130, top: 130, bottom: -130, near: 10, far: 600 });
+SZ.add(licht);
+const kante = new THREE.DirectionalLight(0xffc38a, 1.4); kante.position.set(120, 60, -160); SZ.add(kante);
+const blau = new THREE.DirectionalLight(0x7fa0ff, 0.6); blau.position.set(-160, 40, -80); SZ.add(blau);
+SZ.add(new THREE.HemisphereLight(0xdfe6ff, 0x20242c, 0.35));
+
+const boden = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), new THREE.ShadowMaterial({ opacity: 0.42 }));
+boden.rotation.x = -Math.PI / 2; boden.receiveShadow = true; SZ.add(boden);
+
+const MAT = {
+  schale: new THREE.MeshPhysicalMaterial({ color: 0xefeff1, roughness: 0.5, clearcoat: 0.15, clearcoatRoughness: 0.6 }),
+  deckel: new THREE.MeshPhysicalMaterial({ color: 0xe1e2e6, roughness: 0.55, clearcoat: 0.1 }),
+  holz:   new THREE.MeshStandardMaterial({ color: 0xc9a77c, roughness: 0.72 }),
+  board:  new THREE.MeshStandardMaterial({ color: 0x17181b, roughness: 0.35, metalness: 0.2 }),
+};
+
+function lade(name) {
+  return new Promise((ok, err) => new STLLoader().load(`modelle/${name}.stl`, g => ok(toCreasedNormals(g, Math.PI / 7)), undefined, err));
+}
+function netz(geo, mat) { const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true; return m; }
+
+// Masse aus ../gehaeuse/wetterstation_gehaeuse.scad
+const AUS_MX = 30.14, HOEHE = 35, TIEFE = 14.48;
+const TASTEN = [[2.31, 9.29], [2.20, -8.81]];
+
+const welt = new THREE.Group(); welt.rotation.x = -Math.PI / 2; SZ.add(welt);  // System des Standfusses: Z oben
+const fuss = new THREE.Group(); welt.add(fuss);
+const halter = new THREE.Group(); welt.add(halter);                          // Gehaeuse im Fuss
+halter.matrixAutoUpdate = false;
+halter.matrix.makeTranslation(0, -3, 5)
+  .multiply(new THREE.Matrix4().makeRotationX(-15 * RAD))
+  .multiply(new THREE.Matrix4().set(-1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1))
+  .multiply(new THREE.Matrix4().makeTranslation(-AUS_MX, HOEHE / 2, -TIEFE / 2));
+const gehaeuse = new THREE.Group(); halter.add(gehaeuse);   // Gehaeuse-Koordinaten: X laengs, Y oben, Z Tiefe
+const teil = { front: new THREE.Group(), deckel: new THREE.Group(), platine: new THREE.Group(), tasten: [new THREE.Group(), new THREE.Group()] };
+gehaeuse.add(teil.front, teil.deckel, teil.platine, ...teil.tasten);
+TASTEN.forEach((p, i) => teil.tasten[i].userData.basis = new THREE.Vector3(p[0], p[1], 0));
+
+let anzeige = null;
+const platte = new THREE.Group(); platte.visible = false; SZ.add(platte);
+const schnitt = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
+let duese = null;
+
+async function aufbauen() {
+  const [gF, gD, gT, gS, gB] = await Promise.all(["front", "deckel_eingebaut", "taste", "staender", "board"].map(lade));
+  teil.front.add(netz(gF, MAT.schale));
+  teil.deckel.add(netz(gD, MAT.deckel));
+  teil.tasten.forEach(g => g.add(netz(gT, MAT.holz)));
+  fuss.add(netz(gS, MAT.holz));
+  const b = netz(gB, MAT.board);
+  b.matrixAutoUpdate = false; b.matrix.set(0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 7.98, 0, 0, 0, 1);
+  teil.platine.add(b);
+  // Displaybild: aktive Flaeche 42,72 x 22,7 mm, knapp vor dem Glas, schaut nach vorn (-Z)
+  const tex = new THREE.CanvasTexture(simCv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false;
+  anzeige = new THREE.Mesh(new THREE.PlaneGeometry(42.72, 22.7), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+  anzeige.position.set(33.54, 0, 1.57); anzeige.rotation.y = Math.PI;
+  teil.platine.add(anzeige);
+
+  // Druckplatte: alle Teile in Druckrichtung, wachsen Schicht fuer Schicht (Schnittebene + orange "Schmelze" innen)
+  const druckMat = m => { const c = m.clone(); c.clippingPlanes = [schnitt]; c.clipShadows = true; return c; };
+  const schmelze = new THREE.MeshBasicMaterial({ color: 0xff9a3c, side: THREE.BackSide, clippingPlanes: [schnitt], toneMapped: false });
+  const lege = (geo, mat, rotX, cx, cz, hebe = 0) => {
+    const g = new THREE.Group();
+    const m = netz(geo, druckMat(mat)); const s = new THREE.Mesh(geo, schmelze);
+    g.add(m, s); g.rotation.x = rotX; g.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(g);
+    g.position.set(cx - (box.min.x + box.max.x) / 2, -box.min.y + hebe, cz - (box.min.z + box.max.z) / 2);
+    platte.add(g);
+  };
+  lege(gF, MAT.schale, -Math.PI / 2, -42, -22);
+  lege(gD, MAT.deckel, Math.PI / 2, -42, 26);
+  lege(gS, MAT.holz, -Math.PI / 2, 40, -8);
+  lege(gT, MAT.holz, -Math.PI / 2, 26, 34); lege(gT, MAT.holz, -Math.PI / 2, 38, 34);
+  // Druckbett mit feinem Raster
+  const c = document.createElement("canvas"); c.width = c.height = 1024; const k = c.getContext("2d");
+  k.fillStyle = "#24262b"; k.fillRect(0, 0, 1024, 1024);
+  k.strokeStyle = "rgba(255,255,255,0.07)"; k.lineWidth = 2;
+  for (let i = 0; i <= 1024; i += 1024 / 20) { k.beginPath(); k.moveTo(i, 0); k.lineTo(i, 1024); k.moveTo(0, i); k.lineTo(1024, i); k.stroke(); }
+  const bt = new THREE.CanvasTexture(c); bt.colorSpace = THREE.SRGBColorSpace;
+  const bett = new THREE.Mesh(new THREE.BoxGeometry(200, 4, 140), new THREE.MeshStandardMaterial({ map: bt, roughness: 0.6, metalness: 0.3 }));
+  bett.position.y = -2; bett.receiveShadow = true; platte.add(bett);
+  // Duese (Heizblock + Spitze)
+  duese = new THREE.Group();
+  const metall = new THREE.MeshStandardMaterial({ color: 0xc8a050, roughness: 0.3, metalness: 0.9 });
+  const spitze = new THREE.Mesh(new THREE.CylinderGeometry(3, 0.5, 5, 32), metall); spitze.position.y = 2.5;
+  const block = new THREE.Mesh(new THREE.BoxGeometry(16, 10, 12), new THREE.MeshStandardMaterial({ color: 0x9aa0a8, roughness: 0.4, metalness: 0.8 }));
+  block.position.y = 10;
+  duese.add(spitze, block); duese.traverse(o => o.castShadow = true); platte.add(duese);
+}
+
+// ---------- Kamera ----------
+function orbit(phi, theta, r, ziel) {
+  return { pos: new THREE.Vector3(ziel.x + r * Math.sin(phi * RAD) * Math.cos(theta * RAD), ziel.y + r * Math.sin(theta * RAD),
+                                   ziel.z + r * Math.cos(phi * RAD) * Math.cos(theta * RAD)), ziel };
+}
+// Schluesselbilder: [Zeit, phi, theta, r, Ziel x, y, z] - dazwischen weich
+const KEYS = [
+  [0,          -38, 10, 178, 0, 8, 0],
+  [T(2),       -38, 10, 178, 0, 8, 0],
+  [T(6),       150, 16, 175, 0, 8, 0],
+  [T(6) + 1.4,  62, 18, 275, 0, 1, -8],
+  [T(10),       58, 20, 275, 0, 1, -8],
+  [T(13.6),     22, 12, 185, 0, 5, 0],
+  [T(14),       22, 12, 185, 0, 5, 0],
+];
+const KEYS_SPAET = [
+  [T(19),      -24, 9, 168, 0, 8, 0],
+  [T(22),       12, 9, 160, 0, 8, 0],
+  [DAUER,       24, 14, 190, 0, -2, 0],
+];
+function ausKeys(keys, t) {
+  let i = 0; while (i < keys.length - 2 && t >= keys[i + 1][0]) i++;
+  const a = keys[i], b = keys[i + 1], f = glatt((t - a[0]) / (b[0] - a[0]));
+  const k = a.map((v, j) => mix(v, b[j], f));
+  return orbit(k[1], k[2], k[3], new THREE.Vector3(k[4], k[5], k[6]));
+}
+function kamera(t) {
+  if (t >= T(15) && t < T(19)) {  // Druckplatte
+    const f = (t - T(15)) / (T(19) - T(15));
+    return orbit(mix(18, 62, glatt(f)), mix(40, 30, f), mix(270, 240, glatt(f)), new THREE.Vector3(0, 2, 2));
+  }
+  if (t >= T(19)) return ausKeys(KEYS_SPAET, t);
+  if (t >= T(14)) {  // Nahaufnahme der Tasten
+    const ziel = new THREE.Vector3(); teil.tasten[0].getWorldPosition(ziel);
+    const unten = new THREE.Vector3(); teil.tasten[1].getWorldPosition(unten);
+    ziel.lerp(unten, 0.5); ziel.y -= 14;
+    const f = glatt((t - T(14)) / 0.5);
+    const nah = orbit(mix(22, 30, (t - T(14)) / TAKT), 8, 95, ziel);
+    const weit = ausKeys(KEYS, T(14));
+    return { pos: weit.pos.clone().lerp(nah.pos, f), ziel: weit.ziel.clone().lerp(nah.ziel, f) };
+  }
+  return ausKeys(KEYS, t);
+}
+
+// ---------- Explosion / Zusammenbau ----------
+// e = 0: zusammengebaut, 1: auseinander. Explosion Takt 6-8, Zusammenbau Takt 10-14 (Teil fuer Teil)
+const auf = (t, a, b) => glatt((t - a) / (b - a));
+function zustand(t) {
+  const z = { fuss: 0, deckel: 0, platine: 0, tasten: 0, druck: 0 };
+  if (t < T(10)) {
+    z.fuss    = auf(t, T(6) + 0.6, T(6) + 1.6);
+    z.deckel  = auf(t, T(6) + 1.4, T(6) + 2.4);
+    z.platine = auf(t, T(6) + 2.1, T(6) + 3.1);
+    z.tasten  = auf(t, T(6) + 2.8, T(6) + 3.6);
+  } else {
+    z.tasten  = 1 - auf(t, T(10) + 0.2, T(10) + 1.2);
+    z.platine = 1 - auf(t, T(11) + 0.1, T(11) + 1.3);
+    z.deckel  = 1 - rein((t - (T(12) + 0.2)) / 1.0);
+    z.fuss    = 1 - auf(t, T(13) + 0.1, T(13) + 1.3);
+  }
+  z.druck = fenster(t, TASTE_DRUCK - 0.08, TASTE_DRUCK + 0.3, 0.08, 0.15);
+  return z;
+}
+function stelle(t) {
+  const z = zustand(t);
+  fuss.position.z = -22 * z.fuss;
+  teil.deckel.position.z = 44 * z.deckel;
+  teil.platine.position.z = 22 * z.platine;
+  teil.tasten.forEach((g, i) => { g.position.copy(g.userData.basis); g.position.z = -26 * z.tasten + (i === 0 ? 0.45 * z.druck : 0); });
+  return z;
+}
+
+// ---------- 2D: Hintergrund, Text ----------
+function hintergrund(t) {
+  const g = x.createLinearGradient(0, 0, 0, BH);
+  g.addColorStop(0, "#0d1222"); g.addColorStop(1, "#06080f");
+  x.fillStyle = g; x.fillRect(0, 0, BW, BH);
+  const lichter = [[0.25 + 0.06 * Math.sin(t * 0.21), 0.3, 700, "rgba(240,160,75,0.13)"],
+                   [0.78 + 0.05 * Math.cos(t * 0.17), 0.7, 800, "rgba(70,120,255,0.12)"],
+                   [0.5, 0.62, 560, "rgba(255,255,255,0.05)"]];
+  for (const [fx, fy, r, f] of lichter) {
+    const rg = x.createRadialGradient(fx * BW, fy * BH, 0, fx * BW, fy * BH, r);
+    rg.addColorStop(0, f); rg.addColorStop(1, "rgba(0,0,0,0)");
+    x.fillStyle = rg; x.fillRect(0, 0, BW, BH);
+  }
+}
+function text(s, px, py, groesse, gewicht, farbe, alpha, ausr = "center", abstand = 0) {
+  if (alpha <= 0) return;
+  x.save(); x.globalAlpha = alpha;
+  x.font = `${gewicht} ${groesse}px Inter, sans-serif`;
+  x.fillStyle = farbe; x.textAlign = ausr; x.textBaseline = "alphabetic";
+  if (abstand) x.letterSpacing = abstand + "px";
+  x.fillText(s, px, py);
+  x.restore();
+}
+function unterschrift(t, a, b, gross, klein, px = BW / 2, py = 900) {
+  const f = fenster(t, a, b, 0.45, 0.3);
+  if (f <= 0) return;
+  const hub = (1 - raus((t - a) / 0.6)) * 24;
+  text(gross, px, py + hub, 64, 800, "#ffffff", f, "center", -1);
+  if (klein) text(klein, px, py + 52 + hub, 30, 500, "#aab4c8", f, "center");
+  const lw = 90 * raus((t - a - 0.15) / 0.5);
+  x.save(); x.globalAlpha = f; x.fillStyle = ORANGE;
+  x.fillRect(px - lw / 2, py - 86 + hub, lw, 4); x.restore();
+}
+function schild(s, t, a, b, px, py) {
+  const f = fenster(t, a, b, 0.4, 0.3);
+  if (f <= 0) return;
+  x.save(); x.globalAlpha = f; x.font = "800 24px Inter, sans-serif"; x.letterSpacing = "2px";
+  const w = x.measureText(s).width + 44;
+  x.fillStyle = ORANGE; x.beginPath(); x.roundRect(px - w / 2, py - 29, w, 40, 20); x.fill(); x.restore();
+  text(s, px, py, 24, 800, "#10131a", f, "center", 2);
+}
+// Punkt in der 3D-Welt -> Bildschirm
+function bild(obj) {
+  const box = new THREE.Box3().setFromObject(obj); const v = box.getCenter(new THREE.Vector3());
+  v.project(CAM); return [(v.x + 1) / 2 * BW, (1 - v.y) / 2 * BH];
+}
+// Beschriftung mit Linie vom Teil weg
+function etikett(t, a, b, obj, dx, dy, gross, klein) {
+  const f = fenster(t, a, b, 0.4, 0.3);
+  if (f <= 0) return;
+  const [px, py] = bild(obj);
+  const lx = px + dx, ly = py + dy, l = raus((t - a) / 0.5);
+  x.save(); x.globalAlpha = f; x.strokeStyle = "rgba(255,255,255,0.75)"; x.lineWidth = 2;
+  x.beginPath(); x.moveTo(px, py); x.lineTo(mix(px, lx, l), mix(py, ly, l)); x.stroke();
+  x.fillStyle = ORANGE; x.beginPath(); x.arc(px, py, 6, 0, 7); x.fill(); x.restore();
+  const ausr = dx < 0 ? "right" : "left", tx = lx + (dx < 0 ? -14 : 14);
+  text(gross, tx, ly + 10, 34, 700, "#fff", f * l, ausr);
+  if (klein) text(klein, tx, ly + 46, 24, 500, "#aab4c8", f * l, ausr);
+}
+
+// ---------- ein Videobild ----------
+function zeichne(t) {
+  while (naechstes < EREIGNISSE.length && EREIGNISSE[naechstes][0] <= t) EREIGNISSE[naechstes++][1]();
+  S.zeit(100000 + t * 1000);
+  S.zeichnen();
+  anzeige.material.map.needsUpdate = true;
+
+  const z = stelle(t);
+  const druckSzene = t >= T(15) && t < T(19);
+  welt.visible = !druckSzene; platte.visible = druckSzene;
+  boden.visible = !druckSzene;
+  if (druckSzene) {
+    const f = (t - T(15) - 0.3) / (T(18.4) - T(15) - 0.3);
+    const h = mix(0, 15.2, klemm(f));
+    schnitt.constant = h;
+    duese.visible = f < 1;
+    const w = t * 5.3;
+    duese.position.set(Math.sin(w) * 55 + Math.sin(w * 0.37) * 18, h + 0.3, Math.cos(w * 1.31) * 30);
+  } else schnitt.constant = 1000;
+
+  const k = kamera(t);
+  CAM.position.copy(k.pos); CAM.lookAt(k.ziel); CAM.updateMatrixWorld();
+  SZ.updateMatrixWorld(true);
+  R3.render(SZ, CAM);
+
+  hintergrund(t);
+  // 3D einblenden, an den Szenenwechseln kurz abblenden
+  const a3 = klemm((t - T(2) + 0.3) / 0.9) * klemm((DAUER - 0.3 - t) / 1.2);
+  if (a3 > 0) { x.save(); x.globalAlpha = a3; x.drawImage(R3.domElement, 0, 0); x.restore(); }
+
+  // --- Intro ---
+  text("DAVESLAB", BW / 2, 400, 30, 700, ORANGE, fenster(t, 0.3, T(2) - 0.2, 0.6, 0.5), "center", 14);
+  text("Weather Station", BW / 2, 540 + (1 - raus((t - 0.8) / 1)) * 30, 140, 800, "#fff", fenster(t, 0.8, T(2) - 0.2, 0.8, 0.5), "center", -4);
+  text("Now with a 3D-printed case", BW / 2, 630, 40, 600, "#ffffff", fenster(t, 1.6, T(2) - 0.2, 0.7, 0.5));
+  text("Slim, snap-fit, no supports needed – free STL files", BW / 2, 690, 30, 500, "#aab4c8", fenster(t, 2.2, T(2) - 0.2, 0.7, 0.5));
+
+  // --- Bildunterschriften ---
+  unterschrift(t, T(2) + 0.6, T(4) - 0.1, "A home for the weather station", "Slim case on a wooden stand, tilted back 15° – made for the LILYGO T-Display-S3.");
+  unterschrift(t, T(4) + 0.2, T(6) - 0.1, "Clean on every side", "USB-C on the side, vents at the back, 68 × 35 × 14.5 mm.");
+  unterschrift(t, T(6) + 0.3, T(10) - 0.1, "Just 4 printed parts", "No screws, no glue – everything clicks together.");
+  schild("NEW", t, T(2) + 0.6, T(6) - 0.1, BW / 2, 100);
+  // Beschriftungen in der Explosionsansicht
+  etikett(t, T(8) + 0.3, T(10) - 0.1, teil.deckel, 170, -170, "Back cover", "4 snap tabs, vents");
+  etikett(t, T(8) + 0.5, T(10) - 0.1, teil.platine, 270, 160, "T-Display-S3", "held by two pins");
+  etikett(t, T(8) + 0.7, T(10) - 0.1, teil.front, -260, -40, "Front shell", "display window, USB-C");
+  etikett(t, T(8) + 0.9, T(10) - 0.1, teil.tasten[0], -200, -190, "Button plungers", "for IO0 and IO14");
+  etikett(t, T(8) + 1.1, T(10) - 0.1, fuss, -260, 40, "Stand", "tilts it back 15°");
+  // Zusammenbau
+  unterschrift(t, T(10) + 0.1, T(11) - 0.05, "1 · Drop in the buttons", "Two small plungers sit in a cone – they can't fall out.");
+  unterschrift(t, T(11) + 0.1, T(12) - 0.05, "2 · Board in, display first", "Two pins find the mounting holes, a block carries the USB socket.");
+  unterschrift(t, T(12) + 0.1, T(13) - 0.05, "3 · Click the back on", "Four tabs snap into grooves. A notch at the bottom opens it again.");
+  unterschrift(t, T(13) + 0.1, T(14) - 0.05, "4 · Into the stand", "Done – plug in USB-C and it shows your weather.");
+  // Klick des Deckels
+  const tk = T(12) + 1.2;
+  if (t > tk && t < tk + 0.6) {
+    const f = (t - tk) / 0.6, [px, py] = bild(teil.deckel);
+    x.save(); x.globalAlpha = 1 - f; x.strokeStyle = ORANGE; x.lineWidth = 6;
+    x.beginPath(); x.arc(px, py, 60 + 260 * raus(f), 0, 7); x.stroke(); x.restore();
+    text("click", px, py - 120 - 40 * f, 44, 800, ORANGE, 1 - f);
+  }
+  // Tasten
+  unterschrift(t, T(14) + 0.25, T(15) - 0.1, "The buttons work through the case", "IO0: next page · IO14: brightness");
+  if (t > TASTE_DRUCK && t < TASTE_DRUCK + 0.7) {
+    const f = (t - TASTE_DRUCK) / 0.7, [px, py] = bild(teil.tasten[0]);
+    x.save(); x.globalAlpha = 1 - f; x.strokeStyle = "#fff"; x.lineWidth = 4;
+    x.beginPath(); x.arc(px, py, 30 + 90 * raus(f), 0, 7); x.stroke(); x.restore();
+  }
+  // Druck
+  unterschrift(t, T(15) + 0.4, T(17) - 0.05, "Prints without supports", "FDM · 0.4 mm nozzle · PLA – every overhang 45° or less.");
+  unterschrift(t, T(17) + 0.1, T(19) - 0.1, "Fully parametric", "OpenSCAD source included: tweak tolerances, tilt and size.");
+  // Wetter im Gehaeuse
+  unterschrift(t, T(19) + 0.4, T(22) - 0.1, "Looks good in any weather", "Rain, clear nights, snow – the animations run as always.");
+
+  // --- Schlusskarte ---
+  const schluss = T(22);
+  if (t >= schluss) {
+    text("Free STL files", BW / 2, 760, 88, 800, "#fff", fenster(t, schluss + 0.6, DAUER, 0.6, 1.4), "center", -3);
+    text("Case, OpenSCAD source and firmware – all open source.", BW / 2, 820, 30, 500, "#aab4c8", fenster(t, schluss + 0.9, DAUER, 0.6, 1.4));
+    text("github.com/ProD-byte/Wetterstation", BW / 2, 900, 34, 700, ORANGE, fenster(t, schluss + 1.2, DAUER, 0.6, 1.4));
+    text("daveslab.de/basteln", BW / 2, 948, 30, 500, "#ffffff", fenster(t, schluss + 1.4, DAUER, 0.6, 1.4));
+  }
+  // Abblenden: Anfang, Ende, Wechsel zur Druckplatte und zurueck
+  const dip = c => 1 - klemm(Math.abs(t - c) / 0.28);
+  const schwarz = Math.max(klemm(1 - t / 0.4), klemm((t - (DAUER - 0.6)) / 0.6), dip(T(15)), dip(T(19)));
+  if (schwarz > 0) { x.fillStyle = `rgba(0,0,0,${schwarz})`; x.fillRect(0, 0, BW, BH); }
+}
+
+// ---------- Vorschau (?t=Sekunden) und Rendern (?render) ----------
+async function start() {
+  await new Promise(r => document.readyState === "complete" ? r() : addEventListener("load", r, { once: true }));
+  await Promise.all([document.fonts.load("800 64px Inter"), document.fonts.load("500 30px Inter"), document.fonts.load("700 34px Inter")]);
+  simBereit();
+  await document.getElementById("sim").contentWindow.document.fonts.ready;
+  await aufbauen();
+  const q = new URLSearchParams(location.search);
+  if (q.has("render")) return rendern(+(q.get("ab") || 0));
+  const ab = +(q.get("t") || 0);
+  if (q.has("stand")) {  // Standbild bei ?t= (zum Pruefen)
+    for (let i = 0; i < ab * FPS; i++) zeichne(i / FPS);
+    zeichne(ab); window.__bereit = true; return;
+  }
+  for (let i = 0; i < ab * FPS; i++) zeichne(i / FPS);
+  const t0 = performance.now();
+  const lauf = () => { const t = ab + (performance.now() - t0) / 1000; if (t > DAUER) return; zeichne(t); requestAnimationFrame(lauf); };
+  lauf();
+}
+window.__bild = t => { zeichne(t); };
+
+async function rendern(ab) {
+  const n = Math.round(DAUER * FPS);
+  for (let i = 0; i < n; i++) {
+    const t = i / FPS;
+    zeichne(t);
+    if (i < ab) continue;
+    const daten = V.toDataURL("image/jpeg", 0.95);
+    for (let versuch = 0; ; versuch++) {
+      try { await fetch(`/bild?n=${i}&ordner=gehaeuse`, { method: "POST", body: daten }); break; }
+      catch (e) { if (versuch > 5) throw e; await new Promise(r => setTimeout(r, 500)); }
+    }
+    document.getElementById("info").textContent = `${i + 1} / ${n}`;
+    window.__fortschritt = i + 1;
+  }
+  await fetch("/fertig?ordner=gehaeuse", { method: "POST" });
+  window.__fertig = true;
+}
+start().catch(e => { document.getElementById("info").textContent = "Fehler: " + e; console.error(e); });
+</script>
+</body></html>
