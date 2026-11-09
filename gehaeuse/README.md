@@ -10,6 +10,20 @@ Display links, die zwei Tasten rechts daneben, USB-C rechts an der Seite. Kein A
 | ![hinten](bilder/vorschau_hinten.png) | ![Explosionsansicht](bilder/vorschau_explosion.png) |
 | ![Seite](bilder/vorschau_seite.png) | ![Druckplatte](bilder/vorschau_druckplatte.png) |
 | ![Deckel von innen](bilder/vorschau_deckel_innen.png) | ![Standfuß mit Schriftzug](bilder/vorschau_fuss.png) |
+| ![Schale von innen](bilder/vorschau_schale_innen.png) | |
+
+## Version 3 – nach dem zweiten Probedruck
+
+Das Board ging an der oberen Längsseite (gegenüber dem Reset-Loch) nicht ganz hinunter, deshalb ging der Deckel nicht zu.
+Grund: Dort läuft das **Flachkabel des Displays** um die Platinenkante. Im 3D-Modell von LILYGO fehlt es, deshalb fand die
+Kollisionsprüfung nichts. Der Hohlraum war an dieser Stelle nur 0,25 mm breiter als das Glas.
+
+| Geändert | |
+|---|---|
+| Aussparung für das Flachkabel | an der oberen Längswand ab 26 mm vom USB-Ende bis zum Ende, 1,2 mm breiter (`kabel_x0`, `kabel_y`), nur so tief wie das Kabel reicht – darüber bleibt die Wand für Deckel-Laschen und Zentrierleisten |
+| Deckel-Rippe über dem Kabel entfernt | das Board wird am USB-Ende beidseitig und am anderen Ende unten angedrückt |
+
+Neu drucken: **Front** und **Deckel** (Tasten und Fuß bleiben wie in Version 2).
 
 ## Version 2 – nach dem ersten Probedruck
 
@@ -61,6 +75,7 @@ Alles steht in `wetterstation_gehaeuse.scad`, die Werte oben sind Parameter (auc
 - `taste_vor` – wie weit die Tastenkappen vorstehen
 - `zentrier_h` – Höhe der Zentrierleisten am Deckel
 - `schrift`, `schrift_groesse`, `schrift_relief` – Schriftzug am Fuß (`""` = keiner)
+- `kabel_x0`, `kabel_y` – Aussparung für das Flachkabel des Displays (geht das Board immer noch nicht ganz runter: `kabel_x0` kleiner, `kabel_y` größer)
 - `fuss_neigung`, `fuss_hoehe`, `fuss_vorn` – Winkel und Form des Fußes
 - `rueckraum` – mehr Platz hinten, z. B. `6` für eingelötete Stiftleisten
 - `eck_radius`, `fase`, `hoehe`, `rand_tasten`, `rand_gegen` – Look und Größe
@@ -92,4 +107,4 @@ und das Gehäuse wurde gegen dieses Modell auf Kollisionen geprüft:
 | Tasten IO0 / IO14 | vorn neben der USB-Buchse (drücken von vorn, nicht seitlich), Kappe 2,7 mm hinter der Glasfläche |
 | RST | seitlich, 10 mm vom USB-Ende |
 
-Version 1 wurde gedruckt, Version 2 behebt die Punkte oben und ist noch nicht gedruckt. Wenn etwas klemmt: Toleranzen oben anpassen.
+Version 1 und 2 wurden gedruckt, Version 3 behebt das Flachkabel-Problem und ist noch nicht gedruckt. Wenn etwas klemmt: Toleranzen oben anpassen.
