@@ -23,6 +23,10 @@
 //      das Board liegt mit dem Glas auf der Frontplatte und wird von Rippen im Deckel angedrueckt
 //    - Deckel rutscht nicht mehr: Nuten so lang wie die Laschen, dazu Zentrierleisten an den Laengsseiten
 //    - Standfuss: erhabener Schriftzug "DAVESLAB" vorn (zum Ausmalen)
+//  Version 3 (zweiter Probedruck: Board ging an einer Laengsseite nicht ganz runter, Deckel ging nicht zu):
+//    - Aussparung fuer das Flachkabel des Displays, das um die obere Platinenkante laeuft
+//      (ist im 3D-Modell von LILYGO nicht drin, auf dem echten Board aber da)
+//    - keine Deckel-Rippe mehr ueber dem Flachkabel
 // =====================================================================
 
 teil = "alles";
@@ -52,6 +56,11 @@ taste_vor    = 1.8;    // so weit steht die Tastenkappe vorn aus der Front herau
 /* [Deckel] */
 spiel_nut    = 0.15;   // Luft der Schnapplaschen in ihrer Nut (laengs) - V1 hatte 1 mm je Seite, Deckel rutschte
 zentrier_h   = 2.5;    // Hoehe der Zentrierleisten am Deckel (fuehren ihn quer)
+
+/* [Flachkabel des Displays] */
+// Das Flachkabel laeuft auf der oberen Laengsseite (gegenueber dem Reset-Loch) um die Platinenkante.
+kabel_x0     = 26;     // Aussparung ab hier (mm ab USB-Ende) bis zum Ende des Hohlraums
+kabel_y      = 14.4;   // so weit (ab Mitte) ist der Hohlraum dort ausgespart (Glas: 12,98, Platine: 12,76)
 
 /* [Standfuss] */
 fuss_neigung = 15;     // Grad nach hinten
@@ -149,6 +158,9 @@ module front() {
         // Hohlraum: unten eng (fuehrt Glas), oben weiter
         translate([hr_x0, -hr_y_unten, z_glas]) cube([hr_x1 - hr_x0, 2*hr_y_unten, 30]);
         translate([hr_x0, -hr_y_oben, z_stufe]) cube([hr_x1 - hr_x0, 2*hr_y_oben, 30]);
+        // Aussparung fuer das Flachkabel (obere Laengsseite), bis knapp ueber die Platinenrueckseite -
+        // darueber bleibt die Wand fuer die Zentrierleisten und Schnapplaschen des Deckels
+        translate([kabel_x0, hr_y_unten - e, z_glas]) cube([hr_x1 - kabel_x0, kabel_y - hr_y_unten + e, z_pcb_oben + 1.0 - z_glas]);
 
         // Displayfenster mit 45-Grad-Fase vorn
         fx0 = akt_x0 - 0.3; fx1 = akt_x1 + 0.3; fb = akt_b/2 + 0.3; fv = 1.0;
@@ -204,9 +216,10 @@ module deckel() {
                 translate([0, yo, z_nase]) rotate([0, 90, 0]) rotate([0, 0, 45])
                     cube([sqrt(2)*nase, sqrt(2)*nase, lasche_b], center = true);
             }
-            // Niederhalter: Rippen am Platinenrand druecken das Board an - am USB-Ende und am Display-Ende
-            for (x = [1.0, 50.5], s = [-1, 1]) translate([x, s > 0 ? 11.95 : -12.7, z_pcb_oben + 0.05])
-                cube([x > 10 ? 6 : 4, 0.75, z_innen_deckel - z_pcb_oben]);
+            // Niederhalter: Rippen am Platinenrand druecken das Board an - am USB-Ende beidseitig, am Display-Ende
+            // nur unten (oben laeuft dort das Flachkabel des Displays um die Kante)
+            for (r = [[1.0, 1, 4], [1.0, -1, 4], [50.5, -1, 6]]) translate([r[0], r[1] > 0 ? 11.95 : -12.7, z_pcb_oben + 0.05])
+                cube([r[2], 0.75, z_innen_deckel - z_pcb_oben]);
             // Zentrierleisten an beiden Laengswaenden (ausserhalb der Platine, zwischen den Laschen):
             // fuehren den Deckel quer, die Laschen in ihren Nuten halten ihn laengs
             zy = hr_y_oben - spiel_deckel;
