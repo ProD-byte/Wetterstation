@@ -25,6 +25,18 @@ Kollisionsprüfung nichts. Der Hohlraum war an dieser Stelle nur 0,25 mm breiter
 
 Neu drucken: **Front** und **Deckel** (Tasten und Fuß bleiben wie in Version 2).
 
+## Version 4 – das Displayglas setzt am USB-Ende auf
+
+Ein Foto vom Probedruck zeigt die eigentliche Ursache: Das Displayglas reicht am USB-Ende weiter als im Modell von LILYGO
+und setzte auf dem kleinen **Glasanschlag** vor dem Glas auf (und je nach Board auch auf dem Klotz unter der USB-Buchse).
+
+| Geändert | |
+|---|---|
+| Glasanschlag am USB-Ende | entfernt – in der Länge halten die Hohlraumwände und die USB-Buchse in ihrer Öffnung das Board |
+| Klotz unter der USB-Buchse | standardmäßig weg (`usb_auflage = false`); beim Einstecken des Kabels stützen die Deckel-Rippen am USB-Ende die Platine |
+
+Neu drucken: nur die **Front**.
+
 ## Version 2 – nach dem ersten Probedruck
 
 | Problem in Version 1 | Geändert |
@@ -75,6 +87,7 @@ Alles steht in `wetterstation_gehaeuse.scad`, die Werte oben sind Parameter (auc
 - `taste_vor` – wie weit die Tastenkappen vorstehen
 - `zentrier_h` – Höhe der Zentrierleisten am Deckel
 - `schrift`, `schrift_groesse`, `schrift_relief` – Schriftzug am Fuß (`""` = keiner)
+- `usb_auflage`, `glas_frei` – Klotz unter der USB-Buchse (aus) und wie viel Platz er vor dem Glas lässt
 - `kabel_x0`, `kabel_y` – Aussparung für das Flachkabel des Displays (geht das Board immer noch nicht ganz runter: `kabel_x0` kleiner, `kabel_y` größer)
 - `fuss_neigung`, `fuss_hoehe`, `fuss_vorn` – Winkel und Form des Fußes
 - `rueckraum` – mehr Platz hinten, z. B. `6` für eingelötete Stiftleisten
@@ -107,4 +120,4 @@ und das Gehäuse wurde gegen dieses Modell auf Kollisionen geprüft:
 | Tasten IO0 / IO14 | vorn neben der USB-Buchse (drücken von vorn, nicht seitlich), Kappe 2,7 mm hinter der Glasfläche |
 | RST | seitlich, 10 mm vom USB-Ende |
 
-Version 1 und 2 wurden gedruckt, Version 3 behebt das Flachkabel-Problem und ist noch nicht gedruckt. Wenn etwas klemmt: Toleranzen oben anpassen.
+Version 1 bis 3 wurden gedruckt, Version 4 (Glas am USB-Ende frei) ist noch nicht gedruckt. Wenn etwas klemmt: Toleranzen oben anpassen.

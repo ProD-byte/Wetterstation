@@ -27,6 +27,9 @@
 //    - Aussparung fuer das Flachkabel des Displays, das um die obere Platinenkante laeuft
 //      (ist im 3D-Modell von LILYGO nicht drin, auf dem echten Board aber da)
 //    - keine Deckel-Rippe mehr ueber dem Flachkabel
+//  Version 4 (Foto vom Probedruck: das Displayglas setzt am USB-Ende auf):
+//    - Glasanschlag am USB-Ende entfernt, Klotz unter der USB-Buchse weg (usb_auflage) - das Glas reicht dort
+//      weiter als im Modell von LILYGO. Beim Einstecken des Kabels stuetzen die Deckel-Rippen am USB-Ende die Platine.
 // =====================================================================
 
 teil = "alles";
@@ -56,6 +59,10 @@ taste_vor    = 1.8;    // so weit steht die Tastenkappe vorn aus der Front herau
 /* [Deckel] */
 spiel_nut    = 0.15;   // Luft der Schnapplaschen in ihrer Nut (laengs) - V1 hatte 1 mm je Seite, Deckel rutschte
 zentrier_h   = 2.5;    // Hoehe der Zentrierleisten am Deckel (fuehren ihn quer)
+
+/* [Board] */
+usb_auflage  = false;  // Klotz unter der USB-Buchse (V1-V3). Aus: das echte Displayglas reicht am USB-Ende weiter als im Modell
+glas_frei    = 2.5;    // wenn usb_auflage an: so viel Platz bleibt vor dem Displayglas (laut Modell) frei
 
 /* [Flachkabel des Displays] */
 // Das Flachkabel laeuft auf der oberen Laengsseite (gegenueber dem Reset-Loch) um die Platinenkante.
@@ -190,11 +197,10 @@ module front() {
         // Reset-Loch (unten, im Standfuss verborgen)
         if (reset_loch) translate([rst_pos[0], -hoehe/2 - 1, z_glas + rst_z]) rotate([-90, 0, 0]) cylinder(d = 1.6, h = 10, $fn = 24);
     }
-    // Glasanschlag am USB-Ende (fuehrt das Display in X; am anderen Ende ist das Flachkabel des Displays -
-    // dort nichts, das Board liegt an der Hohlraumwand an)
-    translate([glas_x0 - spiel - 1.0, -9, z_glas - e]) cube([1.0, 18, 1.4]);
-    // Auflage unter der USB-Buchse (traegt beim Einstecken)
-    translate([hr_x0, usb_y0 - 0.3, z_glas - e]) cube([glas_x0 - spiel - 1.0 - hr_x0, usb_y1 - usb_y0 + 0.6, usb_z0 - 0.05 + e]);
+    // Kein Glasanschlag mehr (V1-V3): das echte Displayglas reicht am USB-Ende weiter als im Modell und setzte darauf auf.
+    // In der Laenge halten das Board die Hohlraumwaende und die USB-Buchse in ihrer Oeffnung.
+    // Auflage unter der USB-Buchse (traegt beim Einstecken), endet glas_frei vor dem Glas
+    if (usb_auflage) translate([hr_x0, usb_y0 - 0.3, z_glas - e]) cube([glas_x0 - glas_frei - hr_x0, usb_y1 - usb_y0 + 0.6, usb_z0 - 0.05 + e]);
 }
 
 // ---------------------------------------------------------------------
