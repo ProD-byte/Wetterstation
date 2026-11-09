@@ -16,6 +16,13 @@
 //
 //  Board-Masse aus LILYGOs eigenem 3D-Modell (Repo Xinyuan-LilyGO/T-Display-S3,
 //  dimensions/t-display-s3-full.stp/.stl), siehe README in diesem Ordner.
+//
+//  Version 2 (nach dem ersten Probedruck):
+//    - Tasten: mehr Spiel (0,3 statt 0,15 mm), Kappe steht 1,8 statt 0,4 mm vor
+//    - keine Zapfen/Stuetzen mehr am Display-Ende (dort liegt das Display, Board ging nicht rein);
+//      das Board liegt mit dem Glas auf der Frontplatte und wird von Rippen im Deckel angedrueckt
+//    - Deckel rutscht nicht mehr: Nuten so lang wie die Laschen, dazu Zentrierleisten an den Laengsseiten
+//    - Standfuss: erhabener Schriftzug "DAVESLAB" vorn (zum Ausmalen)
 // =====================================================================
 
 teil = "alles";
@@ -23,7 +30,7 @@ teil = "alles";
 /* [Druck / Toleranzen] */
 spiel        = 0.25;   // Luft rund um Platine und Glas
 spiel_deckel = 0.15;   // Luft zwischen Deckellaschen und Schalenwand
-spiel_taste  = 0.15;   // Luft rund um die Tastenstoessel (radial)
+spiel_taste  = 0.3;    // Luft rund um die Tastenstoessel (radial) - V1 mit 0,15 ging zu schwer
 spiel_fuss   = 0.25;   // Luft im Schlitz des Standfusses (je Seite)
 
 /* [Gehaeuse] */
@@ -39,6 +46,13 @@ hoehe        = 35;     // Gesamthoehe (Ansicht von vorn)
 reset_loch   = true;   // Loch fuer RST (Bueroklammer) unten in der Wand
 lueftung     = true;
 
+/* [Tasten] */
+taste_vor    = 1.8;    // so weit steht die Tastenkappe vorn aus der Front heraus (V1: 0,4)
+
+/* [Deckel] */
+spiel_nut    = 0.15;   // Luft der Schnapplaschen in ihrer Nut (laengs) - V1 hatte 1 mm je Seite, Deckel rutschte
+zentrier_h   = 2.5;    // Hoehe der Zentrierleisten am Deckel (fuehren ihn quer)
+
 /* [Standfuss] */
 fuss_neigung = 15;     // Grad nach hinten
 fuss_laenge  = 52;
@@ -46,6 +60,13 @@ fuss_tiefe   = 38;
 fuss_hoehe   = 15;     // hinten
 fuss_vorn    = 8.5;    // vorn (Keilform, verdeckt das Display nicht)
 fuss_boden   = 5;      // Hoehe des Schlitzbodens (Mitte)
+
+/* [Schriftzug vorn am Standfuss] */
+schrift        = "DAVESLAB";   // erhabener Schriftzug vorn am Fuss ("" = keiner)
+schrift_groesse = 4.2;         // Buchstabenhoehe (mm)
+schrift_relief  = 0.8;         // so weit stehen die Buchstaben vor - zum Ausmalen mit Edding
+schrift_abstand = 1.15;        // Buchstabenabstand (1 = normal)
+schrift_font    = "Liberation Sans:style=Bold";   // wird mit OpenSCAD mitgeliefert
 
 $fn = 48;
 e = 0.01;
@@ -149,7 +170,7 @@ module front() {
         // Nuten fuer die Schnapplaschen (45-Grad-Flanken, ohne Stuetzen)
         for (x = lasche_x, s = [-1, 1])
             translate([x, s*hr_y_oben, z_nase]) rotate([0, 90, 0]) rotate([0, 0, 45])
-                cube([sqrt(2)*(nase + 0.15), sqrt(2)*(nase + 0.15), lasche_b + 2], center = true);
+                cube([sqrt(2)*(nase + 0.15), sqrt(2)*(nase + 0.15), lasche_b + 2*spiel_nut], center = true);
 
         // Hebelkerbe unten in der Trennfuge (Muenze/Fingernagel)
         translate([aus_mx - 5, -hoehe/2 - 1, z_innen_deckel - 0.7]) cube([10, 2.2, 1]);
@@ -157,19 +178,11 @@ module front() {
         // Reset-Loch (unten, im Standfuss verborgen)
         if (reset_loch) translate([rst_pos[0], -hoehe/2 - 1, z_glas + rst_z]) rotate([-90, 0, 0]) cylinder(d = 1.6, h = 10, $fn = 24);
     }
-    // Glasanschlaege quer (fuehren das Display in X)
+    // Glasanschlag am USB-Ende (fuehrt das Display in X; am anderen Ende ist das Flachkabel des Displays -
+    // dort nichts, das Board liegt an der Hohlraumwand an)
     translate([glas_x0 - spiel - 1.0, -9, z_glas - e]) cube([1.0, 18, 1.4]);
-    translate([glas_x1 + spiel, -7, z_glas - e]) cube([0.8, 14, 1.4]);
     // Auflage unter der USB-Buchse (traegt beim Einstecken)
     translate([hr_x0, usb_y0 - 0.3, z_glas - e]) cube([glas_x0 - spiel - 1.0 - hr_x0, usb_y1 - usb_y0 + 0.6, usb_z0 - 0.05 + e]);
-    // Stuetzen mit Zapfen fuer die zwei Befestigungsloecher (D-foermig, Glas frei)
-    for (l = loecher) {
-        intersection() {
-            translate([l[0], l[1], z_glas - e]) cylinder(d = 3.6, h = abst_glas_pcb + e);
-            translate([glas_x1 + spiel + 0.05, -20, 0]) cube([10, 40, 20]);
-        }
-        translate([l[0], l[1], z_pcb - e]) cylinder(d = loch_d - 0.4, h = 1.0, $fn = 20);
-    }
 }
 
 // ---------------------------------------------------------------------
@@ -191,10 +204,19 @@ module deckel() {
                 translate([0, yo, z_nase]) rotate([0, 90, 0]) rotate([0, 0, 45])
                     cube([sqrt(2)*nase, sqrt(2)*nase, lasche_b], center = true);
             }
-            // Niederhalter: Rohre ueber den Zapfen, Rippen am USB-Ende
-            for (l = loecher) translate([l[0], l[1], z_pcb_oben + 0.05])
-                difference() { cylinder(d = 4.0, h = z_innen_deckel - z_pcb_oben); translate([0, 0, -1]) cylinder(d = 2.2, h = 3); }
-            for (s = [-1, 1]) translate([1.0, s > 0 ? 11.95 : -12.7, z_pcb_oben + 0.05]) cube([4, 0.75, z_innen_deckel - z_pcb_oben]);
+            // Niederhalter: Rippen am Platinenrand druecken das Board an - am USB-Ende und am Display-Ende
+            for (x = [1.0, 50.5], s = [-1, 1]) translate([x, s > 0 ? 11.95 : -12.7, z_pcb_oben + 0.05])
+                cube([x > 10 ? 6 : 4, 0.75, z_innen_deckel - z_pcb_oben]);
+            // Zentrierleisten an beiden Laengswaenden (ausserhalb der Platine, zwischen den Laschen):
+            // fuehren den Deckel quer, die Laschen in ihren Nuten halten ihn laengs
+            zy = hr_y_oben - spiel_deckel;
+            for (seg = [[3, 12.5], [24.5, 37.5], [49.5, 58.5]], s = [-1, 1])
+                translate([seg[0], s > 0 ? zy - 0.9 : -zy, z_innen_deckel - zentrier_h])
+                    difference() {
+                        cube([seg[1] - seg[0], 0.9, zentrier_h + e]);
+                        // Einfuehrschraege aussen an der Unterkante
+                        translate([-1, s > 0 ? 0.9 : 0, 0]) rotate([45, 0, 0]) cube([seg[1] - seg[0] + 2, 0.5, 0.5], center = false);
+                    }
         }
         // Lueftungsschlitze
         if (lueftung) for (y = [-8, -4, 0, 4, 8]) hull() for (x = [15, 50])
@@ -206,21 +228,20 @@ module deckel() {
 
 // ---------------------------------------------------------------------
 module taste() {
-    // Kappe steht 0,4 mm vor (z < 0); Sitz-Kegel liegt im 45-Grad-Sitz der Frontplatte
-    vor = 0.4;
-    kd  = kappe_d;
-    z_k = z_senk0;                       // Beginn Kegel
-    z_f = z_k + senk_h;                  // Kegel fertig
-    z_ende = z_glas + taste_hoehe + 0.05; // sitzt der Kegel an, bleiben 0,1 mm Luft zur Tastenkappe
-    translate([0, 0, -vor]) {
-        hull() {                                           // leicht gewoelbte Kappe
-            translate([0, 0, 0.3]) cylinder(d = kd, h = z_k + vor - 0.3);
-            cylinder(d = kd - 0.6, h = e);
-        }
-        translate([0, 0, z_k + vor]) cylinder(d1 = kd, d2 = kd + 2*senk_h - 0.1, h = senk_h - 0.05);
-        translate([0, 0, z_f + vor - 0.05]) cylinder(d = kd + 2*senk_h - 0.1, h = 0.45);
-        translate([0, 0, z_f + vor + 0.4 - e]) cylinder(d = 2.4, h = z_ende - z_f - 0.4 + e);
+    // Gezeichnet in der Lage im Gehaeuse: der Bund liegt im 45-Grad-Sitz der Frontplatte an (dahin drueckt ihn
+    // die Feder der Board-Taste), die Kappe steht taste_vor vor, bis zur Board-Taste bleiben 0,1 mm Luft.
+    kd     = kappe_d;
+    bund_d = kd + 2*senk_h - 0.1;
+    z_sitz = z_senk0 + (bund_d - loch_taste)/2;     // hier hat der Sitz den Durchmesser des Bunds
+    kegel  = senk_h - 0.05;                         // Kegel unter dem Bund, gleiche 45 Grad wie der Sitz
+    z_ende = z_glas + taste_hoehe - 0.1;            // Stoesselende: 0,1 mm vor der Tastenkappe des Boards
+    hull() {                                        // leicht gewoelbte Kappe
+        translate([0, 0, -taste_vor + 0.3]) cylinder(d = kd, h = z_sitz - kegel + taste_vor - 0.3);
+        translate([0, 0, -taste_vor]) cylinder(d = kd - 0.6, h = e);
     }
+    translate([0, 0, z_sitz - kegel]) cylinder(d1 = kd, d2 = bund_d, h = kegel);
+    translate([0, 0, z_sitz - e]) cylinder(d = bund_d, h = 0.45);
+    translate([0, 0, z_sitz + 0.45 - e]) cylinder(d = 2.4, h = z_ende - z_sitz - 0.45 + e);
 }
 
 // ---------------------------------------------------------------------
@@ -241,6 +262,11 @@ module staender() {
         }
         fuss_rahmen() translate([-fuss_laenge, -schlitz_b/2, 0]) cube([2*fuss_laenge, schlitz_b, 40]);
     }
+    // Schriftzug erhaben auf der senkrechten Vorderseite (unter der Fase, mittig)
+    if (schrift != "")
+        translate([0, -fuss_tiefe/2 + e, (fuss_vorn - f)/2])
+            rotate([90, 0, 0]) linear_extrude(schrift_relief + e)
+                text(schrift, size = schrift_groesse, font = schrift_font, halign = "center", valign = "center", spacing = schrift_abstand);
 }
 
 // Gehaeuse in den Fuss setzen: Gehaeuse-X -> -X, Gehaeuse-Y -> nach oben, Gehaeuse-Z -> nach hinten
@@ -293,7 +319,7 @@ if (teil == "alles") {
 } else if (teil == "taste") {
     taste();
 } else if (teil == "tasten") {
-    for (i = [0, 1]) translate([i*8, 0, 0.4]) taste();
+    for (i = [0, 1]) translate([i*8, 0, taste_vor]) taste();
 } else if (teil == "staender") {
     staender();
 } else if (teil == "druckplatte") {
@@ -301,7 +327,7 @@ if (teil == "alles") {
     color(farbe_schale) front();
     translate([0, hoehe + 8, 0]) color(farbe_deckel) translate([0, 0, tiefe]) rotate([180, 0, 0]) deckel();
     translate([aus_x1 + 10 + fuss_laenge/2, 8, 0]) color(farbe_fuss) staender();
-    for (i = [0, 1]) translate([aus_x1 + 14 + i*8, hoehe + 8, 0.4]) color(farbe_taste) taste();
+    for (i = [0, 1]) translate([aus_x1 + 14 + i*8, hoehe + 8, taste_vor]) color(farbe_taste) taste();
 } else if (teil == "platine") {
     platine();
 }
