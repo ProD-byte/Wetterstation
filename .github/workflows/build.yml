@@ -20,6 +20,7 @@ permissions:
   contents: write
   pages: write
   id-token: write
+  actions: read     # fuer den Pages-Check (laeuft ein Zweig-Build parallel?)
 
 jobs:
   bauen:
@@ -112,5 +113,16 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+
+      # Pages muss auf "GitHub Actions" stehen, sonst ueberschreibt der Zweig-Build
+      # die Seite mit der README (Simulation/Flasher/version.json weg) - siehe Skript
+      - name: Pages-Einstellung pruefen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/pages-pruefen.sh
+
       - id: deploy
         uses: actions/deploy-pages@v4

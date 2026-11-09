@@ -4,3 +4,6 @@ bilder/
 *.mp4
 *.jpg
 seiten/
+
+# Gehaeuse-Video: exportierte Modelle (gehaeuse_modelle.py)
+modelle/

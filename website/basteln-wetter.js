@@ -28,10 +28,8 @@ function wetterEinbauen(raw) {
   // --- Abschnitt ganz unten, vor dem Fuss ---
   ersetze('abschnitt', '<footer class="dl-foot">', WETTER_ABSCHNITT + '\n\n  <footer class="dl-foot">');
 
-  // --- Uebersetzungen (hinter den App-Texten) ---
+  // --- Englische Uebersetzungen (hinter den App-Texten; die Seite gibt es nur auf Deutsch und Englisch) ---
   ersetze('en wetter', "app_qr:'Scan with your phone',", "app_qr:'Scan with your phone',\n" + WETTER_EN + ',\n' + WETTER_WEB_EN + ',');
-  ersetze('es wetter', "app_qr:'Escanea con el móvil',", "app_qr:'Escanea con el móvil',\n" + WETTER_ES + ',\n' + WETTER_WEB_ES + ',');
-  ersetze('fr wetter', "app_qr:'Scanne avec ton téléphone',", "app_qr:'Scanne avec ton téléphone',\n" + WETTER_FR + ',\n' + WETTER_WEB_FR + ',');
 
   // --- Build-Nummer anzeigen + Hoehe der Simulation anpassen ---
   ersetze('var build', "var sprache='de',build=null,buildCam=null,buildXiao=null;",
@@ -60,16 +58,6 @@ var WETTER_WEB_EN = [
   `wet_web_h:'⚙️ To the settings page'`,
   `wet_web_p:'Once the weather station is on your Wi-Fi, set location, more places, rain radar area, brightness, night mode and updates in the browser at <code>http://wetterstation.local</code> – phone or PC must be on the same Wi-Fi. If you gave the station its own name there (for several stations), the address changes accordingly. If that does not work, take the station’s IP address from your router.'`,
   `wet_web_btn:'Open settings →'`,
-].join(',\n');
-var WETTER_WEB_ES = [
-  `wet_web_h:'⚙️ A la página de ajustes'`,
-  `wet_web_p:'Cuando la estación está en tu Wi-Fi, ajustas la ubicación, otros lugares, la zona del radar de lluvia, el brillo, el modo nocturno y las actualizaciones en el navegador en <code>http://wetterstation.local</code> – el móvil o el PC deben estar en la misma Wi-Fi. Si le has dado allí un nombre propio (para varias estaciones), la dirección cambia en consecuencia. Si no funciona, toma la dirección IP de la estación del router.'`,
-  `wet_web_btn:'Abrir ajustes →'`,
-].join(',\n');
-var WETTER_WEB_FR = [
-  `wet_web_h:'⚙️ Vers la page de réglages'`,
-  `wet_web_p:'Une fois la station sur ton Wi-Fi, règle le lieu, d’autres lieux, la zone du radar de pluie, la luminosité, le mode nuit et les mises à jour dans le navigateur sur <code>http://wetterstation.local</code> – le téléphone ou le PC doivent être sur le même Wi-Fi. Si tu lui as donné un nom à elle (pour plusieurs stations), l’adresse change en conséquence. Si ça ne marche pas, prends l’adresse IP de la station dans le routeur.'`,
-  `wet_web_btn:'Ouvrir les réglages →'`,
 ].join(',\n');
 
 var WETTER_ABSCHNITT = `  <section class="dl-sec" id="wetter">
@@ -117,8 +105,15 @@ ${WETTER_WEB}
     </div>
   </section>`;
 
+// Hoehe der Simulation anpassen und ihr die Sprache der Seite melden (Deutsch oder Englisch). Die Simulation meldet sich jede Sekunde mit ihrer Hoehe, darauf antworten
+// wir mit der Sprache - so kommt sie auch an, wenn das iframe erst spaeter laedt. Wechselt jemand die Sprache, geht
+// sie sofort raus, und der Link "Simulation oeffnen" bekommt ?lang=.. mit.
+// Auch fuer basteln-sprache.js (baut das in eine schon vorhandene Wetterstation nachtraeglich ein).
+var WETTER_SPRACHE = `addEventListener('message',function(e){if(e.origin==='https://prod-byte.github.io'&&e.data&&e.data.wetterstationHoehe){var f=document.getElementById('dl-wetter-sim');if(f){f.style.height=e.data.wetterstationHoehe+'px';f.contentWindow.postMessage({wetterstationSprache:document.documentElement.lang||'de'},'https://prod-byte.github.io');}}});
+(function(){function melde(){var l=document.documentElement.lang||'de',f=document.getElementById('dl-wetter-sim'),a=document.querySelector('a[data-t="wet_auto_btn"]');if(a)a.href='${WETTER_SEITE}/simulation.html?lang='+l;if(f&&f.contentWindow)f.contentWindow.postMessage({wetterstationSprache:l},'https://prod-byte.github.io');}melde();new MutationObserver(melde).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});})();`;
+
 var WETTER_SKRIPT = `fetch('${WETTER_SEITE}/version.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){buildWetter=j.build;setze(sprache);}).catch(function(){});
-addEventListener('message',function(e){if(e.origin==='https://prod-byte.github.io'&&e.data&&e.data.wetterstationHoehe){var f=document.getElementById('dl-wetter-sim');if(f)f.style.height=e.data.wetterstationHoehe+'px';}});`;
+${WETTER_SPRACHE}`;
 
 var WETTER_EN = [
   `wet_h2:'Install the <span class="dl-grad">weather station</span>'`,
@@ -133,36 +128,6 @@ var WETTER_EN = [
   `wet_auto_h:'🌦️ Full-size simulation'`,
   `wet_auto_p:'Every kind of weather, day and night and the setup screen to click through. Weather data from Open-Meteo, refreshed every 15 minutes. Source code and guide: ${WETTER_GH}.'`,
   `wet_auto_btn:'Open simulation →'`,
-].join(',\n');
-
-var WETTER_ES = [
-  `wet_h2:'Instalar la <span class="dl-grad">estación meteorológica</span>'`,
-  `wet_sub:'El tiempo de tu ciudad animado en la <b>LILYGO T-Display-S3</b> (ESP32-S3). Pruébala primero en la simulación – los botones redondos funcionan como los de verdad – y luego instálala aquí mismo por USB-C.'`,
-  `wet_upd_p:'Instala el nuevo firmware – <b>las redes Wi-Fi guardadas se conservan.</b>'`,
-  `wet_neu_p:'Borra toda la memoria e instala de nuevo – para <b>placas nuevas</b> o cuando ya nada funciona. <b>Las redes Wi-Fi guardadas se borran.</b>'`,
-  `wet_s1:'<b>Conecta la placa.</b> Conecta la T-Display al ordenador por <b>USB-C</b> (un cable con datos) y abre <b>Chrome</b> o <b>Edge</b>.'`,
-  `wet_s2:'<b>Elige el puerto.</b> Normalmente «USB JTAG/serial debug unit»; no hace falta ningún controlador.'`,
-  `wet_s3:'<b>¿Sin conexión?</b> Mantén pulsado <b>BOOT</b>, pulsa brevemente <b>RST</b> en el lateral, suelta BOOT – y vuelve a intentarlo.'`,
-  `wet_s4:'<b>Configura el Wi-Fi</b> (solo la primera vez): conecta el móvil a la red <b>«Wetterstation-Setup»</b>, toca tu Wi-Fi e introduce la contraseña; luego busca tu ciudad (nombre o código postal) o toca la sugerencia.'`,
-  `wet_s5:'<b>Manejo.</b> <b>IO0</b> pasa de página (mantenlo 2 segundos: alemán/inglés), <b>IO14</b> cambia el brillo – mantenlo 3 segundos para configurar el Wi-Fi de nuevo.'`,
-  `wet_auto_h:'🌦️ Simulación en grande'`,
-  `wet_auto_p:'Todos los tipos de tiempo, día y noche y la pantalla de configuración para probar. Datos de Open-Meteo, actualizados cada 15 minutos. Código fuente y guía: ${WETTER_GH}.'`,
-  `wet_auto_btn:'Abrir simulación →'`,
-].join(',\n');
-
-var WETTER_FR = [
-  `wet_h2:'Installer la <span class="dl-grad">station météo</span>'`,
-  `wet_sub:'La météo de ta ville animée sur le <b>LILYGO T-Display-S3</b> (ESP32-S3). Essaie-la d’abord dans la simulation – les boutons ronds marchent comme les vrais –, puis installe-la directement ici en USB-C.'`,
-  `wet_upd_p:'Installe le nouveau firmware – <b>les Wi-Fi enregistrés sont conservés.</b>'`,
-  `wet_neu_p:'Efface toute la mémoire et réinstalle – pour les <b>nouvelles cartes</b> ou quand plus rien ne marche. <b>Les Wi-Fi enregistrés seront effacés.</b>'`,
-  `wet_s1:'<b>Branche la carte.</b> Relie le T-Display à l’ordinateur en <b>USB-C</b> (câble avec données) et ouvre <b>Chrome</b> ou <b>Edge</b>.'`,
-  `wet_s2:'<b>Choisis le port.</b> En général « USB JTAG/serial debug unit » – aucun pilote nécessaire.'`,
-  `wet_s3:'<b>Pas de connexion ?</b> Maintiens le bouton <b>BOOT</b>, appuie brièvement sur <b>RST</b> sur le côté, relâche BOOT – puis réessaie.'`,
-  `wet_s4:'<b>Configure le Wi-Fi</b> (la première fois seulement) : connecte ton téléphone au Wi-Fi <b>« Wetterstation-Setup »</b>, touche ton Wi-Fi, saisis le mot de passe – puis cherche ta ville (nom ou code postal) ou touche la suggestion.'`,
-  `wet_s5:'<b>Commandes.</b> <b>IO0</b> change de page (maintiens-le 2 secondes : allemand/anglais), <b>IO14</b> règle la luminosité – maintiens-le 3 secondes pour reconfigurer le Wi-Fi.'`,
-  `wet_auto_h:'🌦️ Simulation en grand'`,
-  `wet_auto_p:'Toutes les météos, le jour et la nuit et l’écran de configuration à tester. Données d’Open-Meteo, mises à jour toutes les 15 minutes. Code source et guide : ${WETTER_GH}.'`,
-  `wet_auto_btn:'Ouvrir la simulation →'`,
 ].join(',\n');
 
 // ---------- Ausfuehren: Seite holen, einbauen, nach Rueckfrage speichern ----------

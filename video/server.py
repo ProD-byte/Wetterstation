@@ -1,6 +1,6 @@
-"""Kleiner Server zum Rendern des Trailers.
+﻿"""Kleiner Server zum Rendern des Trailers.
 
-Liefert trailer.html, die Board-Fotos und sim.html (= ../simulation/wetterstation.html mit HTML-Kopf)
+Liefert trailer.html, gehaeuse.html (Modelle aus gehaeuse_modelle.py), die Board-Fotos und sim.html (= ../simulation/wetterstation.html mit HTML-Kopf)
 und speichert die Bilder, die video.html?render (oder trailer.html?render) per POST schickt,
 nach %TEMP%/wetterstation-video/bilder/00000.jpg ...
 
@@ -41,13 +41,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         url = urllib.parse.urlparse(self.path)
         laenge = int(self.headers.get("Content-Length", 0))
         daten = self.rfile.read(laenge)
+        q = urllib.parse.parse_qs(url.query)
+        # eigener Unterordner je Video (z. B. ?ordner=gehaeuse), sonst "bilder"
+        ordner = BILDER.parent / "".join(c for c in q.get("ordner", ["bilder"])[0] if c.isalnum() or c == "-")
+        ordner.mkdir(parents=True, exist_ok=True)
         if url.path == "/bild":
-            n = int(urllib.parse.parse_qs(url.query)["n"][0])
+            n = int(q["n"][0])
             if daten.startswith(b"data:"):  # "data:image/jpeg;base64,..."
                 daten = base64.b64decode(daten.split(b",", 1)[1])
-            (BILDER / f"{n:05d}.jpg").write_bytes(daten)
+            (ordner / f"{n:05d}.jpg").write_bytes(daten)
         elif url.path == "/fertig":
-            (BILDER / "fertig.txt").write_text("ok")
+            (ordner / "fertig.txt").write_text("ok")
         self.send_response(204)
         self.end_headers()
 

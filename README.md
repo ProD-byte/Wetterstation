@@ -72,6 +72,13 @@ T-Display-S3 per USB-C anschließen, Chrome oder Edge am Computer (kein Treiber 
 
 WLAN oder Ort ändern: Taste **IO14** drei Sekunden halten.
 
+## 🖨️ Gehäuse
+
+Zum 3D-Drucken liegt ein schlankes Gehäuse in [`gehaeuse/`](gehaeuse/): quer auf einem Standfuß (15° geneigt), Tasten rechts neben dem Display,
+Deckel zum Einklicken, alle Teile ohne Stützstruktur (FDM, PLA). STL-Dateien, OpenSCAD-Quelle mit Parametern und Anleitung stehen dort.
+
+<img src="gehaeuse/bilder/vorschau_vorn.png" width="420" alt="Gehäuse-Vorschau">
+
 ## 🤖 Automatischer Build (GitHub Actions)
 
 Bei jedem Hochladen baut GitHub die Firmware automatisch (`.github/workflows/build.yml`):
@@ -101,6 +108,7 @@ Bei jedem Hochladen baut GitHub die Firmware automatisch (`.github/workflows/bui
 | `website/basteln-wetter.js` | baut den Abschnitt in daveslab.de/basteln ein |
 | `website/basteln-videos.js` | baut Trailer und Update-Video in den Abschnitt ein (Zwei-Klick-Lösung, Vorschaubilder in `docs/video/`) |
 | `INFO.md` | Spickzettel zum Board: Pins, Strom, Akku, Macken |
+| `gehaeuse/` | 3D-Druck-Gehäuse: OpenSCAD-Quelle, STL-Dateien, Vorschaubilder |
 
 ## 🔒 Gut zu wissen
 
@@ -157,6 +165,9 @@ The station checks GitHub every 6 hours and installs new builds by itself (can b
 
 ### Build it yourself
 VS Code + PlatformIO, environment `env:tdisplay_s3` (Arduino core 2.0.14 / `espressif32 @ 6.5.0` – TFT_eSPI does not run on this board with core 3.x). Copy `geheim.beispiel.ini` to `geheim.ini` first (password for Wi-Fi uploads, may stay empty).
+
+### Case
+A 3D-printable case (landscape on a 15° stand, snap-fit back, no supports needed) is in [`gehaeuse/`](gehaeuse/): STL files, parametric OpenSCAD source and previews.
 
 ### Good to know
 The settings page has no password (meant for home networks). HTTPS certificates of the weather services are not verified. Data comes from free services for personal use: Open-Meteo, RainViewer, OpenStreetMap, Bright Sky – see the list above.
