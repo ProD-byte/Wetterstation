@@ -26,6 +26,7 @@
 #include "radar.h"
 #include "verlauf.h"
 #include "orte.h"
+#include "diagnose.h"
 
 #ifndef OTA_PASSWORT
 #define OTA_PASSWORT ""
@@ -1181,6 +1182,7 @@ void wlanBild(WlanPhase phase, const char *netz) {
 // ------------------------------------------------------------
 // Waehrend des Updates laeuft loop() nicht weiter - deshalb wird hier selbst gezeichnet.
 void updateBild(int prozent, const char *text) {
+  diagnoseFuettern();  // Update dauert laenger als der Watchdog - jeder Fortschritt zaehlt als Lebenszeichen
   uint32_t t = millis();
   zeichneHimmel(bild, KLAR, false, t, false);
   const int dy = hoch() ? 75 : 0, bx = hoch() ? 16 : 40, bb = B - 2 * bx;  // hochkant: tiefer und schmaler
@@ -1342,6 +1344,7 @@ void setup() {
 
   Serial.begin(115200);
   Serial.printf("\nWetterstation T-Display-S3, Build %d\n", FIRMWARE_BUILD);
+  diagnoseStart();  // Neustart-Grund, letzter Absturz, Ruecksprung nach kaputtem Update
 
   pinMode(TASTER_SEITE, INPUT_PULLUP);
   pinMode(TASTER_LICHT, INPUT_PULLUP);
@@ -1368,11 +1371,13 @@ void setup() {
   webStart();
   wetterStart();
   if (!seiteAn(seite)) naechsteSeite(millis());
+  diagnoseBereit();  // ab hier passt der Watchdog auf loop() auf
 }
 
 void loop() {
   uint32_t t = millis();
 
+  diagnoseLoop(t);
   ArduinoOTA.handle();
   webLoop();
 
@@ -1386,9 +1391,13 @@ void loop() {
 
   // Neue Version aus dem Internet: auf Wunsch sofort, sonst wenn gerade niemand die Tasten benutzt
   bool gewuenscht = updateInstallierenGewuenscht();
-  if (updateNeuerBuild() && (gewuenscht || (einst.autoUpdate && t - letzterTastendruck > 60000))) {
+  // (einen Build, der schon einmal nicht lief und zurueckgenommen wurde, nur noch auf ausdruecklichen Wunsch)
+  bool selbst = einst.autoUpdate && t - letzterTastendruck > 60000 && updateNeuerBuild() != diagnoseKaputterBuild();
+  if (updateNeuerBuild() && (gewuenscht || selbst)) {
     if (gewuenscht || !istNacht()) lichtStufe(16);  // nachts bleibt das Display beim Selbst-Update dunkel
+    diagnoseUpdateVersuch(updateNeuerBuild());
     updateInstallieren(updateBild);
+    diagnoseUpdateVersuch(0);  // nur bei Fehler erreicht - sonst ist die Station schon neu gestartet
     lichtZuletzt = -1;  // nur bei Fehler: Helligkeit wieder richtig setzen
   }
 

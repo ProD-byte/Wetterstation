@@ -7,6 +7,7 @@
 #include "wlan.h"
 #include "verlauf.h"
 #include "orte.h"
+#include "diagnose.h"
 #include <WiFi.h>
 #include <WebServer.h>
 #include <TFT_eSPI.h>
@@ -57,7 +58,7 @@ static void status() {
              ",\"nacht\":" + (einst.nacht ? "true" : "false") + ",\"von\":" + einst.nachtVon + ",\"bis\":" +
              einst.nachtBis + ",\"auto\":" + (einst.autoUpdate ? "true" : "false") + ",\"sprache\":" + einst.sprache +
              ",\"lage\":" + einst.lage + ",\"radarzoom\":" + einst.radarZoom +
-             ",\"warnab\":" + einst.warnAb + ",\"name\":\"" + einst.name + "\"}}";
+             ",\"warnab\":" + einst.warnAb + ",\"name\":\"" + einst.name + "\"},\"diag\":" + diagnoseJson() + "}";
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", j);
 }
@@ -184,6 +185,10 @@ void webStart() {
   });
   server.on("/api/update/installieren", HTTP_POST, []() {
     updateInstallierenLassen();
+    server.send(200, "text/plain", "ok");
+  });
+  server.on("/api/diagnose/loeschen", HTTP_POST, []() {
+    diagnoseLoeschen();
     server.send(200, "text/plain", "ok");
   });
   server.on("/api/wlan", HTTP_POST, []() {

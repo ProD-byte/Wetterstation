@@ -117,6 +117,12 @@ select{font:inherit;font-size:15px;padding:8px 10px;border-radius:12px;border:1p
     <div class="zeile"><span id="wlanText">…</span><button class="btn" id="wlanBtn" data-t="neuEinrichten">Neu einrichten</button></div>
     <p class="leise" data-t="wlanHinweis">Startet neu und öffnet das WLAN „Wetterstation-Setup“ – dann wie beim ersten Mal mit dem Handy einrichten.</p>
   </div>
+
+  <div class="card">
+    <h2 data-t="diagTitel">Diagnose</h2>
+    <div id="diag">…</div>
+    <div class="zeile"><span class="leise" data-t="diagHinweis">Für die Fehlersuche: Neustarts, Abstürze, Speicher</span><button class="btn" id="diagBtn" data-t="diagLoeschen">Zurücksetzen</button></div>
+  </div>
 </div>
 <div class="meldung" id="meldung"></div>
 <script>
@@ -133,6 +139,7 @@ const EN = {
   lage: 'Orientation', lageKlein: 'how the board stands – the picture turns with it',
   nachtmodus: 'Night mode', nachtDunkel: 'Dark display at night', nachtKlein: 'strongly dimmed, buttons light it up briefly',
   von: 'from', bis: 'until', autoUpd: 'Install new versions by itself', autoKlein: 'gets them from GitHub, no computer needed',
+  diagTitel: 'Diagnostics', diagHinweis: 'For troubleshooting: restarts, crashes, memory', diagLoeschen: 'Reset',
   wlan: 'Wi-Fi', neuEinrichten: 'Set up again', wlanHinweis: 'Restarts and opens the Wi-Fi “Wetterstation-Setup” – then set it up with your phone like the first time.'
 };
 const DE = {};
@@ -193,12 +200,41 @@ function zeigen() {
   $('#updBtn').textContent = st.neu ? L('Installieren', 'Install') : L('Jetzt suchen', 'Check now');
   $('#updBtn').disabled = !st.build;
   $('#wlanText').innerHTML = `${esc(st.wlan)}<small>${L('Signal', 'Signal')} ${st.rssi} dBm</small>`;
+  diagZeigen();
   document.querySelectorAll('#licht button').forEach(b => b.onclick = () => speichern({licht: +b.dataset.i}));
   document.querySelectorAll('#seiten button').forEach(b => b.onclick = () => {
     const s = st.einst.seiten ^ (1 << b.dataset.i);
     if (!s) return melden(L('Mindestens eine Seite', 'At least one page'));
     speichern({seiten: s});
   });
+}
+
+// Diagnose: Neustart-Grund, Abstuerze, Ruecksprung nach kaputtem Update, Speicher
+function diagZeigen() {
+  const d = st.diag; if (!d) return;
+  const GRUND = {strom: L('Strom eingeschaltet', 'power on'), extern: L('Reset-Taste', 'reset button'),
+    neustart: L('gewollter Neustart', 'intended restart'), absturz: L('Absturz', 'crash'), watchdog: L('Watchdog (hing)', 'watchdog (hung)'),
+    spannung: L('Spannung eingebrochen', 'voltage dropped'), tiefschlaf: L('Tiefschlaf', 'deep sleep'), usb: 'USB',
+    wetter: L('Wetterabruf hing', 'weather task hung'), unbekannt: L('unbekannt', 'unknown')};
+  const g = k => GRUND[k] || k;
+  const dauer = s => s < 3600 ? `${Math.floor(s / 60)} min` : s < 86400 ? `${Math.floor(s / 3600)} h ${Math.floor(s % 3600 / 60)} min`
+    : `${Math.floor(s / 86400)} ${s < 172800 ? L('Tag', 'day') : L('Tage', 'days')} ${Math.floor(s % 86400 / 3600)} h`;
+  const wann = z => z ? new Date(z * 1000).toLocaleString(en() ? 'en-GB' : 'de-DE', {dateStyle: 'short', timeStyle: 'short'}) : L('Zeit unbekannt', 'time unknown');
+  const kb = n => `${Math.round(n / 1024)} kB`;
+  const z = (a, b) => `<div class="zeile"><span>${a}</span><span>${b}</span></div>`;
+  let h = z(L('Läuft seit', 'Running for'), dauer(d.laufzeit))
+    + z(L('Letzter Start', 'Last start'), esc(g(d.neustart)) + (d.pruefen ? `<small>${L('neue Firmware wird noch geprüft', 'new firmware still being checked')}</small>` : ''))
+    + z(L('Abstürze', 'Crashes'), d.abstuerze)
+    + z(L('Speicher frei', 'Free memory'), `${kb(d.heap)}<small>${L('kleinster Wert', 'lowest')} ${kb(d.heapMin)} · PSRAM ${kb(d.psram)}</small>`);
+  if (d.wetterAlter != null) h += z(L('Wetter-Aufgabe', 'Weather task'), d.wetterAlter < 5 ? 'OK' : L(`still seit ${d.wetterAlter} s`, `quiet for ${d.wetterAlter} s`));
+  if (d.ruecksprung) h += z(L('Update zurückgenommen', 'Update rolled back'),
+    `${d.ruecksprung.build ? 'Build ' + d.ruecksprung.build : L('eigene Firmware', 'own firmware')}<small>${wann(d.ruecksprung.zeit)} · ${L('lief nicht, alte Version wieder aktiv', 'did not run, old version restored')}</small>`);
+  if (d.absturz) {
+    const a = d.absturz;
+    h += z(L('Letzter Absturz', 'Last crash'), `${esc(g(a.grund))}<small>${wann(a.zeit)} · Build ${a.build || L('eigener', 'own')}${a.aufgabe ? ' · ' + esc(a.aufgabe) : ''}</small>`);
+    if (a.pc) h += `<p class="leise" style="font-family:monospace;word-break:break-all">PC ${esc(a.pc)}<br>${esc(a.kette)}</p>`;
+  }
+  $('#diag').innerHTML = h;
 }
 
 async function laden() { st = await (await fetch('/api/status')).json(); zeigen(); orteLaden(); kurveLaden(); }
@@ -304,6 +340,7 @@ $('#updBtn').onclick = async () => {
   if (st.neu) { if (await senden('/api/update/installieren')) melden(L('Update startet – siehe Display', 'Update starting – see display')); }
   else { await senden('/api/update/suchen'); melden(L('Suche …', 'Checking …')); setTimeout(laden, 4000); }
 };
+$('#diagBtn').onclick = async () => { if (confirm(L('Absturz-Zähler und -Bericht zurücksetzen?', 'Reset crash counter and report?'))) { await senden('/api/diagnose/loeschen'); laden(); } };
 $('#wlanBtn').onclick = async () => { if (confirm(L('WLAN neu einrichten? Die Wetterstation startet neu.', 'Set up Wi-Fi again? The weather station will restart.'))) { await senden('/api/wlan'); melden(L('Startet neu', 'Restarting')); } };
 laden();
 </script>

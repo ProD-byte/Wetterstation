@@ -6,6 +6,7 @@
 #include "verlauf.h"
 #include "orte.h"
 #include "ersatz.h"
+#include "diagnose.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -225,6 +226,7 @@ static void aufgabe(void *) {
   bool ortGeprueft = false;
   int fehlversuche = 0;
   for (;;) {
+    diagnoseLebenszeichen();  // haengt die Aufgabe 10 min, startet loop() die Station neu
     // Gerettete Daten vom letzten Lauf: erst wenn die Uhr stimmt, denn nur dann ist ihr Alter bekannt
     if (rettungKennung == KENNUNG && zeitBekannt() && !aktuell.gueltig) {
       Wetter alt;

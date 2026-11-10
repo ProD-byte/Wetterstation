@@ -61,6 +61,9 @@ jobs:
           # Einzelteile fuer das Flasher-Update (ueberschreibt die gespeicherten WLANs NICHT)
           mkdir -p ausgabe/teile
           cp $B/bootloader.bin $B/partitions.bin "$BOOT_APP0" $B/firmware.bin ausgabe/teile/
+          # Zum Entschluesseln der Absturz-Adressen (Einstellungsseite -> Diagnose) - passt nur zu genau diesem Build:
+          # xtensa-esp32s3-elf-addr2line -pfiaC -e firmware.elf 0x4201abcd ...
+          cp $B/firmware.elf ausgabe/
           ls -la ausgabe ausgabe/teile
 
       - name: Ergebnis aufheben
