@@ -41,6 +41,11 @@ static bool istAbsturz(esp_reset_reason_t r) {
          r == ESP_RST_BROWNOUT;
 }
 
+// Schluessel loeschen, ohne dass Preferences fuer jeden fehlenden einen Fehler ausgibt
+static void weg(Preferences &p, const char *k) {
+  if (p.isKey(k)) p.remove(k);
+}
+
 static bool zeitBekannt() { return time(nullptr) > 1700000000; }
 
 // Core-Dump im Flash auswerten (schreibt ESP-IDF bei jedem Absturz) und danach loeschen
@@ -72,19 +77,20 @@ void diagnoseStart() {
 
   Preferences p;
   p.begin("diag", false);
-  String eigen = p.getString("grund", "");  // eigener Grund vor einem gewollten Neustart (z. B. Wetter-Aufgabe hing)
+  String eigen = p.isKey("grund") ? p.getString("grund", "") : "";  // eigener Grund vor einem gewollten Neustart (z. B. Wetter-Aufgabe hing)
   if (eigen.length()) {
-    p.remove("grund");
+    weg(p, "grund");
     static char g[16];
     strlcpy(g, eigen.c_str(), sizeof(g));
     neustartGrund = g;
   }
-  if (istAbsturz(r) || eigen.length()) {
+  bool absturzJetzt = istAbsturz(r) || eigen.length();
+  if (absturzJetzt) {
     p.putUInt("abst", p.getUInt("abst", 0) + 1);
     p.putString("lzG", neustartGrund);
     p.putInt("lzB", FIRMWARE_BUILD);
     p.putUInt("lzZ", 0);
-    p.remove("lzT"), p.remove("lzPC"), p.remove("lzBT"), p.remove("lzU");
+    weg(p, "lzT"), weg(p, "lzPC"), weg(p, "lzBT"), weg(p, "lzU"), weg(p, "lzR");
     zeitNachtragen = true;
   }
   coreDumpLesen(p);
@@ -100,15 +106,17 @@ void diagnoseStart() {
   if (ungueltig && esp_ota_get_partition_description(ungueltig, &d) == ESP_OK) {
     char kennung[17];
     for (int i = 0; i < 8; i++) snprintf(kennung + 2 * i, 3, "%02x", d.app_elf_sha256[i]);
-    if (p.getString("rsK", "") != kennung) {  // dieser Ruecksprung ist neu
+    if (!p.isKey("rsK") || p.getString("rsK", "") != kennung) {  // dieser Ruecksprung ist neu
       p.putString("rsK", kennung);
       int versuch = p.getInt("vers", 0);
       p.putInt("rsB", versuch);  // 0 = per WLAN hochgeladene eigene Firmware
       p.putUInt("rsZ", 0);
       if (versuch > FIRMWARE_BUILD) p.putInt("kaputt", versuch);
-      p.remove("vers");
+      if (absturzJetzt) p.putInt("lzB", versuch), p.putBool("lzR", true);  // abgestuerzt ist die neue, nicht diese
+      weg(p, "vers");
       zeitNachtragen = true;
-      Serial.printf("Neue Firmware (Build %d) lief nicht - zurueck auf Build %d\n", versuch, FIRMWARE_BUILD);
+      if (versuch) Serial.printf("Neue Firmware (Build %d) lief nicht - zurueck auf Build %d\n", versuch, FIRMWARE_BUILD);
+      else Serial.printf("Per WLAN hochgeladene Firmware lief nicht - zurueck auf die vorige (Build %d)\n", FIRMWARE_BUILD);
     }
   }
   kaputt = p.getInt("kaputt", 0);
@@ -148,8 +156,8 @@ void diagnoseLoop(uint32_t t) {
     esp_ota_mark_app_valid_cancel_rollback();
     Preferences p;
     p.begin("diag", false);
-    p.remove("vers");
-    if (kaputt && kaputt <= FIRMWARE_BUILD) p.remove("kaputt"), kaputt = 0;  // ein neuerer Build hat es geschafft
+    weg(p, "vers");
+    if (kaputt && kaputt <= FIRMWARE_BUILD) weg(p, "kaputt"), kaputt = 0;  // ein neuerer Build hat es geschafft
     p.end();
     Serial.println("Neue Firmware laeuft - bestaetigt");
   }
@@ -165,15 +173,17 @@ void diagnoseLoop(uint32_t t) {
     p.end();
   }
 
+  // mit Vorzeichen rechnen: das Lebenszeichen (millis() | 1, andere Aufgabe) kann ein, zwei ms "vor" der
+  // hier gelesenen Uhr liegen - ohne Vorzeichen liefe die Differenz ueber und loeste faelschlich einen Neustart aus
   uint32_t leben = wetterLeben;
-  if (leben && t - leben > WETTER_STILL) neustartMitGrund("wetter");
+  if (leben && (int32_t)(millis() - leben) > (int32_t)WETTER_STILL) neustartMitGrund("wetter");
 }
 
 void diagnoseUpdateVersuch(int build) {
   Preferences p;
   p.begin("diag", false);
   if (build) p.putInt("vers", build);
-  else p.remove("vers");
+  else weg(p, "vers");
   p.end();
 }
 
@@ -182,8 +192,8 @@ int diagnoseKaputterBuild() { return kaputt; }
 void diagnoseLoeschen() {
   Preferences p;
   p.begin("diag", false);
-  const char *weg[] = {"abst", "lzG", "lzB", "lzZ", "lzT", "lzPC", "lzBT", "lzU", "rsB", "rsZ", "kaputt"};
-  for (const char *k : weg) p.remove(k);
+  const char *schluessel[] = {"abst", "lzG", "lzB", "lzZ", "lzT", "lzPC", "lzBT", "lzU", "lzR", "rsB", "rsZ", "kaputt"};
+  for (const char *k : schluessel) weg(p, k);
   p.end();
   kaputt = 0;
 }
@@ -195,19 +205,24 @@ static String text(const String &s) {
   return aus + "\"";
 }
 
+// Text lesen, ohne dass Preferences fuer einen fehlenden Schluessel einen Fehler ausgibt
+static String lies(Preferences &p, const char *k) { return p.isKey(k) ? p.getString(k, "") : String(); }
+
 String diagnoseJson() {
   Preferences p;
   p.begin("diag", true);
-  uint32_t t = millis();
+  uint32_t leben = wetterLeben, t = millis();
+  int32_t still = leben ? max((int32_t)(t - leben), (int32_t)0) : 0;  // mit Vorzeichen, siehe diagnoseLoop
   String j = "{\"laufzeit\":" + String(t / 1000) + ",\"neustart\":" + text(neustartGrund) +
              ",\"pruefen\":" + (probe ? "true" : "false") + ",\"heap\":" + ESP.getFreeHeap() +
              ",\"heapMin\":" + ESP.getMinFreeHeap() + ",\"psram\":" + ESP.getFreePsram() +
-             ",\"wetterAlter\":" + (wetterLeben ? String((t - wetterLeben) / 1000) : String("null")) +
+             ",\"wetterAlter\":" + (leben ? String(still / 1000) : String("null")) +
              ",\"abstuerze\":" + p.getUInt("abst", 0) + ",\"kaputt\":" + kaputt;
   if (p.isKey("lzG"))
-    j += ",\"absturz\":{\"grund\":" + text(p.getString("lzG", "")) + ",\"build\":" + p.getInt("lzB", 0) +
-         ",\"zeit\":" + p.getUInt("lzZ", 0) + ",\"aufgabe\":" + text(p.getString("lzT", "")) +
-         ",\"pc\":" + text(p.getString("lzPC", "")) + ",\"kette\":" + text(p.getString("lzBT", "")) + "}";
+    j += ",\"absturz\":{\"grund\":" + text(lies(p, "lzG")) + ",\"build\":" + p.getInt("lzB", 0) +
+         ",\"zeit\":" + p.getUInt("lzZ", 0) +
+         ",\"imUpdate\":" + (p.getBool("lzR", false) ? "true" : "false") + ",\"aufgabe\":" + text(lies(p, "lzT")) +
+         ",\"pc\":" + text(lies(p, "lzPC")) + ",\"kette\":" + text(lies(p, "lzBT")) + "}";
   if (p.isKey("rsZ"))
     j += ",\"ruecksprung\":{\"build\":" + String(p.getInt("rsB", 0)) + ",\"zeit\":" + p.getUInt("rsZ", 0) + "}";
   p.end();

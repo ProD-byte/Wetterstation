@@ -231,7 +231,7 @@ function diagZeigen() {
     `${d.ruecksprung.build ? 'Build ' + d.ruecksprung.build : L('eigene Firmware', 'own firmware')}<small>${wann(d.ruecksprung.zeit)} · ${L('lief nicht, alte Version wieder aktiv', 'did not run, old version restored')}</small>`);
   if (d.absturz) {
     const a = d.absturz;
-    h += z(L('Letzter Absturz', 'Last crash'), `${esc(g(a.grund))}<small>${wann(a.zeit)} · Build ${a.build || L('eigener', 'own')}${a.aufgabe ? ' · ' + esc(a.aufgabe) : ''}</small>`);
+    h += z(L('Letzter Absturz', 'Last crash'), `${esc(g(a.grund))}<small>${wann(a.zeit)} · ${a.imUpdate ? L('im zurückgenommenen Update', 'in the rolled-back update') + ' ' : ''}Build ${a.build || L('eigener', 'own')}${a.aufgabe ? ' · ' + esc(a.aufgabe) : ''}</small>`);
     if (a.pc) h += `<p class="leise" style="font-family:monospace;word-break:break-all">PC ${esc(a.pc)}<br>${esc(a.kette)}</p>`;
   }
   $('#diag').innerHTML = h;
